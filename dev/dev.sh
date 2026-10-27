@@ -96,6 +96,11 @@ cmd_register_docker() {
 cmd_update_docker() {
     copy_info_xml
     occ app_api:app:update "$APP_ID" --info-xml "/tmp/$APP_ID-info.xml" --wait-finish
+    # Observed with Nextcloud 35 / current HaRP: after app:update HaRP keeps serving cached
+    # metadata without the app's routes (every /exapps/ path answers 404) although the routes
+    # are in Nextcloud's database. Disabling and enabling makes AppAPI push them to HaRP again.
+    occ app_api:app:disable "$APP_ID"
+    occ app_api:app:enable "$APP_ID"
 }
 
 cmd_help() {
@@ -118,6 +123,7 @@ Usage: dev/dev.sh <command>
   unregister       Remove the app from Nextcloud (data volume is kept)
   logs             Follow the ExApp container's logs
   occ <args>       Run occ in the Nextcloud container
+  seed-mail [addr] Send test mail to GreenMail (default alice@example.test)
 EOF
 }
 
@@ -132,6 +138,7 @@ case "${1:-help}" in
     update-docker) cmd_update_docker ;;
     unregister) occ app_api:app:unregister "$APP_ID" --force ;;
     logs) docker logs -f "nc_app_$APP_ID" ;;
+    seed-mail) shift; bash "$ROOT/dev/seed-mail.sh" "$@" ;;
     occ) shift; occ "$@" ;;
     *) cmd_help ;;
 esac

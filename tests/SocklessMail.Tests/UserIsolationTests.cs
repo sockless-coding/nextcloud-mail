@@ -70,6 +70,23 @@ public sealed class UserIsolationTests : IDisposable
         Assert.Equal(before, await AliceAccountJson(aliceId));
     }
 
+    [Theory]
+    [InlineData("folders")]
+    [InlineData("folders/SU5CT1g/messages")]
+    [InlineData("folders/SU5CT1g/messages/1-1")]
+    [InlineData("folders/SU5CT1g/messages/1-1/parts/2")]
+    public async Task Other_users_mailbox_answers_like_a_missing_one(string path)
+    {
+        var aliceId = await CreateAsync(_alice);
+
+        var foreign = await _bob.GetAsync($"/api/accounts/{aliceId}/{path}", Ct);
+        var missing = await _bob.GetAsync($"/api/accounts/{Guid.NewGuid()}/{path}", Ct);
+
+        // 404 before any IMAP connection is attempted (the account points at an unroutable address).
+        Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+        Assert.Equal(await missing.Content.ReadAsStringAsync(Ct), await foreign.Content.ReadAsStringAsync(Ct));
+    }
+
     [Fact]
     public async Task Reorder_cannot_include_another_users_account()
     {

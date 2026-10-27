@@ -9,6 +9,7 @@ using SocklessMail.Api.AppApi;
 using SocklessMail.Api.Data;
 using SocklessMail.Api.Hosting;
 using SocklessMail.Api.Mail;
+using SocklessMail.Api.Mailbox;
 using SocklessMail.Api.Security;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -41,9 +42,16 @@ builder.Services.AddMailDatabase(options);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CredentialProtector>();
 builder.Services.AddSingleton(new ServerAddressPolicy(options.AllowLocalServers));
+builder.Services.AddSingleton<PolicySocketConnector>();
 builder.Services.AddSingleton<MailServerConnector>();
 builder.Services.AddSingleton<ConnectionTester>();
+builder.Services.AddSingleton<ImapConnections>();
+builder.Services.AddHostedService<ImapConnectionJanitor>();
 builder.Services.AddScoped<AccountService>();
+builder.Services.AddScoped<MailboxService>();
+builder.Services.AddSingleton<ImageProxyTokens>();
+builder.Services.AddSingleton<ImageProxy>();
+ImageProxy.ConfigureServices(builder.Services);
 
 // Connection tests open sockets to user-chosen hosts; keep them from being used as a scanner.
 builder.Services.AddRateLimiter(limiter =>
@@ -84,6 +92,7 @@ app.MapLifecycleEndpoints();
 var api = app.MapGroup("/api").RequireAuthorization(AppApiAuthentication.UserPolicy);
 api.MapMeEndpoints();
 api.MapAccountEndpoints();
+api.MapMailboxEndpoints();
 
 // Unmatched paths must answer 404, not the fallback policy's 401/403: AppAPI calls POST /init
 // with system credentials and treats only 404/501 as "no init needed".

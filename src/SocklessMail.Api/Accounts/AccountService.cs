@@ -11,7 +11,8 @@ public sealed class AccountLimitException() : Exception($"A user can have at mos
 /// DbContext's query filter. Another user's account is indistinguishable from a missing one.
 /// </summary>
 public sealed class AccountService(
-    MailDbContext db, CredentialProtector credentials, ConnectionTester tester, TimeProvider clock, ILogger<AccountService> logger)
+    MailDbContext db, CredentialProtector credentials, ConnectionTester tester, ImapConnections imap, TimeProvider clock,
+    ILogger<AccountService> logger)
 {
     public const int MaxAccountsPerUser = 50;
 
@@ -72,6 +73,8 @@ public sealed class AccountService(
 
         account.UpdatedAt = clock.GetUtcNow();
         await db.SaveChangesAsync(ct);
+        // Pooled connections were opened with the old settings or password.
+        await imap.InvalidateAsync(account.Id);
         logger.LogInformation("Updated account {AccountId}", account.Id);
         return account;
     }
@@ -81,6 +84,7 @@ public sealed class AccountService(
         var deleted = await Owned(userId).Where(a => a.Id == id).ExecuteDeleteAsync(ct);
         if (deleted > 0)
         {
+            await imap.InvalidateAsync(id);
             logger.LogInformation("Deleted account {AccountId}", id);
         }
 

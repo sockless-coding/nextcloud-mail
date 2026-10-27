@@ -1,6 +1,6 @@
 <template>
 	<NcContent app-name="sockless_mail">
-		<NcAppNavigation :aria-label="t('sockless_mail', 'Mail accounts')">
+		<NcAppNavigation :aria-label="t('sockless_mail', 'Mail accounts and folders')">
 			<template #list>
 				<NcAppNavigationNew :text="t('sockless_mail', 'Add account')" @click="openDialog(null)">
 					<template #icon>
@@ -9,9 +9,12 @@
 				</NcAppNavigationNew>
 				<NcAppNavigationItem v-for="(account, index) in accountsState.accounts"
 					:key="account.id"
+					class="account-entry"
 					:name="account.displayName"
-					:active="account.id === accountsState.selectedId"
-					@click="accountsState.selectedId = account.id">
+					allow-collapse
+					:open="!!expanded[account.id]"
+					@update:open="(isOpen) => toggleAccount(account, isOpen)"
+					@click="selectAccount(account)">
 					<template #icon>
 						<NcIconSvgWrapper :path="mdiEmailOutline" />
 					</template>
@@ -20,15 +23,21 @@
 							<template #icon>
 								<NcIconSvgWrapper :path="mdiPencil" />
 							</template>
-							{{ t('sockless_mail', 'Edit') }}
+							{{ t('sockless_mail', 'Edit account') }}
 						</NcActionButton>
-						<NcActionButton :disabled="index === 0" @click="move(account, -1)">
+						<NcActionButton close-after-click @click="refreshAccount(account)">
+							<template #icon>
+								<NcIconSvgWrapper :path="mdiRefresh" />
+							</template>
+							{{ t('sockless_mail', 'Refresh folders') }}
+						</NcActionButton>
+						<NcActionButton :disabled="index === 0" close-after-click @click="move(account, -1)">
 							<template #icon>
 								<NcIconSvgWrapper :path="mdiArrowUp" />
 							</template>
 							{{ t('sockless_mail', 'Move up') }}
 						</NcActionButton>
-						<NcActionButton :disabled="index === accountsState.accounts.length - 1" @click="move(account, 1)">
+						<NcActionButton :disabled="index === accountsState.accounts.length - 1" close-after-click @click="move(account, 1)">
 							<template #icon>
 								<NcIconSvgWrapper :path="mdiArrowDown" />
 							</template>
@@ -38,21 +47,38 @@
 							<template #icon>
 								<NcIconSvgWrapper :path="mdiDelete" />
 							</template>
-							{{ t('sockless_mail', 'Delete') }}
+							{{ t('sockless_mail', 'Delete account') }}
 						</NcActionButton>
 					</template>
+
+					<NcAppNavigationItem v-if="folderState(account.id).loading && !folderState(account.id).list.length"
+						:name="t('sockless_mail', 'Loading folders…')"
+						loading />
+					<NcAppNavigationItem v-else-if="folderState(account.id).error"
+						class="account-entry__error"
+						:name="folderState(account.id).error.message"
+						:title="folderState(account.id).error.message"
+						@click="openDialog(account)">
+						<template #icon>
+							<NcIconSvgWrapper :path="mdiAlertCircleOutline" />
+						</template>
+					</NcAppNavigationItem>
+					<FolderItem v-for="folder in folderTree(account.id)"
+						:key="folder.id"
+						:account-id="account.id"
+						:folder="folder" />
 				</NcAppNavigationItem>
 			</template>
 		</NcAppNavigation>
 
-		<NcAppContent>
+		<NcAppContent v-if="accountsState.loading || accountsState.loadError || accountsState.accounts.length === 0">
 			<div v-if="accountsState.loading" class="centered">
 				<NcLoadingIcon :size="64" />
 			</div>
 			<NcEmptyContent v-else-if="accountsState.loadError"
 				:name="t('sockless_mail', 'Could not load your accounts')"
 				:description="accountsState.loadError" />
-			<NcEmptyContent v-else-if="!selectedAccount"
+			<NcEmptyContent v-else
 				:name="t('sockless_mail', 'No mail accounts yet')"
 				:description="t('sockless_mail', 'Connect an IMAP/SMTP account to read and send mail.')">
 				<template #icon>
@@ -64,11 +90,27 @@
 					</NcButton>
 				</template>
 			</NcEmptyContent>
-			<AccountDetails v-else :account="selectedAccount" @edit="openDialog(selectedAccount)" />
+		</NcAppContent>
+
+		<NcAppContent v-else
+			:page-heading="t('sockless_mail', 'Mail')"
+			:show-details="!!mailboxState.open.id"
+			@update:show-details="(show) => !show && closeMessage()">
+			<template #list>
+				<MessageList v-if="mailboxState.selected.folderId" />
+				<NcEmptyContent v-else :name="t('sockless_mail', 'Choose a folder')" />
+			</template>
+			<MessageView v-if="mailboxState.open.id" />
+			<NcEmptyContent v-else :name="t('sockless_mail', 'No message selected')">
+				<template #icon>
+					<NcIconSvgWrapper :path="mdiEmailOpenOutline" />
+				</template>
+			</NcEmptyContent>
 		</NcAppContent>
 
 		<AccountDialog v-if="dialog.open"
 			:account="dialog.account"
+			@saved="onSaved"
 			@close="dialog.open = false" />
 
 		<NcDialog v-if="accountToDelete"
@@ -76,12 +118,12 @@
 			:message="t('sockless_mail', 'Remove {name} from Sockless Mail? Mail on the server is not affected.', { name: accountToDelete.displayName })"
 			:buttons="deleteButtons"
 			:open="true"
-			@update:open="(open) => !open && (accountToDelete = null)" />
+			@update:open="(isOpen) => !isOpen && (accountToDelete = null)" />
 	</NcContent>
 </template>
 
 <script setup>
-import { mdiArrowDown, mdiArrowUp, mdiDelete, mdiEmailOutline, mdiPencil, mdiPlus } from '@mdi/js'
+import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiDelete, mdiEmailOpenOutline, mdiEmailOutline, mdiPencil, mdiPlus, mdiRefresh } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -95,15 +137,59 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import { computed, onMounted, reactive, ref } from 'vue'
-import AccountDetails from './components/AccountDetails.vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import AccountDialog from './components/AccountDialog.vue'
+import FolderItem from './components/FolderItem.vue'
+import MessageList from './components/MessageList.vue'
+import MessageView from './components/MessageView.vue'
 import { accountsState, deleteAccount, loadAccounts, moveAccount } from './store/accounts.js'
+import { closeMessage, forgetAccount, loadFolders, mailboxState, refreshMessages, selectFolder } from './store/mailbox.js'
+
+/** No push channel to the browser (see README); new mail is found by polling. */
+const POLL_INTERVAL_MS = 60_000
 
 const dialog = reactive({ open: false, account: null })
 const accountToDelete = ref(null)
+const expanded = reactive({})
+let pollTimer = null
 
-const selectedAccount = computed(() => accountsState.accounts.find((a) => a.id === accountsState.selectedId) ?? null)
+const EMPTY_FOLDERS = { list: [], loading: false, error: null }
+
+function folderState(accountId) {
+	return mailboxState.folders[accountId] ?? EMPTY_FOLDERS
+}
+
+/** Nests the flat, server-ordered folder list. */
+function folderTree(accountId) {
+	const nodes = folderState(accountId).list.map((f) => ({ ...f, children: [] }))
+	const byId = new Map(nodes.map((n) => [n.id, n]))
+	const roots = []
+	for (const node of nodes) {
+		(byId.get(node.parentId)?.children ?? roots).push(node)
+	}
+	return roots
+}
+
+async function toggleAccount(account, isOpen) {
+	expanded[account.id] = isOpen
+	if (isOpen && !mailboxState.folders[account.id]) {
+		await loadFolders(account.id)
+	}
+}
+
+/** Clicking an account opens it and shows its inbox. */
+async function selectAccount(account) {
+	expanded[account.id] = true
+	const folders = mailboxState.folders[account.id]?.list.length ? mailboxState.folders[account.id].list : await loadFolders(account.id)
+	const inbox = folders.find((f) => f.specialUse === 'inbox') ?? folders.find((f) => f.selectable)
+	if (inbox) {
+		selectFolder(account.id, inbox.id)
+	}
+}
+
+async function refreshAccount(account) {
+	await loadFolders(account.id)
+}
 
 const deleteButtons = computed(() => [
 	{ label: t('sockless_mail', 'Cancel') },
@@ -111,8 +197,10 @@ const deleteButtons = computed(() => [
 		label: t('sockless_mail', 'Delete'),
 		variant: 'error',
 		callback: async () => {
+			const id = accountToDelete.value.id
 			try {
-				await deleteAccount(accountToDelete.value.id)
+				await deleteAccount(id)
+				forgetAccount(id)
 			} catch (e) {
 				showError(t('sockless_mail', 'Could not delete the account: {error}', { error: e.message }))
 			}
@@ -125,6 +213,12 @@ function openDialog(account) {
 	dialog.open = true
 }
 
+/** New or changed settings: drop cached folders and show the account's inbox. */
+async function onSaved(account) {
+	forgetAccount(account.id)
+	await selectAccount(account)
+}
+
 async function move(account, delta) {
 	try {
 		await moveAccount(account.id, delta)
@@ -133,7 +227,30 @@ async function move(account, delta) {
 	}
 }
 
-onMounted(loadAccounts)
+async function poll() {
+	if (document.hidden) {
+		return
+	}
+	const accountId = mailboxState.selected.accountId
+	await Promise.all([
+		refreshMessages(),
+		accountId ? loadFolders(accountId, true) : Promise.resolve(),
+	])
+}
+
+onMounted(async () => {
+	await loadAccounts()
+	if (accountsState.accounts.length) {
+		await selectAccount(accountsState.accounts[0])
+	}
+	pollTimer = window.setInterval(poll, POLL_INTERVAL_MS)
+	document.addEventListener('visibilitychange', poll)
+})
+
+onBeforeUnmount(() => {
+	window.clearInterval(pollTimer)
+	document.removeEventListener('visibilitychange', poll)
+})
 </script>
 
 <style scoped>
@@ -142,5 +259,9 @@ onMounted(loadAccounts)
 	align-items: center;
 	justify-content: center;
 	height: 100%;
+}
+
+.account-entry__error :deep(.app-navigation-entry__name) {
+	color: var(--color-error-text);
 }
 </style>

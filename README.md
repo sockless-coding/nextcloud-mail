@@ -5,8 +5,10 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 2 (accounts)**. Each Nextcloud user can add, edit, test, reorder and remove any
-> number of IMAP/SMTP accounts; credentials are encrypted at rest. Reading mail comes in phase 3.
+> Status: **phase 3 (read mail)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> (credentials encrypted at rest) and reads mail: folder tree, paged message list, sanitized
+> message view with remote images blocked by default, attachment downloads. Actions (mark read,
+> flag, move, delete) come in phase 4.
 
 ## Layout
 
@@ -21,11 +23,13 @@ src/SocklessMail.Api/       ASP.NET Core minimal APIs
   Api/                      the app's own /api endpoints
   Accounts/                 account model, validation, service, encrypted credentials
   Data/                     EF Core DbContext (SQLite), per-user query filter, migrations
-  Mail/                     MailKit connections: address policy, connector, connection test
+  Mail/                     MailKit connections: address policy, connector, connection pool, HTML sanitizer
+  Mailbox/                  folders, message list, message view, parts, remote image proxy
   Security/                 Data Protection key ring wrapping
 src/frontend/               Vue 3 + @nextcloud/vue 9, built into wwwroot/js and wwwroot/css
-tests/SocklessMail.Tests/   xUnit v3: auth, lifecycle, CSRF, accounts, user isolation, key ring
-tests/SocklessMail.IntegrationTests/  against GreenMail in Docker (Testcontainers)
+tests/SocklessMail.Tests/   xUnit v3: auth, CSRF, accounts, user isolation, key ring, pool, sanitizer
+tests/SocklessMail.IntegrationTests/  API and IMAP against GreenMail in Docker (Testcontainers)
+tests/e2e/                  browser checks against the dev stack (Playwright with installed Edge/Chrome)
 dev/                        local Nextcloud + HaRP + GreenMail stack and the dev.sh helper
 ```
 
@@ -37,8 +41,18 @@ Requirements: .NET SDK 10, Node 22, Docker (Engine 25+ for the healthcheck start
 dotnet test --project tests/SocklessMail.Tests              # unit + endpoint tests
 dotnet test --project tests/SocklessMail.IntegrationTests   # needs Docker: starts GreenMail
 (cd src/frontend && npm ci && npm run build)
-docker build -t sockless.local/sockless_mail:0.2.0 .
+docker build -t sockless.local/sockless_mail:0.3.2 .
 ```
+
+Browser checks (need the dev stack below, the app deployed and `dev/dev.sh seed-mail`):
+
+```bash
+cd tests/e2e && npm ci
+node accounts.mjs    # add/test/validate/reorder/delete accounts
+node mail.mjs        # paging, sanitized view, remote images, attachments, polling
+```
+
+They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console errors.
 
 Database changes: `dotnet tool restore`, then
 `dotnet ef migrations add <Name> --project src/SocklessMail.Api --output-dir Data/Migrations`.
@@ -57,6 +71,8 @@ GreenMail has two mailboxes, `alice@example.test` (password `alice`) and `bob@ex
 (password `bob`), with no encryption: IMAP on port 3143, SMTP on 3025. Use the server name
 `greenmail` for the container deployed by HaRP, and `127.0.0.1` for the app running on your machine.
 The dev registrations set `SOCKLESS_MAIL_ALLOW_LOCAL_SERVERS=true`, because both addresses are local.
+`dev/dev.sh seed-mail [address]` sends 61 test messages there: numbered plain-text mails and an HTML
+newsletter with a script, a remote image, an inline image and a PDF attachment.
 
 ### Fast loop: run the app on your machine (manual-install daemon)
 
@@ -82,6 +98,7 @@ dev/dev.sh logs              # follow the container's logs
 
 After code changes, bump **both** `<version>` and `<image-tag>` in `appinfo/info.xml` (keep them
 equal), then `dev/dev.sh build update-docker`. An update with an unchanged version does nothing.
+`update-docker` disables and enables the app after updating; see "Known limitations" for why.
 `register-docker` replaces any installed copy and also works without a bump. The `sockless.local`
 registry in info.xml is fictional, and `dev.sh up` maps it to "local" so AppAPI uses the local image.
 
@@ -102,7 +119,9 @@ registry in info.xml is fictional, and `dev.sh up` maps it to "local" so AppAPI 
 4. **Update**: bump `<version>` and `<image-tag>`, push, then
    `occ app_api:app:update sockless_mail --info-xml /path/to/info.xml --wait-finish`.
    The app secret, port, settings and data volume are kept. Unregistering keeps the data volume
-   unless you pass `--rm-data`.
+   unless you pass `--rm-data`. If every `/exapps/sockless_mail/...` request answers 404 after the
+   update, run `occ app_api:app:disable sockless_mail` and `occ app_api:app:enable sockless_mail`
+   (see "Known limitations").
 
 ## Configuration
 
@@ -134,6 +153,25 @@ Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_
 - **Container user**: the image's default user stays root, because AppAPI copies certificates in
   and runs `update-ca-certificates` as root. The entrypoint drops to the unprivileged user
   `sockless` before starting `frpc` and the app.
+- **IMAP connections** are pooled per account (`ImapConnections` over `ConnectionPool`):
+  - At most 3 connections per account and 100 in total. When the total is reached, the oldest idle
+    connection of another account is closed.
+  - A connection is leased exclusively for one operation, because MailKit clients are not
+    thread-safe.
+  - Before reuse, a connection idle for more than 30 seconds is checked with `NOOP`. A
+    background job closes connections idle for more than 5 minutes.
+  - If a connection turns out to be dead, the operation runs once more on a fresh one (read
+    operations only).
+  - Changing or deleting an account closes its pooled connections.
+  - SMTP connects per use.
+- **Reading** never changes the mailbox. Folders are opened read-only (`EXAMINE`) and bodies are
+  fetched with `BODY.PEEK`, so opening a message does not mark it as read.
+- **Message list** pages are newest first, 50 per page. The cursor is a UID
+  (`?before=<uid>`), so mail arriving between page loads neither shifts nor duplicates entries.
+  Message ids are `<UIDVALIDITY>-<UID>`, so an id becomes 404 when the server renumbers the folder.
+- **New mail** is found by polling. Every 60 seconds, and when the tab becomes visible again,
+  the UI reloads the newest page of the open folder and merges it in, and refreshes the folder
+  counts. There is no WebSocket or SSE channel to the browser (see "Known limitations").
 
 ## Security model
 
@@ -181,6 +219,47 @@ older keys readable, and only new keys use it. Removing or changing the variable
 credentials unreadable: the app keeps running, and connection tests report
 `credential_unavailable`. Users then re-enter their password when editing the account.
 
+### Displaying mail
+
+Message HTML is attacker-controlled, and it is displayed inside the Nextcloud origin. There are
+three layers of defence:
+
+1. **Server-side sanitizing** (`MessageHtmlSanitizer`, based on HtmlSanitizer) removes:
+   - scripts, event handlers, frames, objects and embeds
+   - forms and inputs, so a mail cannot imitate a Nextcloud login inside Nextcloud
+   - `base`, `meta` and `link` elements
+   - `javascript:` and other unsafe URLs, and `data:` URLs except raster images
+
+   It keeps `<style>` blocks, which are sanitized as CSS, so newsletters keep their layout. Links
+   open in a new tab with `rel="noopener noreferrer"`. Plain-text mail is converted to escaped
+   HTML with clickable links.
+2. **A sandboxed iframe** without `allow-scripts`, so even markup the sanitizer missed cannot run
+   code. `allow-same-origin` is set only so the page can size the frame to its content.
+3. **Nextcloud's Content-Security-Policy**, which the iframe inherits. It blocks remote loads and
+   inline scripts as well.
+
+**Remote content** is blocked by default, so opening a message does not tell the sender anything
+(tracking pixels):
+- Remote `img` sources, `background` attributes and CSS `url()` are removed.
+- The message is flagged, and the UI offers **Show images**.
+- When the user chooses that, image URLs are rewritten to the app's **image proxy**
+  (`/api/image-proxy?token=...`). The browser never contacts the sender's server, and the CSP
+  needs no exception.
+- Proxy tokens are signed, user-bound and expire after 12 hours, so the proxy only fetches URLs it
+  issued itself.
+- Fetches go through the same address policy as mail connections, also after redirects.
+- Only PNG, JPEG, GIF, WebP, AVIF, BMP and ICO up to 5 MB are passed on. SVG is refused, because
+  it can carry script.
+- Remote CSS `url()` stays blocked even then.
+
+**Attachments and inline parts** are served with:
+- `Content-Disposition: attachment`, except raster images referenced inline (`cid:`)
+- `Content-Security-Policy: default-src 'none'; sandbox`
+- `X-Content-Type-Options: nosniff`
+- `Cache-Control: no-store`
+
+An HTML or SVG attachment therefore cannot run in the Nextcloud origin, even if opened directly.
+
 ### Connections to mail servers
 
 Any user can make the app connect to a host and port of their choice. Without limits that would
@@ -202,6 +281,16 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
 - The PHP proxy (manual-install) forwards only GET, HEAD, POST, PUT and DELETE, so the API uses
   no PATCH. It buffers responses, so the app polls instead of using WebSockets or SSE.
 - SQLite limits the app to a single instance.
+- **AppAPI/HaRP route cache after `app:update`** (observed with Nextcloud 35.0.2 and the current
+  HaRP release): after an update, HaRP answered every `/exapps/sockless_mail/...` request with
+  404 ("No defined route"), although the routes were in Nextcloud's database. Disabling and
+  enabling the app fixes it, because that pushes the app's metadata to HaRP again.
+  `dev/dev.sh update-docker` does this automatically. This looks like an upstream issue.
+- No local mail store yet: every folder or list view asks the IMAP server. Persisted sync state
+  (UIDVALIDITY, HIGHESTMODSEQ), a header cache, IDLE and CONDSTORE come in phase 6.
+- Message parts are held in memory while they are served, so very large attachments cost
+  memory in proportion to their size.
+- The frontend bundle is about 1.2 MB (355 kB gzipped), mostly the Nextcloud component library.
 - One username and password per account, used for both IMAP and SMTP. OAuth2 (Gmail, Outlook)
   is prepared in the data model (`AuthMethod` plus a typed credential) but not implemented yet.
 - Mail servers with self-signed certificates cannot be used. There is no "trust this certificate"

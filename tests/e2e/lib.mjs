@@ -1,0 +1,63 @@
+// Shared helpers for the browser checks. Settings via environment:
+//   NC_URL (default http://localhost:8180), NC_USER/NC_PASSWORD (admin/admin),
+//   BROWSER_CHANNEL (msedge, or chrome), MAIL_HOST (greenmail: the server name the app uses).
+import { chromium } from 'playwright-core'
+
+export const base = process.env.NC_URL ?? 'http://localhost:8180'
+export const mailHost = process.env.MAIL_HOST ?? 'greenmail'
+export const appPage = `${base}/index.php/apps/app_api/embedded/sockless_mail/sockless_mail`
+
+export async function start() {
+	const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL ?? 'msedge', headless: true })
+	const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
+	const errors = []
+	let current = 'start'
+	page.on('pageerror', (e) => errors.push(`[${current}] ${String(e).split('\n')[0]}`))
+	page.on('console', (m) => {
+		// The 400 of a deliberately invalid form is expected; everything else is reported.
+		if (m.type() === 'error' && !m.text().includes('status of 400')) {
+			errors.push(`[${current}] ${m.text().split('\n')[0]}`)
+		}
+	})
+	const step = (message) => {
+		current = message
+		console.log(`- ${message}`)
+	}
+
+	await page.goto(`${base}/login`)
+	await page.fill('#user', process.env.NC_USER ?? 'admin')
+	await page.fill('#password', process.env.NC_PASSWORD ?? 'admin')
+	await page.click('button[type=submit]')
+	await page.waitForURL((u) => !u.pathname.includes('/login'))
+	await page.goto(appPage)
+	await page.getByRole('button', { name: 'Add account' }).first().waitFor({ timeout: 30000 })
+
+	return {
+		browser,
+		page,
+		step,
+		async finish() {
+			await browser.close()
+			if (errors.length) {
+				console.log(`console errors:\n  ${errors.join('\n  ')}`)
+				process.exitCode = 1
+			} else {
+				console.log('console errors: none')
+			}
+		},
+	}
+}
+
+/** Account names in the navigation, top to bottom. */
+export async function accountNames(page) {
+	return (await page.locator('li.account-entry > .app-navigation-entry .app-navigation-entry__name').allInnerTexts()).map((s) => s.trim())
+}
+
+/** Opens an account's action menu and clicks an entry. */
+export async function accountAction(page, name, action) {
+	// The account's own row: its <li> also contains the folder rows, which have their own hover state.
+	const row = page.locator('li.account-entry > .app-navigation-entry', { has: page.locator('.app-navigation-entry__name', { hasText: new RegExp(`^${name}$`) }) }).first()
+	await row.hover()
+	await row.getByRole('button', { name: 'Actions' }).click()
+	await page.getByRole('menuitem', { name: action }).click()
+}

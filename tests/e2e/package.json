@@ -1,0 +1,13 @@
+{
+  "name": "sockless-mail-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Browser checks against the dev stack (dev/dev.sh up). Uses an installed Edge or Chrome.",
+  "scripts": {
+    "accounts": "node accounts.mjs",
+    "mail": "node mail.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.64.1"
+  }
+}

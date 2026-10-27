@@ -10,7 +10,7 @@ namespace SocklessMail.IntegrationTests;
 public sealed class ConnectionTestTests(GreenMailFixture mail)
 {
     private static readonly ConnectionTester Tester =
-        new(new MailServerConnector(new ServerAddressPolicy(allowLocal: true)), NullLogger<ConnectionTester>.Instance);
+        new(new MailServerConnector(new PolicySocketConnector(new ServerAddressPolicy(allowLocal: true))), NullLogger<ConnectionTester>.Instance);
 
     private CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -80,7 +80,7 @@ public sealed class ConnectionTestTests(GreenMailFixture mail)
     [Fact]
     public async Task Local_server_is_refused_unless_the_admin_allows_it()
     {
-        var strict = new ConnectionTester(new MailServerConnector(new ServerAddressPolicy(allowLocal: false)), NullLogger<ConnectionTester>.Instance);
+        var strict = new ConnectionTester(new MailServerConnector(new PolicySocketConnector(new ServerAddressPolicy(allowLocal: false))), NullLogger<ConnectionTester>.Instance);
         var result = await strict.TestAsync(PlainImap, PlainSmtp, GreenMailFixture.AliceAddress,
             new PasswordCredential(GreenMailFixture.AlicePassword), Ct);
 

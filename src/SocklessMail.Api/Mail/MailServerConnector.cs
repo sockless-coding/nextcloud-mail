@@ -24,13 +24,11 @@ public sealed class MailConnectionException(string code, string message, Excepti
 }
 
 /// <summary>
-/// Opens connected, authenticated MailKit clients. DNS is resolved here and every address is
-/// checked against <see cref="ServerAddressPolicy"/> before connecting; MailKit then gets the
-/// already connected socket, so the address it talks to is the one that was checked (no DNS
-/// rebinding between check and connect), while TLS still validates the certificate against the
-/// host name.
+/// Opens connected, authenticated MailKit clients. The TCP connection comes from
+/// <see cref="PolicySocketConnector"/> (address policy enforced); MailKit then runs the protocol
+/// on that socket, and TLS still validates the certificate against the host name.
 /// </summary>
-public sealed class MailServerConnector(ServerAddressPolicy policy)
+public sealed class MailServerConnector(PolicySocketConnector sockets)
 {
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
 
@@ -64,7 +62,7 @@ public sealed class MailServerConnector(ServerAddressPolicy policy)
 
         try
         {
-            var socket = await ConnectSocketAsync(endpoint.Host, endpoint.Port, timeout.Token);
+            var socket = await sockets.ConnectAsync(endpoint.Host, endpoint.Port, timeout.Token);
             await client.ConnectAsync(socket, endpoint.Host, endpoint.Port, ToSocketOptions(endpoint.Security), timeout.Token);
 
             if (client is SmtpClient smtp && !smtp.Capabilities.HasFlag(SmtpCapabilities.Authentication))
@@ -86,56 +84,6 @@ public sealed class MailServerConnector(ServerAddressPolicy policy)
             client.Dispose();
             throw;
         }
-    }
-
-    private async Task<Socket> ConnectSocketAsync(string host, int port, CancellationToken ct)
-    {
-        IPAddress[] addresses;
-        if (IPAddress.TryParse(host, out var literal))
-        {
-            addresses = [literal];
-        }
-        else
-        {
-            try
-            {
-                addresses = await Dns.GetHostAddressesAsync(host, ct);
-            }
-            catch (SocketException e)
-            {
-                throw new MailConnectionException("host_not_found", $"The server name \"{host}\" could not be resolved.", e);
-            }
-        }
-
-        var allowed = addresses.Where(policy.IsAllowed).ToArray();
-        if (addresses.Length > 0 && allowed.Length == 0)
-        {
-            throw new MailConnectionException("address_not_allowed",
-                $"\"{host}\" points to a private or reserved network address. An administrator can allow local mail servers with SOCKLESS_MAIL_ALLOW_LOCAL_SERVERS.");
-        }
-
-        SocketException? last = null;
-        foreach (var address in allowed)
-        {
-            var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-            try
-            {
-                await socket.ConnectAsync(address, port, ct);
-                return socket;
-            }
-            catch (SocketException e)
-            {
-                last = e;
-                socket.Dispose();
-            }
-            catch
-            {
-                socket.Dispose();
-                throw;
-            }
-        }
-
-        throw last ?? new SocketException((int)SocketError.HostNotFound);
     }
 
     private static Task AuthenticateAsync(MailService client, string username, MailCredential credential, CancellationToken ct) =>

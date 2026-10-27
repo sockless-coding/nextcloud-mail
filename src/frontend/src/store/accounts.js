@@ -9,7 +9,6 @@ export const accountsState = reactive({
 	accounts: [],
 	loading: true,
 	loadError: '',
-	selectedId: null,
 })
 
 /** Field errors from a 400 response, keyed by field path (e.g. "imap.host"). */
@@ -39,9 +38,6 @@ export async function loadAccounts() {
 	accountsState.loadError = ''
 	try {
 		accountsState.accounts = await apiGet('/accounts')
-		if (!accountsState.accounts.some((a) => a.id === accountsState.selectedId)) {
-			accountsState.selectedId = accountsState.accounts[0]?.id ?? null
-		}
 	} catch (e) {
 		accountsState.loadError = e?.response ? `HTTP ${e.response.status}` : String(e)
 	} finally {
@@ -56,7 +52,6 @@ export async function createAccount(input) {
 	try {
 		const account = await apiSend('POST', '/accounts', input)
 		accountsState.accounts.push(account)
-		accountsState.selectedId = account.id
 		return account
 	} catch (e) {
 		rethrow(e)
@@ -88,9 +83,6 @@ export async function deleteAccount(id) {
 		rethrow(e)
 	}
 	accountsState.accounts = accountsState.accounts.filter((a) => a.id !== id)
-	if (accountsState.selectedId === id) {
-		accountsState.selectedId = accountsState.accounts[0]?.id ?? null
-	}
 }
 
 /**
@@ -124,20 +116,6 @@ export async function moveAccount(id, delta) {
 export async function testConnection(input, accountId) {
 	try {
 		return await apiSend('POST', '/accounts/test', { ...input, accountId })
-	} catch (e) {
-		if (e?.response?.status === 429) {
-			throw new Error('Too many connection tests. Wait a minute and try again.')
-		}
-		rethrow(e)
-	}
-}
-
-/**
- * @param {string} id account id
- */
-export async function testStoredAccount(id) {
-	try {
-		return await apiSend('POST', `/accounts/${id}/test`)
 	} catch (e) {
 		if (e?.response?.status === 429) {
 			throw new Error('Too many connection tests. Wait a minute and try again.')
