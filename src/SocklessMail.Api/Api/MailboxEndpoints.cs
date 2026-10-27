@@ -38,6 +38,14 @@ public static class MailboxEndpoints
                     Math.Clamp(limit ?? MailboxService.DefaultPageSize, 1, MailboxService.MaxPageSize), ct))
                 : NotFound());
 
+        // Polling: cheap, served from the cache after an incremental sync (or none while IDLE watches the folder).
+        account.MapGet("/folders/{folderId}/changes", async (
+                Guid accountId, string folderId, long since,
+                ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
+            await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
+                ? Results.Ok(await mailbox.GetChangesAsync(a, folderId, since, ct))
+                : NotFound());
+
         account.MapGet("/folders/{folderId}/messages/{messageId}", async (
                 Guid accountId, string folderId, string messageId, string? remote,
                 ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>

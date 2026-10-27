@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SocklessMail.Api.Data;
 using SocklessMail.Api.Mail;
+using SocklessMail.Api.Sync;
 
 namespace SocklessMail.Api.Accounts;
 
@@ -11,8 +12,8 @@ public sealed class AccountLimitException() : Exception($"A user can have at mos
 /// DbContext's query filter. Another user's account is indistinguishable from a missing one.
 /// </summary>
 public sealed class AccountService(
-    MailDbContext db, CredentialProtector credentials, ConnectionTester tester, ImapConnections imap, TimeProvider clock,
-    ILogger<AccountService> logger)
+    MailDbContext db, CredentialProtector credentials, ConnectionTester tester, ImapConnections imap, MailboxWatchers watchers,
+    TimeProvider clock, ILogger<AccountService> logger)
 {
     public const int MaxAccountsPerUser = 50;
 
@@ -73,8 +74,9 @@ public sealed class AccountService(
 
         account.UpdatedAt = clock.GetUtcNow();
         await db.SaveChangesAsync(ct);
-        // Pooled connections were opened with the old settings or password.
+        // Pooled and watching connections were opened with the old settings or password.
         await imap.InvalidateAsync(account.Id);
+        watchers.Invalidate(account.Id);
         logger.LogInformation("Updated account {AccountId}", account.Id);
         return account;
     }
@@ -85,6 +87,7 @@ public sealed class AccountService(
         if (deleted > 0)
         {
             await imap.InvalidateAsync(id);
+            watchers.Invalidate(id);
             logger.LogInformation("Deleted account {AccountId}", id);
         }
 

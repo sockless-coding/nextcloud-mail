@@ -5,11 +5,13 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 5 (send)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> Status: **phase 6a (sync)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
 > (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
 > with remote images blocked by default, attachments), works with it (read/unread, flag, move,
 > delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
-> with a copy saved to Sent. Phase 6 covers sync (IDLE/CONDSTORE), search, unified inbox and OAuth2.
+> with a copy saved to Sent. Message lists come from a local header cache kept in sync with
+> QRESYNC/CONDSTORE and IMAP IDLE. Still to come in phase 6: search (6b), a unified inbox (6c)
+> and OAuth2 (6d).
 
 ## Layout
 
@@ -26,10 +28,11 @@ src/SocklessMail.Api/       ASP.NET Core minimal APIs
   Data/                     EF Core DbContext (SQLite), per-user query filter, migrations
   Mail/                     MailKit connections: address policy, connector, connection pool, HTML sanitizer
   Mailbox/                  folders, message list, message view, parts, remote image proxy
+  Sync/                     header cache, folder sync (QRESYNC/CONDSTORE/plain), IDLE watchers
   Security/                 Data Protection key ring wrapping
 src/frontend/               Vue 3 + @nextcloud/vue 9, built into wwwroot/js and wwwroot/css
 tests/SocklessMail.Tests/   xUnit v3: auth, CSRF, accounts, user isolation, key ring, pool, sanitizer
-tests/SocklessMail.IntegrationTests/  API and IMAP against GreenMail in Docker (Testcontainers)
+tests/SocklessMail.IntegrationTests/  API and IMAP against GreenMail and Dovecot in Docker (Testcontainers)
 tests/e2e/                  browser checks against the dev stack (Playwright with installed Edge/Chrome)
 dev/                        local Nextcloud + HaRP + GreenMail stack and the dev.sh helper
 ```
@@ -40,7 +43,7 @@ Requirements: .NET SDK 10, Node 22, Docker (Engine 25+ for the healthcheck start
 
 ```bash
 dotnet test --project tests/SocklessMail.Tests              # unit + endpoint tests
-dotnet test --project tests/SocklessMail.IntegrationTests   # needs Docker: starts GreenMail
+dotnet test --project tests/SocklessMail.IntegrationTests   # needs Docker: starts GreenMail and Dovecot
 (cd src/frontend && npm ci && npm run build)
 docker build -t sockless.local/sockless_mail:0.3.2 .
 ```
@@ -50,7 +53,7 @@ Browser checks (need the dev stack below, the app deployed and `dev/dev.sh seed-
 ```bash
 cd tests/e2e && npm ci
 node accounts.mjs    # add/test/validate/reorder/delete accounts
-node mail.mjs        # paging, sanitized view, remote images, attachments, polling
+node mail.mjs        # paging, sanitized view, remote images, attachments, polling (new and removed mail)
 node actions.mjs     # read/unread, flag, delete (with and without Trash), move, create/rename folders
 node compose.mjs     # new message with attachment, validation, reply, forward, copies in Sent
 ```
@@ -156,7 +159,7 @@ Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_
 - **Container user**: the image's default user stays root, because AppAPI copies certificates in
   and runs `update-ca-certificates` as root. The entrypoint drops to the unprivileged user
   `sockless` before starting `frpc` and the app.
-- **IMAP connections** are pooled per account (`ImapConnections` over `ConnectionPool`):
+- **IMAP connections** for requests are pooled per account (`ImapConnections` over `ConnectionPool`):
   - At most 3 connections per account and 100 in total. When the total is reached, the oldest idle
     connection of another account is closed.
   - A connection is leased exclusively for one operation, because MailKit clients are not
@@ -167,6 +170,7 @@ Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_
     operations only).
   - Changing or deleting an account closes its pooled connections.
   - SMTP connects per use.
+  - IDLE watchers hold one more connection per watched account, outside the pool (see below).
 - **Reading** never changes the mailbox. Folders are opened read-only (`EXAMINE`) and bodies are
   fetched with `BODY.PEEK`. Marking a message as read when it is opened is a separate,
   explicit request from the UI.
@@ -226,12 +230,61 @@ Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_
      says to check Sent first.
 - **In the composer**, Escape and clicking outside do not close it, so a half-written message
   cannot vanish by accident. Discard and Send are the only ways out.
-- **Message list** pages are newest first, 50 per page. The cursor is a UID
-  (`?before=<uid>`), so mail arriving between page loads neither shifts nor duplicates entries.
-  Message ids are `<UIDVALIDITY>-<UID>`, so an id becomes 404 when the server renumbers the folder.
-- **New mail** is found by polling. Every 60 seconds, and when the tab becomes visible again,
-  the UI reloads the newest page of the open folder and merges it in, and refreshes the folder
-  counts. There is no WebSocket or SSE channel to the browser (see "Known limitations").
+- **Message lists come from a header cache** in the database (`folders`, `messages` and
+  `removed_messages` tables): subject, addresses, date, flags, size, has-attachments. Bodies are
+  never cached; opening a message still fetches it from the server.
+  - Per folder, the cache holds a contiguous window of UIDs. It starts with the newest page (50)
+    the first time the folder is shown, grows downwards when older pages are requested, and new
+    mail extends it upwards. More than 500 new messages since the last sync rebuild the window
+    from the newest page instead.
+  - Every list request first runs an **incremental sync** of the folder, then answers from the
+    cache. How the sync finds changes depends on the server:
+    - **QRESYNC** (enabled on every connection that offers it):
+      `UID FETCH <window> (FLAGS) (CHANGEDSINCE <modseq> VANISHED)`. If HIGHESTMODSEQ has not
+      moved, the sync ends after the `EXAMINE`.
+    - **CONDSTORE** alone: `CHANGEDSINCE` for flags. A `UID SEARCH` over the window finds
+      removed messages, and only runs when the message count or UIDNEXT moved.
+    - **Neither** (GreenMail, for example): the flags of the whole window are fetched and
+      compared, so the cost grows with how far the user has scrolled.
+    - New messages are fetched with `UID SEARCH <lastuid+1>:*` plus a `FETCH` of the new ones.
+    - A changed UIDVALIDITY drops the folder's cache and rebuilds it.
+  - A sync reads everything from the server first and then writes the database in one
+    transaction. A connection that breaks halfway therefore leaves the cache unchanged, and the
+    sync (a read) is retried like other reads. A lock per folder keeps a sync and the app's own
+    changes from interleaving.
+  - The app's own changes (flags, move, delete) update the cache directly after the server has
+    applied them.
+  - Folders that disappear from the folder list (deleted or renamed elsewhere) lose their cache
+    the next time the list is loaded. Deleting an account deletes its cache.
+- **Paging**: newest first, 50 per page. The cursor is a UID (`?before=<uid>`), so mail arriving
+  between page loads neither shifts nor duplicates entries. Message ids are `<UIDVALIDITY>-<UID>`,
+  so an id becomes 404 when the server renumbers the folder.
+- **Change tokens**: each folder has a change counter. Every row records the change that last
+  touched it, and removals are kept for 24 hours. A page answers with a `token`, and
+  `GET …/folders/{id}/changes?since=<token>` answers with:
+  - the messages added or changed since then
+  - the ids removed since then
+  - the folder's total and unread counts
+  - a new token
+
+  The answer says `reset: true` instead when the token is older than the kept removals, comes
+  from before a rebuilt window, or more than 500 messages changed. The UI then reloads the list.
+- **New mail in the UI** is found by polling the changes endpoint every 15 seconds, and when the
+  tab becomes visible again. The folder list (LIST + STATUS) is reloaded every 60 seconds.
+  There is no WebSocket or SSE channel to the browser (see "Known limitations").
+- **IDLE watchers** keep the INBOX cache current without any request:
+  - Only accounts of users who used the app in the last 10 minutes are watched, at most 50
+    accounts in total. A user's first request starts their watchers at once.
+  - Each watcher has its own connection, separate from the pool. It syncs the INBOX, then idles
+    (re-issued every 9 minutes). A change the server reports ends IDLE, and the INBOX is synced
+    again.
+  - While a watcher idles with nothing pending, INBOX list and changes requests are answered
+    from the cache without contacting the server.
+  - Servers without IDLE are synced every 2 minutes instead, and requests keep syncing
+    themselves.
+  - Failures reconnect after 30 seconds, doubling up to 10 minutes. Changing an account restarts
+    its watcher, and deleting the account stops it. An account whose password can no longer be
+    decrypted is not watched until the password is entered again.
 
 ## Security model
 
@@ -355,8 +408,11 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
 - Actions work on one message at a time in the UI. The API takes up to 500 ids, so selecting
   several messages is a UI addition only. Folders cannot be deleted from the UI yet, and there is
   no undo after a move or delete (Trash is the safety net).
-- No local mail store yet: every folder or list view asks the IMAP server. Persisted sync state
-  (UIDVALIDITY, HIGHESTMODSEQ), a header cache, IDLE and CONDSTORE come in phase 6.
+- The header cache covers what the user has paged through, not whole folders. The folder list
+  and its counts still come from the server (LIST + STATUS) every time.
+- Only the INBOX is watched with IDLE. Other folders are synced when they are shown or polled.
+- The UI still polls: IDLE makes those polls cheap and current, but the browser learns about new
+  mail up to 15 seconds late.
 - Message parts are held in memory while they are served, so very large attachments cost
   memory in proportion to their size.
 - The frontend bundle is about 1.2 MB (355 kB gzipped), mostly the Nextcloud component library.

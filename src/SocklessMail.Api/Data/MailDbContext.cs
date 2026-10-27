@@ -1,6 +1,11 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SocklessMail.Api.Accounts;
+using SocklessMail.Api.Mailbox;
+using SocklessMail.Api.Sync;
 
 namespace SocklessMail.Api.Data;
 
@@ -8,7 +13,8 @@ namespace SocklessMail.Api.Data;
 /// The app database (SQLite in the persistent volume). Every user-owned entity carries a query
 /// filter on the current Nextcloud user, as a second line of defence behind the explicit owner
 /// checks in the services: a query that forgets to scope still cannot see another user's rows.
-/// Without a user (startup, background work) the filter matches nothing; such code must use
+/// Without a user (startup, background work) the filter matches nothing; background work acts
+/// for a user explicitly (<see cref="CurrentUserScopes.CreateUserScope"/>) or uses
 /// IgnoreQueryFilters deliberately.
 /// </summary>
 public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurrentUser currentUser) : DbContext(options)
@@ -16,6 +22,19 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
     private readonly string? _userId = currentUser.UserId;
 
     public DbSet<MailAccount> Accounts => Set<MailAccount>();
+    public DbSet<CachedFolder> Folders => Set<CachedFolder>();
+    public DbSet<CachedMessage> Messages => Set<CachedMessage>();
+    public DbSet<RemovedMessage> RemovedMessages => Set<RemovedMessage>();
+
+    // SQLite cannot order or compare DateTimeOffset natively; store UTC ticks.
+    private static readonly ValueConverter<DateTimeOffset, long> UtcTicks =
+        new(v => v.UtcTicks, v => new DateTimeOffset(v, TimeSpan.Zero));
+
+    private static readonly ValueConverter<AddressDto[], string> Addresses =
+        new(v => JsonSerializer.Serialize(v, JsonSerializerOptions.Web), v => JsonSerializer.Deserialize<AddressDto[]>(v, JsonSerializerOptions.Web) ?? Array.Empty<AddressDto>());
+
+    private static readonly ValueComparer<AddressDto[]> AddressComparer =
+        new((a, b) => a!.SequenceEqual(b!), v => v.Aggregate(0, (hash, address) => HashCode.Combine(hash, address)), v => v.ToArray());
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -34,10 +53,51 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             account.Property(a => a.ImapSecurity).HasConversion<string>().HasMaxLength(16);
             account.Property(a => a.SmtpSecurity).HasConversion<string>().HasMaxLength(16);
             account.Property(a => a.AuthMethod).HasConversion<string>().HasMaxLength(16);
-            // SQLite cannot order or compare DateTimeOffset natively; store UTC ticks.
-            account.Property(a => a.CreatedAt).HasConversion(v => v.UtcTicks, v => new DateTimeOffset(v, TimeSpan.Zero));
-            account.Property(a => a.UpdatedAt).HasConversion(v => v.UtcTicks, v => new DateTimeOffset(v, TimeSpan.Zero));
+            account.Property(a => a.CreatedAt).HasConversion(UtcTicks);
+            account.Property(a => a.UpdatedAt).HasConversion(UtcTicks);
             account.HasQueryFilter(a => a.OwnerUserId == _userId);
+        });
+
+        model.Entity<CachedFolder>(folder =>
+        {
+            folder.ToTable("folders");
+            folder.HasKey(f => f.Id);
+            folder.HasIndex(f => new { f.AccountId, f.FullName }).IsUnique();
+            // Deleting an account drops its cache with it.
+            folder.HasOne<MailAccount>().WithMany().HasForeignKey(f => f.AccountId).OnDelete(DeleteBehavior.Cascade);
+            folder.Property(f => f.OwnerUserId).HasMaxLength(64);
+            folder.Property(f => f.FullName).HasMaxLength(1000);
+            // Mod-sequences are 63-bit (RFC 7162), so they fit SQLite's signed integer.
+            folder.Property(f => f.HighestModSeq).HasConversion<long>();
+            folder.Property(f => f.SyncedAt).HasConversion(UtcTicks);
+            folder.HasQueryFilter(f => f.OwnerUserId == _userId);
+        });
+
+        model.Entity<CachedMessage>(message =>
+        {
+            message.ToTable("messages");
+            message.HasKey(m => new { m.FolderId, m.Uid });
+            message.HasIndex(m => new { m.FolderId, m.ChangeSeq });
+            message.HasOne<CachedFolder>().WithMany().HasForeignKey(m => m.FolderId).OnDelete(DeleteBehavior.Cascade);
+            message.Property(m => m.OwnerUserId).HasMaxLength(64);
+            message.Property(m => m.Subject).HasMaxLength(2000);
+            message.Property(m => m.From).HasConversion(Addresses, AddressComparer);
+            message.Property(m => m.To).HasConversion(Addresses, AddressComparer);
+            message.Property(m => m.Date).HasConversion(UtcTicks);
+            message.Property(m => m.Flags).HasConversion<int>();
+            message.HasQueryFilter(m => m.OwnerUserId == _userId);
+        });
+
+        model.Entity<RemovedMessage>(removed =>
+        {
+            removed.ToTable("removed_messages");
+            removed.HasKey(r => r.Id);
+            removed.HasIndex(r => new { r.FolderId, r.ChangeSeq });
+            removed.HasIndex(r => r.RemovedAt);
+            removed.HasOne<CachedFolder>().WithMany().HasForeignKey(r => r.FolderId).OnDelete(DeleteBehavior.Cascade);
+            removed.Property(r => r.OwnerUserId).HasMaxLength(64);
+            removed.Property(r => r.RemovedAt).HasConversion(UtcTicks);
+            removed.HasQueryFilter(r => r.OwnerUserId == _userId);
         });
     }
 }

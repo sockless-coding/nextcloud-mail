@@ -1,7 +1,7 @@
 // Reading mail: paging, safe HTML view, remote images via the proxy, attachments, polling.
 // Needs: dev/dev.sh up, the app deployed, dev/dev.sh seed-mail. Adds an account for
 // alice@example.test if the user has none for that address.
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { appPage, base, mailHost, start } from './lib.mjs'
 
 const { page, step, finish } = await start()
@@ -83,6 +83,15 @@ execSync('curl -s --url smtp://127.0.0.1:3025 --mail-from poll@example.test --ma
 await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
 await page.waitForFunction((s) => document.querySelector('.message-list li.list-item__wrapper')?.innerText.includes(s), subject, { timeout: 15000 })
 step('polling: new mail appeared at the top')
+
+// Deleted by another mail program: the next poll drops it from the list.
+const imap = (command) => execFileSync('curl', ['-s', 'imap://127.0.0.1:3143/INBOX', '-u', 'alice@example.test:alice', '-X', command]).toString()
+const uid = imap(`UID SEARCH SUBJECT "${subject}"`).match(/SEARCH (\d+)/)[1]
+imap(`UID STORE ${uid} +FLAGS (\\Deleted)`)
+imap('EXPUNGE')
+await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+await page.waitForFunction((s) => ![...document.querySelectorAll('.message-list li.list-item__wrapper')].some((li) => li.innerText.includes(s)), subject, { timeout: 20000 })
+step('polling: mail deleted elsewhere disappeared')
 
 console.log(`alert dialogs: ${dialogs.length ? dialogs.join(' | ') : 'none'}`)
 await finish()

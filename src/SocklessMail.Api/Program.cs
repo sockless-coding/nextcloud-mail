@@ -12,6 +12,7 @@ using SocklessMail.Api.Hosting;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Mailbox;
 using SocklessMail.Api.Security;
+using SocklessMail.Api.Sync;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -44,12 +45,20 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CredentialProtector>();
 builder.Services.AddSingleton(new ServerAddressPolicy(options.AllowLocalServers));
 builder.Services.AddSingleton<PolicySocketConnector>();
+builder.Services.AddSingleton(new ImapFeatures());
 builder.Services.AddSingleton<MailServerConnector>();
 builder.Services.AddSingleton<ConnectionTester>();
 builder.Services.AddSingleton<ImapConnections>();
 builder.Services.AddHostedService<ImapConnectionJanitor>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<MailboxService>();
+builder.Services.AddScoped<FolderCache>();
+builder.Services.AddSingleton<SyncLocks>();
+builder.Services.AddSingleton(new WatcherOptions());
+builder.Services.AddSingleton<UserActivity>();
+builder.Services.AddSingleton<MailboxWatchers>();
+builder.Services.AddHostedService(services => services.GetRequiredService<MailboxWatchers>());
+builder.Services.AddHostedService<MailCacheJanitor>();
 builder.Services.AddSingleton<ImageProxyTokens>();
 builder.Services.AddSingleton<AttachmentUploads>();
 builder.Services.AddHostedService<AttachmentUploadJanitor>();
@@ -93,6 +102,7 @@ app.UseRouting();
 app.UseMiddleware<ApiRequestGuard>();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseUserActivity();
 app.UseRateLimiter();
 
 app.MapLifecycleEndpoints();

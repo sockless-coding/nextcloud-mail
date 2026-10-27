@@ -3,13 +3,14 @@ import { apiBase, apiGet, apiSend } from '../api.js'
 
 /**
  * Folders, the message list of the selected folder and the open message. Everything is read
- * from the API on demand; polling (App.vue) refreshes the selected folder and the folder counts.
+ * from the API on demand; polling (App.vue) asks what changed in the selected folder since the
+ * list's token, and refreshes the folder counts.
  */
 export const mailboxState = reactive({
 	/** accountId -> { list, loading, error } */
 	folders: {},
 	selected: { accountId: null, folderId: null },
-	messages: { list: [], nextBefore: null, total: 0, uidValidity: null, loading: false, loadingMore: false, error: null },
+	messages: { list: [], nextBefore: null, total: 0, uidValidity: null, token: null, loading: false, loadingMore: false, error: null },
 	open: { id: null, message: null, loading: false, error: null },
 })
 
@@ -77,7 +78,7 @@ export async function selectFolder(accountId, folderId, reset = false) {
 	}
 	mailboxState.selected = { accountId, folderId }
 	closeMessage()
-	Object.assign(mailboxState.messages, { list: [], nextBefore: null, total: 0, uidValidity: null, error: null, loading: true })
+	Object.assign(mailboxState.messages, { list: [], nextBefore: null, total: 0, uidValidity: null, token: null, error: null, loading: true })
 	const completedAtStart = writesCompleted
 	try {
 		const page = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages?limit=${PAGE_SIZE}`)
@@ -87,7 +88,9 @@ export async function selectFolder(accountId, folderId, reset = false) {
 				nextBefore: page.nextBefore,
 				total: page.total,
 				uidValidity: page.uidValidity,
+				token: page.token,
 			})
+			updateFolderCounts(page)
 		}
 	} catch (e) {
 		if (isSelected(accountId, folderId)) {
@@ -114,6 +117,7 @@ export async function loadMore() {
 	state.loadingMore = true
 	try {
 		const page = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages?limit=${PAGE_SIZE}&before=${state.nextBefore}`)
+		// The token stays the first page's: changes up to this page's token are not merged yet.
 		if (isSelected(accountId, folderId)) {
 			state.list.push(...page.messages)
 			state.nextBefore = page.nextBefore
@@ -126,41 +130,82 @@ export async function loadMore() {
 }
 
 /**
- * Polling: merges the newest page into the list (new mail on top, updated flags) without
- * resetting what the user scrolled to. A changed UIDVALIDITY means the ids are stale: reload.
+ * Polling: merges what changed since the list's token (new mail on top, updated flags, messages
+ * removed elsewhere) without resetting what the user scrolled to. A changed UIDVALIDITY means
+ * the ids are stale, so the folder is shown afresh; a token the server can no longer answer
+ * (reset) reloads the list in place.
  */
 export async function refreshMessages() {
 	const { accountId, folderId } = mailboxState.selected
 	const state = mailboxState.messages
-	if (!accountId || !folderId || state.loading || hasPendingWrites()) {
+	if (!accountId || !folderId || state.loading || state.token === null || hasPendingWrites()) {
 		return
 	}
 	const generation = writeGeneration
 	try {
-		const page = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages?limit=${PAGE_SIZE}`)
+		const changes = await apiGet(`/accounts/${accountId}/folders/${folderId}/changes?since=${state.token}`)
 		// A change made while this was loading is not in the snapshot; the next refresh catches up.
 		if (!isSelected(accountId, folderId) || generation !== writeGeneration) {
 			return
 		}
-		if (state.uidValidity !== null && page.uidValidity !== state.uidValidity) {
+		if (state.uidValidity !== null && changes.uidValidity !== state.uidValidity) {
 			await selectFolder(accountId, folderId, true)
 			return
 		}
+		if (changes.reset) {
+			await reloadList(accountId, folderId)
+			return
+		}
+		if (changes.removed.length) {
+			const removed = new Set(changes.removed)
+			state.list = state.list.filter((m) => !removed.has(m.id))
+			if (removed.has(mailboxState.open.id)) {
+				closeMessage()
+			}
+		}
 		const known = new Map(state.list.map((m, i) => [m.id, i]))
 		const fresh = []
-		for (const message of page.messages) {
+		for (const message of changes.messages) {
 			if (known.has(message.id)) {
 				state.list[known.get(message.id)] = message
 			} else {
 				fresh.push(message)
 			}
 		}
-		// Messages newer than everything we have go on top; the rest of the newest page is already listed.
+		// Messages newer than everything listed go on top; others belong to pages not loaded yet.
 		const newestKnown = state.list.length ? uidOf(state.list[0].id) : 0
 		state.list.unshift(...fresh.filter((m) => uidOf(m.id) > newestKnown))
-		state.total = page.total
+		state.total = changes.total
+		state.token = changes.token
+		updateFolderCounts(changes)
 	} catch {
 		// Polling failures stay silent; the next explicit action shows errors.
+	}
+}
+
+/** Replaces the list with the newest page, keeping the open message. */
+async function reloadList(accountId, folderId) {
+	const page = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages?limit=${PAGE_SIZE}`)
+	if (isSelected(accountId, folderId)) {
+		Object.assign(mailboxState.messages, {
+			list: page.messages,
+			nextBefore: page.nextBefore,
+			total: page.total,
+			uidValidity: page.uidValidity,
+			token: page.token,
+		})
+		updateFolderCounts(page)
+	}
+}
+
+/** The selected folder's counts in the navigation, from a page or a changes answer. */
+function updateFolderCounts({ total, unread }) {
+	const folder = selectedFolderEntry()
+	if (folder && folder.total !== null && folder.total !== undefined) {
+		folder.total = total
+	}
+	if (folder && unread !== null && unread !== undefined) {
+		folder.unread = unread
 	}
 }
 
@@ -204,7 +249,7 @@ export function forgetAccount(accountId) {
 	if (mailboxState.selected.accountId === accountId) {
 		mailboxState.selected = { accountId: null, folderId: null }
 		closeMessage()
-		Object.assign(mailboxState.messages, { list: [], nextBefore: null, total: 0, uidValidity: null, error: null, loading: false })
+		Object.assign(mailboxState.messages, { list: [], nextBefore: null, total: 0, uidValidity: null, token: null, error: null, loading: false })
 	}
 }
 

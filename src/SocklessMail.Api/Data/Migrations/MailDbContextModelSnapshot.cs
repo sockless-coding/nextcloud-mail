@@ -97,6 +97,170 @@ namespace SocklessMail.Api.Data.Migrations
 
                     b.ToTable("accounts", (string)null);
                 });
+
+            modelBuilder.Entity("SocklessMail.Api.Sync.CachedFolder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ChangeSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("HighestModSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<uint>("LastUid")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ResetSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("SyncedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Total")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<uint?>("UidNext")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<uint>("UidValidity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Unread")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<uint?>("WindowStart")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId", "FullName")
+                        .IsUnique();
+
+                    b.ToTable("folders", (string)null);
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Sync.CachedMessage", b =>
+                {
+                    b.Property<Guid>("FolderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<uint>("Uid")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ChangeSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Date")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Flags")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("From")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("HasAttachments")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("To")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("FolderId", "Uid");
+
+                    b.HasIndex("FolderId", "ChangeSeq");
+
+                    b.ToTable("messages", (string)null);
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Sync.RemovedMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ChangeSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("FolderId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RemovedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<uint>("Uid")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RemovedAt");
+
+                    b.HasIndex("FolderId", "ChangeSeq");
+
+                    b.ToTable("removed_messages", (string)null);
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Sync.CachedFolder", b =>
+                {
+                    b.HasOne("SocklessMail.Api.Accounts.MailAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Sync.CachedMessage", b =>
+                {
+                    b.HasOne("SocklessMail.Api.Sync.CachedFolder", null)
+                        .WithMany()
+                        .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Sync.RemovedMessage", b =>
+                {
+                    b.HasOne("SocklessMail.Api.Sync.CachedFolder", null)
+                        .WithMany()
+                        .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

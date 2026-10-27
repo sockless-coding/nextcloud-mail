@@ -6,6 +6,7 @@ using MimeKit.Utils;
 using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Compose;
 using SocklessMail.Api.Mail;
+using SocklessMail.Api.Sync;
 
 namespace SocklessMail.Api.Mailbox;
 
@@ -21,7 +22,7 @@ public sealed partial class MailboxService
         Run(account, async (client, token) =>
         {
             var (folder, uid) = await OpenMessageAsync(client, folderId, messageId, token);
-            var summary = await FetchOneAsync(folder, uid, ListItems, token);
+            var summary = await FetchOneAsync(folder, uid, FolderCache.ListItems, token);
             var envelope = summary.Envelope ?? new Envelope();
             var body = await BodyTextAsync(folder, uid, summary, token);
 

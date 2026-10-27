@@ -13,14 +13,14 @@ public sealed partial class MailboxService
     public const int MaxMessagesPerAction = 500;
     public const int MaxFolderNameLength = 200;
 
-    public Task<int> SetFlagsAsync(MailAccount account, string folderId, FlagsInput input, CancellationToken ct)
+    public async Task<int> SetFlagsAsync(MailAccount account, string folderId, FlagsInput input, CancellationToken ct)
     {
         if (input.Seen is null && input.Flagged is null)
         {
             throw new MailboxValidationException("seen", "Set seen, flagged or both.");
         }
 
-        return Run(account, async (client, token) =>
+        var (uidValidity, uids) = await Run(account, async (client, token) =>
         {
             var folder = await OpenFolderAsync(client, folderId, token, FolderAccess.ReadWrite);
             var uids = ParseMessageIds(folder, input.MessageIds);
@@ -35,12 +35,18 @@ public sealed partial class MailboxService
 
             await Store(MessageFlags.Seen, input.Seen);
             await Store(MessageFlags.Flagged, input.Flagged);
-            return uids.Count;
+            return (folder.UidValidity, uids);
         }, ct, retry: false);
+
+        var fullName = FullNameOf(folderId);
+        await UpdateCacheAsync(account, fullName, () =>
+            cache.ApplyFlagsAsync(account.Id, fullName, uidValidity, uids.Select(u => u.Id).ToList(), input.Seen, input.Flagged, CancellationToken.None));
+        return uids.Count;
     }
 
-    public Task<int> MoveAsync(MailAccount account, string folderId, MoveInput input, CancellationToken ct) =>
-        Run(account, async (client, token) =>
+    public async Task<int> MoveAsync(MailAccount account, string folderId, MoveInput input, CancellationToken ct)
+    {
+        var (uidValidity, uids) = await Run(account, async (client, token) =>
         {
             if (string.IsNullOrEmpty(input.TargetFolderId) || input.TargetFolderId == folderId)
             {
@@ -57,11 +63,24 @@ public sealed partial class MailboxService
             var uids = ParseMessageIds(folder, input.MessageIds);
             // MOVE where supported; MailKit falls back to COPY + \Deleted + (UID) EXPUNGE.
             await folder.MoveToAsync(uids, target, token);
-            return uids.Count;
+            return (folder.UidValidity, uids);
         }, ct, retry: false);
 
-    public Task<DeleteResult> DeleteAsync(MailAccount account, string folderId, DeleteInput input, CancellationToken ct) =>
-        Run(account, async (client, token) =>
+        await RemoveFromCacheAsync(account, folderId, uidValidity, uids);
+        return uids.Count;
+    }
+
+    /// <summary>The target folder's cache needs nothing: its next sync finds the new UIDs.</summary>
+    private Task RemoveFromCacheAsync(MailAccount account, string folderId, uint uidValidity, List<UniqueId> uids)
+    {
+        var fullName = FullNameOf(folderId);
+        return UpdateCacheAsync(account, fullName, () =>
+            cache.RemoveAsync(account.Id, fullName, uidValidity, uids.Select(u => u.Id).ToList(), CancellationToken.None));
+    }
+
+    public async Task<DeleteResult> DeleteAsync(MailAccount account, string folderId, DeleteInput input, CancellationToken ct)
+    {
+        var (result, uidValidity, uids) = await Run(account, async (client, token) =>
         {
             var trash = await FindSpecialFolderAsync(client, "trash", token);
             var inTrash = trash is not null && MailboxIds.FolderId(trash.FullName) == folderId;
@@ -86,12 +105,16 @@ public sealed partial class MailboxService
                     await folder.ExpungeAsync(token);
                 }
 
-                return new DeleteResult(false, null);
+                return (new DeleteResult(false, null), folder.UidValidity, uids);
             }
 
             await folder.MoveToAsync(uids, trash!, token);
-            return new DeleteResult(true, MailboxIds.FolderId(trash!.FullName));
+            return (new DeleteResult(true, MailboxIds.FolderId(trash!.FullName)), folder.UidValidity, uids);
         }, ct, retry: false);
+
+        await RemoveFromCacheAsync(account, folderId, uidValidity, uids);
+        return result;
+    }
 
     public Task<FolderDto> CreateFolderAsync(MailAccount account, CreateFolderInput input, CancellationToken ct) =>
         Run(account, async (client, token) =>

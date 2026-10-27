@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SocklessMail.Api.AppApi;
 using SocklessMail.Api.Data;
+using SocklessMail.Api.Sync;
 
 namespace SocklessMail.Tests;
 
@@ -55,7 +56,11 @@ public sealed class TestApp(string? storageDirectory = null, IReadOnlyDictionary
         }
 
         builder.ConfigureTestServices(services =>
-            services.AddHttpClient<NextcloudClient>().ConfigurePrimaryHttpMessageHandler(() => Nextcloud));
+        {
+            services.AddHttpClient<NextcloudClient>().ConfigurePrimaryHttpMessageHandler(() => Nextcloud);
+            // Test accounts point at made-up servers; no background IMAP connections.
+            services.AddSingleton(new WatcherOptions { MaxWatchers = 0 });
+        });
     }
 
     /// <summary>A client that sends what HaRP or the PHP proxy would forward for <paramref name="userId"/>.</summary>

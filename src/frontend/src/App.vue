@@ -185,8 +185,14 @@ import { askNewFolder, dialogs, removePermanently } from './store/actions.js'
 import { composeNew, composer } from './store/compose.js'
 import { closeMessage, forgetAccount, hasPendingWrites, loadFolders, mailboxState, refreshMessages, selectFolder } from './store/mailbox.js'
 
-/** No push channel to the browser (see README); new mail is found by polling. */
-const POLL_INTERVAL_MS = 60_000
+/**
+ * No push channel to the browser (see README); new mail is found by polling. The open folder is
+ * polled through the cheap changes endpoint, the folder list (LIST + STATUS on the server) only
+ * every FOLDER_POLL_EVERY ticks and when the tab becomes visible.
+ */
+const POLL_INTERVAL_MS = 15_000
+const FOLDER_POLL_EVERY = 4
+let pollCount = 0
 
 const dialog = reactive({ open: false, account: null })
 const accountToDelete = ref(null)
@@ -294,14 +300,15 @@ async function move(account, delta) {
 	}
 }
 
-async function poll() {
+async function poll(event) {
 	if (document.hidden || hasPendingWrites()) {
 		return
 	}
 	const accountId = mailboxState.selected.accountId
+	const withFolders = event?.type === 'visibilitychange' || ++pollCount % FOLDER_POLL_EVERY === 0
 	await Promise.all([
 		refreshMessages(),
-		accountId ? loadFolders(accountId, true) : Promise.resolve(),
+		accountId && withFolders ? loadFolders(accountId, true) : Promise.resolve(),
 	])
 }
 

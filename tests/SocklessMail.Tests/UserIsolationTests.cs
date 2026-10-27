@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
+using SocklessMail.Api.Sync;
 using static SocklessMail.Tests.AccountTestData;
 
 namespace SocklessMail.Tests;
@@ -73,6 +74,7 @@ public sealed class UserIsolationTests : IDisposable
     [Theory]
     [InlineData("folders")]
     [InlineData("folders/SU5CT1g/messages")]
+    [InlineData("folders/SU5CT1g/changes?since=0")]
     [InlineData("folders/SU5CT1g/messages/1-1")]
     [InlineData("folders/SU5CT1g/messages/1-1/parts/2")]
     public async Task Other_users_mailbox_answers_like_a_missing_one(string path)
@@ -153,6 +155,36 @@ public sealed class UserIsolationTests : IDisposable
         {
             Assert.Empty(await noUser.Accounts.ToListAsync(Ct));
             Assert.Equal(2, await noUser.Accounts.IgnoreQueryFilters().CountAsync(Ct));
+        }
+    }
+
+    [Fact]
+    public async Task Cached_mail_is_filtered_by_owner()
+    {
+        var aliceId = await CreateAsync(_alice);
+        var folderId = Guid.NewGuid();
+        await using (var asAlice = _app.CreateDbContext("alice"))
+        {
+            asAlice.Folders.Add(new CachedFolder { Id = folderId, AccountId = aliceId, OwnerUserId = "alice", FullName = "INBOX" });
+            asAlice.Messages.Add(new CachedMessage { FolderId = folderId, Uid = 1, OwnerUserId = "alice", Subject = "Secret", From = [], To = [] });
+            asAlice.RemovedMessages.Add(new RemovedMessage { FolderId = folderId, Uid = 2, OwnerUserId = "alice" });
+            await asAlice.SaveChangesAsync(Ct);
+        }
+
+        foreach (var user in new[] { "bob", null })
+        {
+            await using var db = _app.CreateDbContext(user);
+            Assert.Empty(await db.Folders.ToListAsync(Ct));
+            Assert.Empty(await db.Messages.ToListAsync(Ct));
+            Assert.Empty(await db.RemovedMessages.ToListAsync(Ct));
+        }
+
+        // Deleting the account takes its cache with it.
+        await _alice.DeleteAsync($"/api/accounts/{aliceId}", Ct);
+        await using (var noUser = _app.CreateDbContext(null))
+        {
+            Assert.Equal(0, await noUser.Messages.IgnoreQueryFilters().CountAsync(Ct));
+            Assert.Equal(0, await noUser.RemovedMessages.IgnoreQueryFilters().CountAsync(Ct));
         }
     }
 

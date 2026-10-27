@@ -6,6 +6,7 @@ using MimeKit.Text;
 using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Compose;
 using SocklessMail.Api.Mail;
+using SocklessMail.Api.Sync;
 
 namespace SocklessMail.Api.Mailbox;
 
@@ -17,21 +18,20 @@ public sealed record PartContent(string FileName, string ContentType, Func<Strea
 /// that was already looked up for the current user (<see cref="AccountService.GetAsync"/>), which
 /// is what scopes every operation here to its owner. Folders are opened read-only (EXAMINE), and
 /// bodies are fetched with BODY.PEEK, so reading does not change \Seen; marking messages as read
-/// is an explicit action.
+/// is an explicit action. Message lists come from the header cache (<see cref="FolderCache"/>)
+/// after a sync; the sync is skipped while an IDLE watcher keeps the folder current.
 /// </summary>
 public sealed partial class MailboxService(
     ImapConnections imap, CredentialProtector credentials, ImageProxyTokens proxyTokens,
-    MailServerConnector connector, AttachmentUploads uploads, TimeProvider clock, ILogger<MailboxService> logger)
+    MailServerConnector connector, AttachmentUploads uploads, FolderCache cache, SyncLocks syncLocks,
+    MailboxWatchers watchers, TimeProvider clock, ILogger<MailboxService> logger)
 {
     public const int DefaultPageSize = 50;
     public const int MaxPageSize = 100;
 
-    private const MessageSummaryItems ListItems =
-        MessageSummaryItems.UniqueId | MessageSummaryItems.Envelope | MessageSummaryItems.Flags
-        | MessageSummaryItems.InternalDate | MessageSummaryItems.Size | MessageSummaryItems.BodyStructure;
-
-    public Task<IReadOnlyList<FolderDto>> GetFoldersAsync(MailAccount account, CancellationToken ct) =>
-        Run(account, async (client, token) =>
+    public async Task<IReadOnlyList<FolderDto>> GetFoldersAsync(MailAccount account, CancellationToken ct)
+    {
+        var list = await Run(account, async (client, token) =>
         {
             var personal = client.PersonalNamespaces.Count > 0 ? client.PersonalNamespaces[0] : new FolderNamespace('/', "");
             IList<IMailFolder> folders;
@@ -54,45 +54,89 @@ public sealed partial class MailboxService(
             return FolderOrdering.Order(folders.Select(ToDto).ToList());
         }, ct);
 
-    public Task<MessagePage> GetMessagesAsync(MailAccount account, string folderId, uint? before, int limit, CancellationToken ct) =>
-        Run(account, async (client, token) =>
+        // Folders deleted or renamed elsewhere leave their cache behind; this list is the authority.
+        try
+        {
+            await cache.ForgetMissingFoldersAsync(account.Id, list.Select(f => FolderCache.Key(f.FullName)), ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger.LogWarning(e, "Cleaning up the folder cache of account {AccountId} failed", account.Id);
+        }
+
+        return list;
+    }
+
+    public async Task<MessagePage> GetMessagesAsync(MailAccount account, string folderId, uint? before, int limit, CancellationToken ct)
+    {
+        var fullName = FullNameOf(folderId);
+        var state = await CurrentStateAsync(account, folderId, fullName, ct);
+        var rows = await cache.PageAsync(state, before, limit + 1, ct);
+        if (rows.Count <= limit && state.WindowStart > 1)
+        {
+            // The page reaches below the cached window: sync again and page further back on the server.
+            state = await SyncAsync(account, folderId, fullName, (before, limit + 1 - rows.Count), ct);
+            rows = await cache.PageAsync(state, before, limit + 1, ct);
+        }
+
+        var page = rows.Take(limit).ToList();
+        uint? next = rows.Count > limit ? page[^1].Uid : null;
+        return new MessagePage(
+            page.Select(m => FolderCache.ToSummaryDto(state.UidValidity, m)).ToList(),
+            next, state.Total, state.UidValidity, state.Unread, state.ChangeSeq);
+    }
+
+    /// <summary>What changed since <paramref name="since"/> (a token from a page or an earlier call).</summary>
+    public async Task<FolderChanges> GetChangesAsync(MailAccount account, string folderId, long since, CancellationToken ct)
+    {
+        var fullName = FullNameOf(folderId);
+        return await cache.ChangesAsync(await CurrentStateAsync(account, folderId, fullName, ct), since, ct);
+    }
+
+    /// <summary>The folder's cache state, synced now unless an IDLE watcher already keeps it current.</summary>
+    private async Task<CachedFolder> CurrentStateAsync(MailAccount account, string folderId, string fullName, CancellationToken ct) =>
+        (watchers.IsCurrent(account.Id, fullName) ? await cache.FindAsync(account.Id, fullName, ct) : null)
+        ?? await SyncAsync(account, folderId, fullName, null, ct);
+
+    private async Task<CachedFolder> SyncAsync(
+        MailAccount account, string folderId, string fullName, (uint? Before, int Need)? extend, CancellationToken ct)
+    {
+        // Lock before leasing a connection (see SyncLocks).
+        using var _ = await syncLocks.AcquireAsync(account.Id, fullName, ct);
+        return await Run(account, async (client, token) =>
         {
             var folder = await OpenFolderAsync(client, folderId, token);
-            IList<IMessageSummary> summaries;
-            bool more;
-            if (before is null)
-            {
-                var first = Math.Max(0, folder.Count - limit);
-                summaries = folder.Count == 0 ? [] : await folder.FetchAsync(first, folder.Count - 1, ListItems, token);
-                more = first > 0;
-            }
-            else if (before.Value <= 1)
-            {
-                summaries = [];
-                more = false;
-            }
-            else
-            {
-                var older = await folder.SearchAsync(
-                    SearchQuery.Uids(new UniqueIdRange(UniqueId.MinValue, new UniqueId(before.Value - 1))), token);
-                var page = older.OrderBy(u => u.Id).Skip(Math.Max(0, older.Count - limit)).ToList();
-                summaries = page.Count == 0 ? [] : await folder.FetchAsync(page, ListItems, token);
-                more = older.Count > page.Count;
-            }
-
-            var messages = summaries
-                .OrderByDescending(s => s.UniqueId.Id)
-                .Select(s => ToSummaryDto(folder.UidValidity, s))
-                .ToList();
-            uint? next = more && summaries.Count > 0 ? summaries.Min(s => s.UniqueId.Id) : null;
-            return new MessagePage(messages, next, folder.Count, folder.UidValidity);
+            var state = await cache.SyncAsync(client, account, folder, DefaultPageSize, token);
+            return extend is { } e ? await cache.ExtendAsync(account, folder, state, e.Before, e.Need, token) : state;
         }, ct);
+    }
+
+    /// <summary>
+    /// Brings the cache in line with a change the app just made on the server. The change has
+    /// happened, so a failure here must not fail the request; the next sync repairs the cache.
+    /// </summary>
+    private async Task UpdateCacheAsync(MailAccount account, string fullName, Func<Task> update)
+    {
+        try
+        {
+            using var _ = await syncLocks.AcquireAsync(account.Id, fullName, CancellationToken.None);
+            await update();
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Updating the cache of account {AccountId} after a change failed", account.Id);
+        }
+    }
+
+    /// <summary>The folder's name as the cache keys it.</summary>
+    private static string FullNameOf(string folderId) =>
+        MailboxIds.FolderFullName(folderId) is { } name ? FolderCache.Key(name) : throw new MailboxNotFoundException("The folder");
 
     public Task<MessageDto> GetMessageAsync(MailAccount account, string folderId, string messageId, bool allowRemote, CancellationToken ct) =>
         Run(account, async (client, token) =>
         {
             var (folder, uid) = await OpenMessageAsync(client, folderId, messageId, token);
-            var summary = await FetchOneAsync(folder, uid, ListItems, token);
+            var summary = await FetchOneAsync(folder, uid, FolderCache.ListItems, token);
 
             var html = "";
             BodyPartText? bodyPart = summary.HtmlBody ?? summary.TextBody;

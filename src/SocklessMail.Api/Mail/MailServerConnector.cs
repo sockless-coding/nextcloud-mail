@@ -23,12 +23,18 @@ public sealed class MailConnectionException(string code, string message, Excepti
     public string Code { get; } = code;
 }
 
+/// <summary>IMAP extensions to ignore even when a server announces them; lets tests exercise the fallbacks.</summary>
+public sealed record ImapFeatures
+{
+    public ImapCapabilities Disabled { get; init; }
+}
+
 /// <summary>
 /// Opens connected, authenticated MailKit clients. The TCP connection comes from
 /// <see cref="PolicySocketConnector"/> (address policy enforced); MailKit then runs the protocol
 /// on that socket, and TLS still validates the certificate against the host name.
 /// </summary>
-public sealed class MailServerConnector(PolicySocketConnector sockets)
+public sealed class MailServerConnector(PolicySocketConnector sockets, ImapFeatures? features = null)
 {
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(20);
 
@@ -36,6 +42,22 @@ public sealed class MailServerConnector(PolicySocketConnector sockets)
     {
         var client = new ImapClient();
         await ConnectAndAuthenticateAsync(client, endpoint, username, credential, ct);
+        try
+        {
+            client.Capabilities &= ~(features?.Disabled ?? ImapCapabilities.None);
+            // Must happen before any folder is selected. With it, syncs learn about removed
+            // messages from VANISHED responses instead of comparing UID lists.
+            if (client.Capabilities.HasFlag(ImapCapabilities.QuickResync))
+            {
+                await client.EnableQuickResyncAsync(ct);
+            }
+        }
+        catch
+        {
+            client.Dispose();
+            throw;
+        }
+
         return client;
     }
 
