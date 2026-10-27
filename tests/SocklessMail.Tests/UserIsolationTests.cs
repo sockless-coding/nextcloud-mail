@@ -87,6 +87,26 @@ public sealed class UserIsolationTests : IDisposable
         Assert.Equal(await missing.Content.ReadAsStringAsync(Ct), await foreign.Content.ReadAsStringAsync(Ct));
     }
 
+    [Theory]
+    [InlineData("PUT", "folders/SU5CT1g/messages/flags", """{"messageIds":["1-1"],"seen":true}""")]
+    [InlineData("POST", "folders/SU5CT1g/messages/move", """{"messageIds":["1-1"],"targetFolderId":"VHJhc2g"}""")]
+    [InlineData("POST", "folders/SU5CT1g/messages/delete", """{"messageIds":["1-1"],"permanent":true}""")]
+    [InlineData("POST", "folders", """{"name":"Planted"}""")]
+    [InlineData("PUT", "folders/VHJhc2g", """{"name":"Renamed"}""")]
+    public async Task Other_users_mailbox_cannot_be_changed(string method, string path, string body)
+    {
+        var aliceId = await CreateAsync(_alice);
+
+        HttpRequestMessage Request(Guid id) =>
+            new(new HttpMethod(method), $"/api/accounts/{id}/{path}") { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
+
+        var foreign = await _bob.SendAsync(Request(aliceId), Ct);
+        var missing = await _bob.SendAsync(Request(Guid.NewGuid()), Ct);
+
+        Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+        Assert.Equal(await missing.Content.ReadAsStringAsync(Ct), await foreign.Content.ReadAsStringAsync(Ct));
+    }
+
     [Fact]
     public async Task Reorder_cannot_include_another_users_account()
     {

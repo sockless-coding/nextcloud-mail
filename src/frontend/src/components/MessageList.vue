@@ -31,6 +31,32 @@
 					<template #icon>
 						<NcAvatar :display-name="sender(message)" is-no-user disable-menu :size="40" />
 					</template>
+					<template #actions>
+						<NcActionButton close-after-click @click="toggleSeen(message)">
+							<template #icon>
+								<NcIconSvgWrapper :path="message.seen ? mdiEmailOutline : mdiEmailOpenOutline" />
+							</template>
+							{{ message.seen ? t('sockless_mail', 'Mark as unread') : t('sockless_mail', 'Mark as read') }}
+						</NcActionButton>
+						<NcActionButton close-after-click @click="toggleFlagged(message)">
+							<template #icon>
+								<NcIconSvgWrapper :path="message.flagged ? mdiStarOff : mdiStarOutline" />
+							</template>
+							{{ message.flagged ? t('sockless_mail', 'Remove flag') : t('sockless_mail', 'Flag') }}
+						</NcActionButton>
+						<NcActionButton close-after-click @click="askMove([message.id])">
+							<template #icon>
+								<NcIconSvgWrapper :path="mdiFolderMoveOutline" />
+							</template>
+							{{ t('sockless_mail', 'Move…') }}
+						</NcActionButton>
+						<NcActionButton close-after-click @click="remove([message.id])">
+							<template #icon>
+								<NcIconSvgWrapper :path="mdiDeleteOutline" />
+							</template>
+							{{ t('sockless_mail', 'Delete') }}
+						</NcActionButton>
+					</template>
 					<template #subname>
 						<span class="message-list__subject">
 							<NcIconSvgWrapper v-if="message.flagged" :path="mdiStar" :size="16" class="message-list__flag" :name="t('sockless_mail', 'Flagged')" />
@@ -53,8 +79,9 @@
 </template>
 
 <script setup>
-import { mdiEmailOpenOutline, mdiPaperclip, mdiStar } from '@mdi/js'
+import { mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFolderMoveOutline, mdiPaperclip, mdiStar, mdiStarOff, mdiStarOutline } from '@mdi/js'
 import { getCanonicalLocale, n, t } from '@nextcloud/l10n'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
@@ -62,6 +89,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcListItem from '@nextcloud/vue/components/NcListItem'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { computed } from 'vue'
+import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { loadMore, mailboxState, openMessage } from '../store/mailbox.js'
 
 const state = mailboxState.messages

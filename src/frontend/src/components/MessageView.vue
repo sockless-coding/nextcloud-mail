@@ -25,6 +25,32 @@
 					</div>
 					<NcDateTime class="message-view__date" :timestamp="Date.parse(message.date)" :format="{ dateStyle: 'medium', timeStyle: 'short' }" :relative-time="false" />
 				</div>
+				<div class="message-view__toolbar" role="toolbar" :aria-label="t('sockless_mail', 'Message actions')">
+					<NcButton variant="tertiary" @click="toggleSeen(message)">
+						<template #icon>
+							<NcIconSvgWrapper :path="message.seen ? mdiEmailOutline : mdiEmailOpenOutline" />
+						</template>
+						{{ message.seen ? t('sockless_mail', 'Mark as unread') : t('sockless_mail', 'Mark as read') }}
+					</NcButton>
+					<NcButton variant="tertiary" :pressed="message.flagged" @click="toggleFlagged(message)">
+						<template #icon>
+							<NcIconSvgWrapper :path="message.flagged ? mdiStar : mdiStarOutline" />
+						</template>
+						{{ message.flagged ? t('sockless_mail', 'Flagged') : t('sockless_mail', 'Flag') }}
+					</NcButton>
+					<NcButton variant="tertiary" @click="askMove([message.id])">
+						<template #icon>
+							<NcIconSvgWrapper :path="mdiFolderMoveOutline" />
+						</template>
+						{{ t('sockless_mail', 'Move…') }}
+					</NcButton>
+					<NcButton variant="tertiary" @click="remove([message.id])">
+						<template #icon>
+							<NcIconSvgWrapper :path="mdiDeleteOutline" />
+						</template>
+						{{ t('sockless_mail', 'Delete') }}
+					</NcButton>
+				</div>
 			</header>
 
 			<NcNoteCard v-if="message.hasRemoteContent && !message.remoteContentAllowed" type="info">
@@ -57,7 +83,7 @@
 </template>
 
 <script setup>
-import { mdiPaperclip } from '@mdi/js'
+import { mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFolderMoveOutline, mdiPaperclip, mdiStar, mdiStarOutline } from '@mdi/js'
 import { getCanonicalLocale, n, t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -67,6 +93,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { computed } from 'vue'
+import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { mailboxState, openMessage, partUrl } from '../store/mailbox.js'
 import MessageBody from './MessageBody.vue'
 
@@ -128,6 +155,13 @@ function formatFileSize(bytes) {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.message-view__toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-bottom: 12px;
 }
 
 .message-view__remote {

@@ -66,6 +66,42 @@ public static class MailboxEndpoints
                 return Results.Empty;
             });
 
+        // Changes. POST/PUT with JSON bodies: the PHP proxy forwards neither PATCH nor DELETE bodies reliably.
+        account.MapPut("/folders/{folderId}/messages/flags", async (
+                Guid accountId, string folderId, FlagsInput input,
+                ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
+            await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
+                ? Results.Ok(new { updated = await mailbox.SetFlagsAsync(a, folderId, input, ct) })
+                : NotFound());
+
+        account.MapPost("/folders/{folderId}/messages/move", async (
+                Guid accountId, string folderId, MoveInput input,
+                ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
+            await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
+                ? Results.Ok(new { moved = await mailbox.MoveAsync(a, folderId, input, ct) })
+                : NotFound());
+
+        account.MapPost("/folders/{folderId}/messages/delete", async (
+                Guid accountId, string folderId, DeleteInput input,
+                ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
+            await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
+                ? Results.Ok(await mailbox.DeleteAsync(a, folderId, input, ct))
+                : NotFound());
+
+        account.MapPost("/folders", async (
+                Guid accountId, CreateFolderInput input,
+                ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
+            await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
+                ? Results.Ok(await mailbox.CreateFolderAsync(a, input, ct))
+                : NotFound());
+
+        account.MapPut("/folders/{folderId}", async (
+                Guid accountId, string folderId, RenameFolderInput input,
+                ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
+            await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
+                ? Results.Ok(await mailbox.RenameFolderAsync(a, folderId, input, ct))
+                : NotFound());
+
         api.MapGet("/image-proxy", async (string token, ClaimsPrincipal user, ImageProxyTokens tokens, ImageProxy proxy, HttpContext http, CancellationToken ct) =>
         {
             if (tokens.Resolve(user.GetNextcloudUserId(), token) is not { } url)
@@ -98,6 +134,14 @@ public static class MailboxEndpoints
             catch (MailboxNotFoundException)
             {
                 return NotFound();
+            }
+            catch (MailboxValidationException e)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]> { [e.Field] = [e.Message] });
+            }
+            catch (MailboxConflictException e)
+            {
+                return Results.Json(new { error = e.Code, message = e.Message }, statusCode: StatusCodes.Status409Conflict);
             }
             catch (CredentialUnavailableException)
             {

@@ -5,10 +5,10 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 3 (read mail)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
-> (credentials encrypted at rest) and reads mail: folder tree, paged message list, sanitized
-> message view with remote images blocked by default, attachment downloads. Actions (mark read,
-> flag, move, delete) come in phase 4.
+> Status: **phase 4 (actions)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
+> with remote images blocked by default, attachments) and works with it: mark read/unread, flag,
+> move, delete via Trash, create and rename folders. Sending comes in phase 5.
 
 ## Layout
 
@@ -50,6 +50,7 @@ Browser checks (need the dev stack below, the app deployed and `dev/dev.sh seed-
 cd tests/e2e && npm ci
 node accounts.mjs    # add/test/validate/reorder/delete accounts
 node mail.mjs        # paging, sanitized view, remote images, attachments, polling
+node actions.mjs     # read/unread, flag, delete (with and without Trash), move, create/rename folders
 ```
 
 They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console errors.
@@ -165,7 +166,37 @@ Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_
   - Changing or deleting an account closes its pooled connections.
   - SMTP connects per use.
 - **Reading** never changes the mailbox. Folders are opened read-only (`EXAMINE`) and bodies are
-  fetched with `BODY.PEEK`, so opening a message does not mark it as read.
+  fetched with `BODY.PEEK`. Marking a message as read when it is opened is a separate,
+  explicit request from the UI.
+- **Changes** go through POST/PUT endpoints with JSON bodies, because the PHP proxy forwards no
+  PATCH:
+  - `PUT …/messages/flags` (`seen`, `flagged`)
+  - `POST …/messages/move`
+  - `POST …/messages/delete`
+  - `POST …/folders` (create) and `PUT …/folders/{id}` (rename)
+
+  The flag, move and delete endpoints take up to 500 message ids.
+  - Changes are not retried automatically, unlike reads. A move repeated after a dropped
+    connection could act twice.
+  - Ids from before the server renumbered the folder (a different UIDVALIDITY) are refused with
+    409 `stale_messages`, rather than acting on whatever now has those UIDs.
+  - **Delete** moves to the Trash folder (RFC 6154 special-use, or a common name such as
+    "Trash" or "Deleted Items"). In Trash, or with `permanent: true`, it flags the messages
+    `\Deleted` and expunges exactly those UIDs (`UID EXPUNGE`). On servers without UIDPLUS this
+    falls back to `EXPUNGE`, which also removes other messages another client had marked
+    `\Deleted` in that folder.
+  - An account without a Trash folder answers 409 `no_trash`, and the UI asks before deleting
+    permanently.
+  - Folder names must not contain the server's hierarchy separator, `*` or `%`. INBOX cannot
+    be renamed.
+- **In the UI** changes show at once (optimistic) and are undone with an error toast if the
+  server refuses:
+  - Changes are sent one at a time in the order made. Requests run on several pooled IMAP
+    connections, so "read" (when a message opens) followed quickly by "unread" could otherwise
+    reach the server in the wrong order.
+  - While changes are in flight, and for snapshots requested before them, polling results are
+    discarded so they cannot overwrite the newer local state.
+  - After a move or delete, the counts and the target folder (if shown) are reloaded.
 - **Message list** pages are newest first, 50 per page. The cursor is a UID
   (`?before=<uid>`), so mail arriving between page loads neither shifts nor duplicates entries.
   Message ids are `<UIDVALIDITY>-<UID>`, so an id becomes 404 when the server renumbers the folder.
@@ -286,6 +317,9 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
   404 ("No defined route"), although the routes were in Nextcloud's database. Disabling and
   enabling the app fixes it, because that pushes the app's metadata to HaRP again.
   `dev/dev.sh update-docker` does this automatically. This looks like an upstream issue.
+- Actions work on one message at a time in the UI. The API takes up to 500 ids, so selecting
+  several messages is a UI addition only. Folders cannot be deleted from the UI yet, and there is
+  no undo after a move or delete (Trash is the safety net).
 - No local mail store yet: every folder or list view asks the IMAP server. Persisted sync state
   (UIDVALIDITY, HIGHESTMODSEQ), a header cache, IDLE and CONDSTORE come in phase 6.
 - Message parts are held in memory while they are served, so very large attachments cost

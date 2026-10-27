@@ -18,7 +18,7 @@ public sealed record PartContent(string FileName, string ContentType, Func<Strea
 /// bodies are fetched with BODY.PEEK, so reading does not change \Seen; marking messages as read
 /// is an explicit action.
 /// </summary>
-public sealed class MailboxService(ImapConnections imap, CredentialProtector credentials, ImageProxyTokens proxyTokens)
+public sealed partial class MailboxService(ImapConnections imap, CredentialProtector credentials, ImageProxyTokens proxyTokens)
 {
     public const int DefaultPageSize = 50;
     public const int MaxPageSize = 100;
@@ -154,30 +154,38 @@ public sealed class MailboxService(ImapConnections imap, CredentialProtector cre
             };
         }, ct);
 
-    private Task<T> Run<T>(MailAccount account, Func<ImapClient, CancellationToken, Task<T>> action, CancellationToken ct) =>
-        imap.RunAsync(account, credentials.Unprotect(account.Id, account.ProtectedCredential), action, ct);
+    /// <param name="retry">Repeat on a fresh connection if the pooled one turned out dead; only for operations safe to repeat.</param>
+    private Task<T> Run<T>(MailAccount account, Func<ImapClient, CancellationToken, Task<T>> action, CancellationToken ct, bool retry = true) =>
+        imap.RunAsync(account, credentials.Unprotect(account.Id, account.ProtectedCredential), action, ct, retry);
 
-    private static async Task<IMailFolder> OpenFolderAsync(ImapClient client, string folderId, CancellationToken ct)
+    private static async Task<IMailFolder> FindFolderAsync(ImapClient client, string folderId, CancellationToken ct)
     {
         var fullName = MailboxIds.FolderFullName(folderId) ?? throw new MailboxNotFoundException("The folder");
-        IMailFolder folder;
         try
         {
-            folder = IsInbox(fullName) ? client.Inbox : await client.GetFolderAsync(fullName, ct);
+            return IsInbox(fullName) ? client.Inbox : await client.GetFolderAsync(fullName, ct);
         }
         catch (FolderNotFoundException)
         {
             throw new MailboxNotFoundException("The folder");
         }
+    }
 
-        if (folder.Attributes.HasFlag(FolderAttributes.NoSelect) || folder.Attributes.HasFlag(FolderAttributes.NonExistent))
+    private static async Task<IMailFolder> OpenFolderAsync(
+        ImapClient client, string folderId, CancellationToken ct, FolderAccess access = FolderAccess.ReadOnly)
+    {
+        var folder = await FindFolderAsync(client, folderId, ct);
+        if (!IsSelectable(folder))
         {
             throw new MailboxNotFoundException("The folder");
         }
 
-        await folder.OpenAsync(FolderAccess.ReadOnly, ct);
+        await folder.OpenAsync(access, ct);
         return folder;
     }
+
+    private static bool IsSelectable(IMailFolder folder) =>
+        !folder.Attributes.HasFlag(FolderAttributes.NoSelect) && !folder.Attributes.HasFlag(FolderAttributes.NonExistent);
 
     private static async Task<(IMailFolder Folder, UniqueId Uid)> OpenMessageAsync(
         ImapClient client, string folderId, string messageId, CancellationToken ct)

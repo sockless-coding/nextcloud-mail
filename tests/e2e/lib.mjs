@@ -14,8 +14,9 @@ export async function start() {
 	let current = 'start'
 	page.on('pageerror', (e) => errors.push(`[${current}] ${String(e).split('\n')[0]}`))
 	page.on('console', (m) => {
-		// The 400 of a deliberately invalid form is expected; everything else is reported.
-		if (m.type() === 'error' && !m.text().includes('status of 400')) {
+		// Expected answers the checks provoke: 400 (invalid form), 409 (no_trash before asking
+		// to delete permanently). Browsers log them as errors; everything else is reported.
+		if (m.type() === 'error' && !/status of (400|409)/.test(m.text())) {
 			errors.push(`[${current}] ${m.text().split('\n')[0]}`)
 		}
 	})
@@ -45,6 +46,14 @@ export async function start() {
 				console.log('console errors: none')
 			}
 		},
+	}
+}
+
+/** Prints a check result; a failed check makes the run exit non-zero. */
+export function check(ok, description) {
+	console.log(`${ok ? '  ok  ' : '  FAIL'} ${description}`)
+	if (!ok) {
+		process.exitCode = 1
 	}
 }
 

@@ -17,10 +17,11 @@ public sealed class GreenMailFixture : IAsyncLifetime
     public const string AlicePassword = "alice-password";
     public const string ReaderAddress = "reader@example.test";
     public const string ReaderPassword = "reader-password";
+    public const string ActionsPassword = "actions-password";
 
     private readonly IContainer _container = new ContainerBuilder("greenmail/standalone:2.1.15")
         .WithEnvironment("GREENMAIL_OPTS",
-            $"-Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=alice:{AlicePassword}@example.test,reader:{ReaderPassword}@example.test -Dgreenmail.users.login=email")
+            $"-Dgreenmail.setup.test.all -Dgreenmail.hostname=0.0.0.0 -Dgreenmail.users=alice:{AlicePassword}@example.test,reader:{ReaderPassword}@example.test,actions:{ActionsPassword}@example.test,notrash:{ActionsPassword}@example.test -Dgreenmail.users.login=email")
         .WithPortBinding(3143, true)
         .WithPortBinding(3025, true)
         .WithPortBinding(3993, true)

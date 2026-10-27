@@ -1,5 +1,5 @@
 import { reactive } from 'vue'
-import { apiBase, apiGet } from '../api.js'
+import { apiBase, apiGet, apiSend } from '../api.js'
 
 /**
  * Folders, the message list of the selected folder and the open message. Everything is read
@@ -43,8 +43,13 @@ export async function loadFolders(accountId, quiet = false) {
 	if (!quiet) {
 		entry.loading = true
 	}
+	const generation = writeGeneration
 	try {
-		entry.list = await apiGet(`/accounts/${accountId}/folders`)
+		const list = await apiGet(`/accounts/${accountId}/folders`)
+		// Background reloads must not undo counts adjusted for a change made meanwhile.
+		if (!quiet || generation === writeGeneration) {
+			entry.list = list
+		}
 		entry.error = null
 	} catch (e) {
 		if (!quiet) {
@@ -57,13 +62,23 @@ export async function loadFolders(accountId, quiet = false) {
 }
 
 /**
+ * Shows a folder. Selecting the folder that is already shown only refreshes it: a late or
+ * repeated selection (a click while the initial load is still running) must not throw away the
+ * list position or close the message the user opened in the meantime.
+ *
  * @param {string} accountId account
  * @param {string} folderId folder
+ * @param {boolean} reset reload from scratch even if the folder is already shown
  */
-export async function selectFolder(accountId, folderId) {
+export async function selectFolder(accountId, folderId, reset = false) {
+	if (!reset && isSelected(accountId, folderId) && !mailboxState.messages.error) {
+		await refreshMessages()
+		return
+	}
 	mailboxState.selected = { accountId, folderId }
 	closeMessage()
 	Object.assign(mailboxState.messages, { list: [], nextBefore: null, total: 0, uidValidity: null, error: null, loading: true })
+	const completedAtStart = writesCompleted
 	try {
 		const page = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages?limit=${PAGE_SIZE}`)
 		if (isSelected(accountId, folderId)) {
@@ -82,6 +97,11 @@ export async function selectFolder(accountId, folderId) {
 		if (isSelected(accountId, folderId)) {
 			mailboxState.messages.loading = false
 		}
+	}
+	// A change that finished while this loaded (e.g. a delete into the Trash just opened) may be
+	// missing from the snapshot, and its own follow-up refresh was skipped during loading.
+	if (isSelected(accountId, folderId) && writesCompleted !== completedAtStart) {
+		await refreshMessages()
 	}
 }
 
@@ -112,16 +132,18 @@ export async function loadMore() {
 export async function refreshMessages() {
 	const { accountId, folderId } = mailboxState.selected
 	const state = mailboxState.messages
-	if (!accountId || !folderId || state.loading) {
+	if (!accountId || !folderId || state.loading || hasPendingWrites()) {
 		return
 	}
+	const generation = writeGeneration
 	try {
 		const page = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages?limit=${PAGE_SIZE}`)
-		if (!isSelected(accountId, folderId)) {
+		// A change made while this was loading is not in the snapshot; the next refresh catches up.
+		if (!isSelected(accountId, folderId) || generation !== writeGeneration) {
 			return
 		}
 		if (state.uidValidity !== null && page.uidValidity !== state.uidValidity) {
-			await selectFolder(accountId, folderId)
+			await selectFolder(accountId, folderId, true)
 			return
 		}
 		const known = new Map(state.list.map((m, i) => [m.id, i]))
@@ -156,6 +178,10 @@ export async function openMessage(messageId, allowRemote = false) {
 		const message = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages/${messageId}${allowRemote ? '?remote=allow' : ''}`)
 		if (mailboxState.open.id === messageId) {
 			mailboxState.open.message = message
+			// Opening a message reads it; the server side only fetched with BODY.PEEK.
+			if (!message.seen) {
+				setFlags([messageId], { seen: true }).catch(() => {})
+			}
 		}
 	} catch (e) {
 		if (mailboxState.open.id === messageId) {
@@ -188,4 +214,210 @@ function isSelected(accountId, folderId) {
 
 function uidOf(messageId) {
 	return Number(messageId.split('-')[1])
+}
+
+/** A failed change, with the server's error code and message (and field errors for 400). */
+export class ActionError extends Error {
+	constructor(e) {
+		const data = e?.response?.data
+		const fieldErrors = data?.errors ? Object.fromEntries(Object.entries(data.errors).map(([k, v]) => [k, v[0]])) : {}
+		super(data?.message ?? Object.values(fieldErrors)[0] ?? (e?.response ? `HTTP ${e.response.status}` : String(e?.message ?? e)))
+		this.code = data?.error ?? (e?.response?.status === 400 ? 'invalid' : 'failed')
+		this.fieldErrors = fieldErrors
+	}
+}
+
+/**
+ * Changes go out one at a time, in the order the user made them. The server runs requests on
+ * several pooled IMAP connections, so two quick changes to the same message ("read" when it
+ * opens, then "unread") could otherwise land in the wrong order.
+ */
+let writeChain = Promise.resolve()
+let pendingWrites = 0
+/** Bumped by every change; a snapshot requested before the current value may predate a change. */
+let writeGeneration = 0
+/** Bumped when a change has been applied on the server. */
+let writesCompleted = 0
+
+/** While changes are in flight, server snapshots (polling) may predate them and must not be merged. */
+export function hasPendingWrites() {
+	return pendingWrites > 0
+}
+
+async function send(method, path, body) {
+	pendingWrites++
+	writeGeneration++
+	const run = writeChain.then(() => apiSend(method, path, body))
+	writeChain = run.catch(() => {})
+	try {
+		return await run
+	} catch (e) {
+		throw new ActionError(e)
+	} finally {
+		pendingWrites--
+		writesCompleted++
+	}
+}
+
+/** After a move or delete: fresh counts, and the target folder's list if that is the one shown. */
+function afterTransfer(accountId, targetFolderId) {
+	if (hasPendingWrites()) {
+		return
+	}
+	loadFolders(accountId, true)
+	if (targetFolderId && isSelected(accountId, targetFolderId)) {
+		refreshMessages()
+	}
+}
+
+function folderBase() {
+	const { accountId, folderId } = mailboxState.selected
+	return `/accounts/${accountId}/folders/${folderId}`
+}
+
+function selectedFolderEntry() {
+	const { accountId, folderId } = mailboxState.selected
+	return mailboxState.folders[accountId]?.list.find((f) => f.id === folderId)
+}
+
+/** Messages of the open list (and the open message) with the given ids. */
+function messagesById(ids) {
+	const wanted = new Set(ids)
+	return [
+		...mailboxState.messages.list.filter((m) => wanted.has(m.id)),
+		...(mailboxState.open.message && wanted.has(mailboxState.open.message.id) ? [mailboxState.open.message] : []),
+	]
+}
+
+/**
+ * Sets \Seen and/or \Flagged in the selected folder. Optimistic: the list, the open message
+ * and the folder's unread count change at once and are restored if the server refuses.
+ *
+ * @param {string[]} messageIds messages of the selected folder
+ * @param {{seen?: boolean, flagged?: boolean}} flags flags to set (true) or clear (false)
+ */
+export async function setFlags(messageIds, { seen, flagged }) {
+	const targets = messagesById(messageIds)
+	const before = targets.map((m) => ({ m, seen: m.seen, flagged: m.flagged }))
+	const folder = selectedFolderEntry()
+	const unreadBefore = folder?.unread
+	if (seen !== undefined && folder?.unread !== undefined && folder.unread !== null) {
+		const listed = mailboxState.messages.list.filter((m) => messageIds.includes(m.id))
+		const changed = listed.filter((m) => m.seen !== seen).length
+		folder.unread = Math.max(0, folder.unread + (seen ? -changed : changed))
+	}
+	for (const m of targets) {
+		if (seen !== undefined) m.seen = seen
+		if (flagged !== undefined) m.flagged = flagged
+	}
+	try {
+		await send('PUT', `${folderBase()}/messages/flags`, { messageIds, seen, flagged })
+	} catch (e) {
+		for (const { m, seen: s, flagged: f } of before) {
+			m.seen = s
+			m.flagged = f
+		}
+		if (folder) folder.unread = unreadBefore
+		throw e
+	}
+}
+
+/** Takes messages out of the list (and closes the view if one of them is open); returns an undo. */
+function removeFromList(messageIds) {
+	const state = mailboxState.messages
+	const previous = [...state.list]
+	const previousTotal = state.total
+	const folder = selectedFolderEntry()
+	const previousUnread = folder?.unread
+	const removed = state.list.filter((m) => messageIds.includes(m.id))
+	state.list = state.list.filter((m) => !messageIds.includes(m.id))
+	state.total = Math.max(0, state.total - removed.length)
+	if (folder && folder.unread !== null && folder.unread !== undefined) {
+		folder.unread = Math.max(0, folder.unread - removed.filter((m) => !m.seen).length)
+	}
+	if (messageIds.includes(mailboxState.open.id)) {
+		closeMessage()
+	}
+	const { accountId, folderId } = mailboxState.selected
+	return () => {
+		if (folder) folder.unread = previousUnread
+		// The user may have switched folders while the request ran; that list must stay as it is.
+		if (isSelected(accountId, folderId)) {
+			state.list = previous
+			state.total = previousTotal
+		}
+	}
+}
+
+/**
+ * @param {string[]} messageIds messages of the selected folder
+ * @param {string} targetFolderId destination
+ */
+export async function moveMessages(messageIds, targetFolderId) {
+	const accountId = mailboxState.selected.accountId
+	const undo = removeFromList(messageIds)
+	try {
+		await send('POST', `${folderBase()}/messages/move`, { messageIds, targetFolderId })
+	} catch (e) {
+		undo()
+		throw e
+	}
+	afterTransfer(accountId, targetFolderId)
+}
+
+/**
+ * Moves to Trash, or deletes permanently in Trash. Throws an ActionError with code "no_trash"
+ * when the account has no Trash folder; call again with permanent = true after asking.
+ *
+ * @param {string[]} messageIds messages of the selected folder
+ * @param {boolean} permanent skip the Trash
+ */
+export async function deleteMessages(messageIds, permanent = false) {
+	const accountId = mailboxState.selected.accountId
+	const undo = removeFromList(messageIds)
+	let result
+	try {
+		result = await send('POST', `${folderBase()}/messages/delete`, { messageIds, permanent })
+	} catch (e) {
+		undo()
+		throw e
+	}
+	afterTransfer(accountId, result.trashFolderId)
+	return result
+}
+
+/**
+ * @param {string} accountId account
+ * @param {string} name folder name
+ * @param {string|null} parentId parent folder, or null for the top level
+ */
+export async function createFolder(accountId, name, parentId = null) {
+	const folder = await send('POST', `/accounts/${accountId}/folders`, { name, parentId })
+	await loadFolders(accountId, true)
+	return folder
+}
+
+/**
+ * Renaming changes the folder's id (it is derived from the name), so a selected folder is
+ * re-selected under its new id.
+ *
+ * @param {string} accountId account
+ * @param {string} folderId folder to rename
+ * @param {string} name new name
+ */
+export async function renameFolder(accountId, folderId, name) {
+	const folder = await send('PUT', `/accounts/${accountId}/folders/${folderId}`, { name })
+	const wasSelected = isSelected(accountId, folderId)
+	const oldFullName = mailboxState.folders[accountId]?.list.find((f) => f.id === folderId)?.fullName
+	await loadFolders(accountId, true)
+	if (wasSelected) {
+		await selectFolder(accountId, folder.id, true)
+	} else if (oldFullName && mailboxState.selected.accountId === accountId) {
+		// A subfolder of the renamed one was selected: its id changed as well.
+		const current = mailboxState.folders[accountId].list.find((f) => f.id === mailboxState.selected.folderId)
+		if (!current) {
+			mailboxState.selected = { accountId: null, folderId: null }
+		}
+	}
+	return folder
 }

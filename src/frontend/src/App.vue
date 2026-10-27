@@ -25,6 +25,12 @@
 							</template>
 							{{ t('sockless_mail', 'Edit account') }}
 						</NcActionButton>
+						<NcActionButton close-after-click @click="newFolder(account)">
+							<template #icon>
+								<NcIconSvgWrapper :path="mdiFolderPlusOutline" />
+							</template>
+							{{ t('sockless_mail', 'New folder') }}
+						</NcActionButton>
 						<NcActionButton close-after-click @click="refreshAccount(account)">
 							<template #icon>
 								<NcIconSvgWrapper :path="mdiRefresh" />
@@ -113,6 +119,21 @@
 			@saved="onSaved"
 			@close="dialog.open = false" />
 
+		<MoveDialog v-if="dialogs.move"
+			:message-ids="dialogs.move"
+			@close="dialogs.move = null" />
+
+		<FolderNameDialog v-if="dialogs.folderName"
+			:prompt="dialogs.folderName"
+			@close="dialogs.folderName = null" />
+
+		<NcDialog v-if="dialogs.confirmPermanent"
+			:name="t('sockless_mail', 'Delete permanently?')"
+			:message="t('sockless_mail', 'This account has no Trash folder. The messages will be deleted permanently and cannot be restored.')"
+			:buttons="permanentButtons"
+			:open="true"
+			@update:open="(isOpen) => !isOpen && (dialogs.confirmPermanent = null)" />
+
 		<NcDialog v-if="accountToDelete"
 			:name="t('sockless_mail', 'Delete account')"
 			:message="t('sockless_mail', 'Remove {name} from Sockless Mail? Mail on the server is not affected.', { name: accountToDelete.displayName })"
@@ -123,7 +144,7 @@
 </template>
 
 <script setup>
-import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiDelete, mdiEmailOpenOutline, mdiEmailOutline, mdiPencil, mdiPlus, mdiRefresh } from '@mdi/js'
+import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiDelete, mdiEmailOpenOutline, mdiEmailOutline, mdiFolderPlusOutline, mdiPencil, mdiPlus, mdiRefresh } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -140,10 +161,13 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import AccountDialog from './components/AccountDialog.vue'
 import FolderItem from './components/FolderItem.vue'
+import FolderNameDialog from './components/FolderNameDialog.vue'
 import MessageList from './components/MessageList.vue'
 import MessageView from './components/MessageView.vue'
+import MoveDialog from './components/MoveDialog.vue'
 import { accountsState, deleteAccount, loadAccounts, moveAccount } from './store/accounts.js'
-import { closeMessage, forgetAccount, loadFolders, mailboxState, refreshMessages, selectFolder } from './store/mailbox.js'
+import { askNewFolder, dialogs, removePermanently } from './store/actions.js'
+import { closeMessage, forgetAccount, hasPendingWrites, loadFolders, mailboxState, refreshMessages, selectFolder } from './store/mailbox.js'
 
 /** No push channel to the browser (see README); new mail is found by polling. */
 const POLL_INTERVAL_MS = 60_000
@@ -180,7 +204,15 @@ async function toggleAccount(account, isOpen) {
 /** Clicking an account opens it and shows its inbox. */
 async function selectAccount(account) {
 	expanded[account.id] = true
+	// Already showing one of this account's folders (checked again after loading, since the user
+	// may have picked a folder meanwhile): keep it instead of jumping back to the inbox.
+	if (mailboxState.selected.accountId === account.id) {
+		return
+	}
 	const folders = mailboxState.folders[account.id]?.list.length ? mailboxState.folders[account.id].list : await loadFolders(account.id)
+	if (mailboxState.selected.accountId === account.id) {
+		return
+	}
 	const inbox = folders.find((f) => f.specialUse === 'inbox') ?? folders.find((f) => f.selectable)
 	if (inbox) {
 		selectFolder(account.id, inbox.id)
@@ -208,6 +240,25 @@ const deleteButtons = computed(() => [
 	},
 ])
 
+const permanentButtons = computed(() => [
+	{ label: t('sockless_mail', 'Cancel') },
+	{
+		label: t('sockless_mail', 'Delete permanently'),
+		variant: 'error',
+		callback: () => {
+			removePermanently(dialogs.confirmPermanent)
+		},
+	},
+])
+
+async function newFolder(account) {
+	if (!mailboxState.folders[account.id]) {
+		await loadFolders(account.id)
+	}
+	expanded[account.id] = true
+	askNewFolder(account.id)
+}
+
 function openDialog(account) {
 	dialog.account = account
 	dialog.open = true
@@ -228,7 +279,7 @@ async function move(account, delta) {
 }
 
 async function poll() {
-	if (document.hidden) {
+	if (document.hidden || hasPendingWrites()) {
 		return
 	}
 	const accountId = mailboxState.selected.accountId
