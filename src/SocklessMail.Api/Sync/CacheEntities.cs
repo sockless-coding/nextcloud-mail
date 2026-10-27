@@ -64,6 +64,9 @@ public sealed class CachedMessage
     public MessageFlags Flags { get; set; }
 
     public long ChangeSeq { get; set; }
+
+    /// <summary>Subject, names and addresses in <see cref="SearchTerms.Normalize"/>d form, for searching the cache.</summary>
+    public required string SearchText { get; init; }
 }
 
 /// <summary>A message that disappeared from a cached folder, so polling clients can drop it too. Pruned after a day.</summary>

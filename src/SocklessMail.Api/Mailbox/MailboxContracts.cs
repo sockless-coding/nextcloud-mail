@@ -92,3 +92,12 @@ public static class MailboxIds
 
 /// <summary>The requested folder or message does not exist (any more); answered with 404.</summary>
 public sealed class MailboxNotFoundException(string what) : Exception($"{what} was not found.");
+
+/// <summary>Matches of a folder search, newest first, paged like <see cref="MessagePage"/>; <see cref="Total"/> counts all matches.</summary>
+public sealed record SearchPage(IReadOnlyList<MessageSummaryDto> Messages, uint? NextBefore, int Total, uint UidValidity);
+
+/// <summary>A cached message matching a search across folders, with where it lives.</summary>
+public sealed record SearchHit(Guid AccountId, string FolderId, string FolderFullName, MessageSummaryDto Message);
+
+/// <summary>Newest first; <see cref="More"/> means there were more matches than returned.</summary>
+public sealed record CachedSearchResult(IReadOnlyList<SearchHit> Hits, bool More);

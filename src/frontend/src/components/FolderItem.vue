@@ -42,6 +42,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { computed, ref } from 'vue'
 import { askNewFolder, askRenameFolder } from '../store/actions.js'
 import { mailboxState, selectFolder } from '../store/mailbox.js'
+import { clearSearch } from '../store/search.js'
 
 const props = defineProps({
 	accountId: { type: String, required: true },
@@ -79,6 +80,7 @@ const active = computed(() => mailboxState.selected.accountId === props.accountI
 
 function select() {
 	if (props.folder.selectable) {
+		clearSearch()
 		selectFolder(props.accountId, props.folder.id)
 	} else {
 		open.value = !open.value

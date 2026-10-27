@@ -184,6 +184,7 @@ import { accountsState, deleteAccount, loadAccounts, moveAccount } from './store
 import { askNewFolder, dialogs, removePermanently } from './store/actions.js'
 import { composeNew, composer } from './store/compose.js'
 import { closeMessage, forgetAccount, hasPendingWrites, loadFolders, mailboxState, refreshMessages, selectFolder } from './store/mailbox.js'
+import { clearSearch } from './store/search.js'
 
 /**
  * No push channel to the browser (see README); new mail is found by polling. The open folder is
@@ -226,6 +227,7 @@ async function toggleAccount(account, isOpen) {
 /** Clicking an account opens it and shows its inbox. */
 async function selectAccount(account) {
 	expanded[account.id] = true
+	clearSearch()
 	// Already showing one of this account's folders (checked again after loading, since the user
 	// may have picked a folder meanwhile): keep it instead of jumping back to the inbox.
 	if (mailboxState.selected.accountId === account.id) {

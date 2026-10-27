@@ -191,6 +191,29 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
             removed.Select(uid => MailboxIds.MessageId(state.UidValidity, uid)).ToList());
     }
 
+    /// <summary>
+    /// Cached messages of all of <paramref name="userId"/>'s accounts whose subject, names or
+    /// addresses contain every term, newest first. Only what the cache holds is found: messages
+    /// of folders the user has opened, as far back as they paged.
+    /// </summary>
+    public async Task<CachedSearchResult> SearchAsync(string userId, IReadOnlyList<string> terms, int limit, CancellationToken ct)
+    {
+        var messages = db.Messages.AsNoTracking().Where(m => m.OwnerUserId == userId);
+        foreach (var term in terms.Select(SearchTerms.Normalize))
+        {
+            messages = messages.Where(m => m.SearchText.Contains(term));
+        }
+
+        var rows = await messages
+            .Join(db.Folders.AsNoTracking(), m => m.FolderId, f => f.Id, (m, f) => new { Message = m, f.AccountId, f.FullName, f.UidValidity })
+            .OrderByDescending(x => x.Message.Date)
+            .Take(limit + 1)
+            .ToListAsync(ct);
+        return new CachedSearchResult(
+            rows.Take(limit).Select(x => new SearchHit(x.AccountId, MailboxIds.FolderId(x.FullName), x.FullName, ToSummaryDto(x.UidValidity, x.Message))).ToList(),
+            rows.Count > limit);
+    }
+
     /// <summary>Applies a flag change the app itself just made on the server.</summary>
     public async Task ApplyFlagsAsync(Guid accountId, string fullName, uint uidValidity, IReadOnlyCollection<uint> uids,
         bool? seen, bool? flagged, CancellationToken ct)
@@ -528,18 +551,31 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
         return removed;
     }
 
-    private static CachedMessage ToCachedMessage(CachedFolder state, IMessageSummary s, long seq) => new()
+    private static CachedMessage ToCachedMessage(CachedFolder state, IMessageSummary s, long seq)
     {
-        FolderId = state.Id,
-        Uid = s.UniqueId.Id,
-        OwnerUserId = state.OwnerUserId,
-        Subject = s.Envelope?.Subject ?? "",
-        From = AddressDto.From(s.Envelope?.From),
-        To = AddressDto.From(s.Envelope?.To),
-        Date = s.Envelope?.Date ?? s.InternalDate ?? DateTimeOffset.UnixEpoch,
-        HasAttachments = s.Attachments.Any(),
-        Size = (long)(s.Size ?? 0),
-        Flags = (s.Flags ?? MessageFlags.None) & SystemFlags,
-        ChangeSeq = seq,
-    };
+        var subject = s.Envelope?.Subject ?? "";
+        var from = AddressDto.From(s.Envelope?.From);
+        var to = AddressDto.From(s.Envelope?.To);
+        return new CachedMessage
+        {
+            FolderId = state.Id,
+            Uid = s.UniqueId.Id,
+            OwnerUserId = state.OwnerUserId,
+            Subject = subject,
+            From = from,
+            To = to,
+            SearchText = SearchText(subject, from.Concat(to)),
+            Date = s.Envelope?.Date ?? s.InternalDate ?? DateTimeOffset.UnixEpoch,
+            HasAttachments = s.Attachments.Any(),
+            Size = (long)(s.Size ?? 0),
+            Flags = (s.Flags ?? MessageFlags.None) & SystemFlags,
+            ChangeSeq = seq,
+        };
+    }
+
+    private static string SearchText(string subject, IEnumerable<AddressDto> addresses)
+    {
+        var text = SearchTerms.Normalize(string.Join('\n', addresses.Select(a => $"{a.Name} {a.Address}").Prepend(subject)));
+        return text.Length > 4000 ? text[..4000] : text;
+    }
 }

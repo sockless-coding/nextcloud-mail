@@ -5,13 +5,14 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 6a (sync)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> Status: **phase 6b (search)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
 > (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
 > with remote images blocked by default, attachments), works with it (read/unread, flag, move,
 > delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
 > with a copy saved to Sent. Message lists come from a local header cache kept in sync with
-> QRESYNC/CONDSTORE and IMAP IDLE. Still to come in phase 6: search (6b), a unified inbox (6c)
-> and OAuth2 (6d).
+> QRESYNC/CONDSTORE and IMAP IDLE. Search covers the open folder on the server (message text
+> included) or all accounts from the cache. Still to come in phase 6: a unified inbox (6c) and
+> OAuth2 (6d).
 
 ## Layout
 
@@ -56,6 +57,7 @@ node accounts.mjs    # add/test/validate/reorder/delete accounts
 node mail.mjs        # paging, sanitized view, remote images, attachments, polling (new and removed mail)
 node actions.mjs     # read/unread, flag, delete (with and without Trash), move, create/rename folders
 node compose.mjs     # new message with attachment, validation, reply, forward, copies in Sent
+node search.mjs      # folder search (body text), search across accounts, opening a result
 ```
 
 They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console errors.
@@ -272,6 +274,21 @@ Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_
 - **New mail in the UI** is found by polling the changes endpoint every 15 seconds, and when the
   tab becomes visible again. The folder list (LIST + STATUS) is reloaded every 60 seconds.
   There is no WebSocket or SSE channel to the browser (see "Known limitations").
+- **Search** has two scopes, chosen with a switch above the message list:
+  - **This folder** (`GET …/folders/{id}/search?q=…&before=<uid>`) asks the mail server:
+    `UID SEARCH TEXT <term> TEXT <term> …`. It matches headers and message text, finds old mail
+    the cache has never seen, and pages newest first with the same UID cursor as the list. The
+    server decides how terms match: Dovecot with a full-text index matches words, others (such
+    as GreenMail) substrings. The results are not cached.
+  - **All accounts and folders** (`GET /api/search?q=…`) only asks the database:
+    - It matches subject, sender and recipient names and addresses of cached messages, without
+      regard to case (also beyond ASCII). Message text is not included.
+    - It covers only what the cache holds: folders shown before, as far back as they were paged.
+    - It returns the 50 newest matches, saying when there are more.
+  - Every word or "quoted phrase" must match. A search has at most 10 terms and 200 characters.
+  - Results from other folders show "Account › Folder". Opening one selects its folder, so the
+    message actions work on the right folder. Clicking a folder or account in the navigation
+    leaves the search.
 - **IDLE watchers** keep the INBOX cache current without any request:
   - Only accounts of users who used the app in the last 10 minutes are watched, at most 50
     accounts in total. A user's first request starts their watchers at once.
@@ -410,6 +427,9 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
   no undo after a move or delete (Trash is the safety net).
 - The header cache covers what the user has paged through, not whole folders. The folder list
   and its counts still come from the server (LIST + STATUS) every time.
+- Search across accounts only knows the subjects and addresses of cached messages, and shows at
+  most 50 results. To find message text or older mail, search one folder; there is no search of
+  all folders on the servers at once.
 - Only the INBOX is watched with IDLE. Other folders are synced when they are shown or polled.
 - The UI still polls: IDLE makes those polls cheap and current, but the browser learns about new
   mail up to 15 seconds late.

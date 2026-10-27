@@ -86,6 +86,38 @@ public sealed partial class MailboxService(
             next, state.Total, state.UidValidity, state.Unread, state.ChangeSeq);
     }
 
+    /// <summary>
+    /// Searches one folder on the server (IMAP <c>SEARCH TEXT</c>, headers and body) for messages
+    /// containing every term. Not cached: matches may lie anywhere in the folder.
+    /// </summary>
+    public Task<SearchPage> SearchFolderAsync(MailAccount account, string folderId, string? query, uint? before, int limit, CancellationToken ct)
+    {
+        var terms = SearchTerms.Parse(query);
+        return Run(account, async (client, token) =>
+        {
+            var folder = await OpenFolderAsync(client, folderId, token);
+            var search = terms.Select(SearchQuery.MessageContains).Aggregate<SearchQuery>((a, b) => a.And(b));
+            if (before is { } b)
+            {
+                if (b <= 1)
+                {
+                    return new SearchPage([], null, 0, folder.UidValidity);
+                }
+
+                search = search.And(SearchQuery.Uids(new UniqueIdRange(new UniqueId(folder.UidValidity, 1), new UniqueId(folder.UidValidity, b - 1))));
+            }
+
+            var matches = (await folder.SearchAsync(search, token)).OrderByDescending(u => u.Id).ToList();
+            var page = matches.Take(limit).ToList();
+            var summaries = page.Count == 0 ? [] : await folder.FetchAsync(page, FolderCache.ListItems, token);
+            return new SearchPage(
+                summaries.OrderByDescending(s => s.UniqueId.Id).Select(s => ToSummaryDto(folder.UidValidity, s)).ToList(),
+                matches.Count > limit ? page[^1].Id : null,
+                matches.Count,
+                folder.UidValidity);
+        }, ct);
+    }
+
     /// <summary>What changed since <paramref name="since"/> (a token from a page or an earlier call).</summary>
     public async Task<FolderChanges> GetChangesAsync(MailAccount account, string folderId, long since, CancellationToken ct)
     {

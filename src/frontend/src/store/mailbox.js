@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
 import { apiBase, apiGet, apiSend } from '../api.js'
+import { dropHits, searchState } from './search.js'
 
 /**
  * Folders, the message list of the selected folder and the open message. Everything is read
@@ -246,6 +247,7 @@ export function closeMessage() {
 /** Removes everything cached for a deleted or changed account. */
 export function forgetAccount(accountId) {
 	delete mailboxState.folders[accountId]
+	searchState.hits = searchState.hits.filter((h) => h.accountId !== accountId)
 	if (mailboxState.selected.accountId === accountId) {
 		mailboxState.selected = { accountId: null, folderId: null }
 		closeMessage()
@@ -325,11 +327,12 @@ function selectedFolderEntry() {
 	return mailboxState.folders[accountId]?.list.find((f) => f.id === folderId)
 }
 
-/** Messages of the open list (and the open message) with the given ids. */
+/** Messages of the open list, of search results from the same folder, and the open message with the given ids. */
 function messagesById(ids) {
 	const wanted = new Set(ids)
 	return [
 		...mailboxState.messages.list.filter((m) => wanted.has(m.id)),
+		...searchState.hits.filter((h) => isSelected(h.accountId, h.folderId) && wanted.has(h.message.id)).map((h) => h.message),
 		...(mailboxState.open.message && wanted.has(mailboxState.open.message.id) ? [mailboxState.open.message] : []),
 	]
 }
@@ -375,6 +378,7 @@ function removeFromList(messageIds) {
 	const folder = selectedFolderEntry()
 	const previousUnread = folder?.unread
 	const removed = state.list.filter((m) => messageIds.includes(m.id))
+	const previousHits = searchState.hits
 	state.list = state.list.filter((m) => !messageIds.includes(m.id))
 	state.total = Math.max(0, state.total - removed.length)
 	if (folder && folder.unread !== null && folder.unread !== undefined) {
@@ -384,8 +388,14 @@ function removeFromList(messageIds) {
 		closeMessage()
 	}
 	const { accountId, folderId } = mailboxState.selected
+	dropHits(messageIds, accountId, folderId)
+	const hitsAfterDrop = searchState.hits
 	return () => {
 		if (folder) folder.unread = previousUnread
+		// Unless a new search replaced the results meanwhile.
+		if (searchState.hits === hitsAfterDrop) {
+			searchState.hits = previousHits
+		}
 		// The user may have switched folders while the request ran; that list must stay as it is.
 		if (isSelected(accountId, folderId)) {
 			state.list = previous

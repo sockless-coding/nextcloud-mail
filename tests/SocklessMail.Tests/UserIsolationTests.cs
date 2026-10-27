@@ -75,6 +75,7 @@ public sealed class UserIsolationTests : IDisposable
     [InlineData("folders")]
     [InlineData("folders/SU5CT1g/messages")]
     [InlineData("folders/SU5CT1g/changes?since=0")]
+    [InlineData("folders/SU5CT1g/search?q=secret")]
     [InlineData("folders/SU5CT1g/messages/1-1")]
     [InlineData("folders/SU5CT1g/messages/1-1/parts/2")]
     public async Task Other_users_mailbox_answers_like_a_missing_one(string path)
@@ -166,10 +167,18 @@ public sealed class UserIsolationTests : IDisposable
         await using (var asAlice = _app.CreateDbContext("alice"))
         {
             asAlice.Folders.Add(new CachedFolder { Id = folderId, AccountId = aliceId, OwnerUserId = "alice", FullName = "INBOX" });
-            asAlice.Messages.Add(new CachedMessage { FolderId = folderId, Uid = 1, OwnerUserId = "alice", Subject = "Secret", From = [], To = [] });
+            asAlice.Messages.Add(new CachedMessage { FolderId = folderId, Uid = 1, OwnerUserId = "alice", Subject = "Secret", From = [], To = [], SearchText = "secret" });
             asAlice.RemovedMessages.Add(new RemovedMessage { FolderId = folderId, Uid = 2, OwnerUserId = "alice" });
             await asAlice.SaveChangesAsync(Ct);
         }
+
+        // Bob's search across "all" folders covers only his own.
+        var bobResponse = await _bob.GetAsync("/api/search?q=secret", Ct);
+        Assert.True(bobResponse.IsSuccessStatusCode, await bobResponse.Content.ReadAsStringAsync(Ct));
+        var search = await JsonAsync(bobResponse);
+        Assert.Empty(search.GetProperty("hits").EnumerateArray());
+        var own = await JsonAsync(await _alice.GetAsync("/api/search?q=secret", Ct));
+        Assert.Single(own.GetProperty("hits").EnumerateArray());
 
         foreach (var user in new[] { "bob", null })
         {

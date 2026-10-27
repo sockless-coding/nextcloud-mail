@@ -6,6 +6,7 @@ using SocklessMail.Api.Accounts;
 using SocklessMail.Api.AppApi;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Mailbox;
+using SocklessMail.Api.Sync;
 
 namespace SocklessMail.Api.Api;
 
@@ -44,6 +45,14 @@ public static class MailboxEndpoints
                 ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
             await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
                 ? Results.Ok(await mailbox.GetChangesAsync(a, folderId, since, ct))
+                : NotFound());
+
+        account.MapGet("/folders/{folderId}/search", async (
+                Guid accountId, string folderId, string? q, uint? before, int? limit,
+                ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
+            await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
+                ? Results.Ok(await mailbox.SearchFolderAsync(a, folderId, q, before,
+                    Math.Clamp(limit ?? MailboxService.DefaultPageSize, 1, MailboxService.MaxPageSize), ct))
                 : NotFound());
 
         account.MapGet("/folders/{folderId}/messages/{messageId}", async (
@@ -109,6 +118,23 @@ public static class MailboxEndpoints
             await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
                 ? Results.Ok(await mailbox.RenameFolderAsync(a, folderId, input, ct))
                 : NotFound());
+
+        // Across all accounts and folders, from the header cache only: no IMAP traffic.
+        api.MapGet("/search", async (string? q, int? limit, ClaimsPrincipal user, FolderCache cache, CancellationToken ct) =>
+        {
+            IReadOnlyList<string> terms;
+            try
+            {
+                terms = SearchTerms.Parse(q);
+            }
+            catch (MailboxValidationException e)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]> { [e.Field] = [e.Message] });
+            }
+
+            return Results.Ok(await cache.SearchAsync(user.GetNextcloudUserId(), terms,
+                Math.Clamp(limit ?? MailboxService.DefaultPageSize, 1, MailboxService.MaxPageSize), ct));
+        });
 
         api.MapGet("/image-proxy", async (string token, ClaimsPrincipal user, ImageProxyTokens tokens, ImageProxy proxy, HttpContext http, CancellationToken ct) =>
         {
