@@ -98,7 +98,9 @@ public sealed class EndpointTests : IDisposable
     [Fact]
     public async Task State_changing_api_request_without_csrf_header_is_403()
     {
-        var response = await _app.ClientAs("alice").PostAsync("/api/me", null, Ct);
+        var client = _app.ClientAs("alice");
+        client.DefaultRequestHeaders.Remove("X-Sockless-Request");
+        var response = await client.PostAsync("/api/me", null, Ct);
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal("csrf_check_failed", (await Json(response)).GetProperty("error").GetString());
     }
@@ -106,9 +108,7 @@ public sealed class EndpointTests : IDisposable
     [Fact]
     public async Task State_changing_api_request_with_csrf_header_passes_the_guard()
     {
-        var client = _app.ClientAs("alice");
-        client.DefaultRequestHeaders.Add("X-Sockless-Request", "1");
-        var response = await client.PostAsync("/api/me", null, Ct);
+        var response = await _app.ClientAs("alice").PostAsync("/api/me", null, Ct);
         // Passes the guard and reaches routing: /api/me has no POST handler.
         Assert.NotEqual(HttpStatusCode.Forbidden, response.StatusCode);
     }

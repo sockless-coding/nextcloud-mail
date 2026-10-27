@@ -5,8 +5,8 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 1 (skeleton)**. The AppAPI lifecycle, request authentication, packaging and a
-> "Hello &lt;user&gt;" page work end to end. Mail accounts come in phase 2.
+> Status: **phase 2 (accounts)**. Each Nextcloud user can add, edit, test, reorder and remove any
+> number of IMAP/SMTP accounts; credentials are encrypted at rest. Reading mail comes in phase 3.
 
 ## Layout
 
@@ -19,8 +19,13 @@ src/SocklessMail.Api/       ASP.NET Core minimal APIs
   AppApi/                   AppAPI contract: env, auth headers, lifecycle, OCS client, UI registration
   Hosting/                  listener (unix socket / TCP), CSRF guard, request logging
   Api/                      the app's own /api endpoints
+  Accounts/                 account model, validation, service, encrypted credentials
+  Data/                     EF Core DbContext (SQLite), per-user query filter, migrations
+  Mail/                     MailKit connections: address policy, connector, connection test
+  Security/                 Data Protection key ring wrapping
 src/frontend/               Vue 3 + @nextcloud/vue 9, built into wwwroot/js and wwwroot/css
-tests/SocklessMail.Tests/   xUnit v3: auth validation, lifecycle, scoping, CSRF
+tests/SocklessMail.Tests/   xUnit v3: auth, lifecycle, CSRF, accounts, user isolation, key ring
+tests/SocklessMail.IntegrationTests/  against GreenMail in Docker (Testcontainers)
 dev/                        local Nextcloud + HaRP + GreenMail stack and the dev.sh helper
 ```
 
@@ -29,10 +34,15 @@ dev/                        local Nextcloud + HaRP + GreenMail stack and the dev
 Requirements: .NET SDK 10, Node 22, Docker (Engine 25+ for the healthcheck start interval).
 
 ```bash
-dotnet test                                 # unit + endpoint tests
+dotnet test --project tests/SocklessMail.Tests              # unit + endpoint tests
+dotnet test --project tests/SocklessMail.IntegrationTests   # needs Docker: starts GreenMail
 (cd src/frontend && npm ci && npm run build)
-docker build -t sockless.local/sockless_mail:0.1.0 .
+docker build -t sockless.local/sockless_mail:0.2.0 .
 ```
+
+Database changes: `dotnet tool restore`, then
+`dotnet ef migrations add <Name> --project src/SocklessMail.Api --output-dir Data/Migrations`.
+Migrations run automatically at startup.
 
 ## Local development
 
@@ -42,6 +52,11 @@ Nextcloud 35 on **http://localhost:8180** (admin/admin), HaRP behind the same ng
 ```bash
 dev/dev.sh up        # start the stack, register the deploy daemons harp_dev and manual_dev
 ```
+
+GreenMail has two mailboxes, `alice@example.test` (password `alice`) and `bob@example.test`
+(password `bob`), with no encryption: IMAP on port 3143, SMTP on 3025. Use the server name
+`greenmail` for the container deployed by HaRP, and `127.0.0.1` for the app running on your machine.
+The dev registrations set `SOCKLESS_MAIL_ALLOW_LOCAL_SERVERS=true`, because both addresses are local.
 
 ### Fast loop: run the app on your machine (manual-install daemon)
 
@@ -97,9 +112,13 @@ AppAPI injects everything the app needs: `APP_ID`, `APP_VERSION`, `APP_SECRET`, 
 `<environment-variables>`; AppAPI drops `--env` values for undeclared names. Values are fixed at
 registration, so changing one means registering again.
 
-| Variable | Purpose |
-|---|---|
-| `SOCKLESS_MAIL_ENCRYPTION_KEY` | Protects the key ring that encrypts stored mail credentials (used from phase 2). |
+| Variable | Default | Purpose |
+|---|---|---|
+| `SOCKLESS_MAIL_ENCRYPTION_KEY` | unset | Wraps the key ring that encrypts stored mail credentials. At least 32 characters. Strongly recommended; see "Stored credentials". |
+| `SOCKLESS_MAIL_ALLOW_LOCAL_SERVERS` | `false` | `true` allows mail servers on private, loopback and carrier-grade NAT addresses, e.g. an internal mail server. |
+
+Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_data`):
+`sockless_mail.db` (SQLite, WAL mode) and `keys/` (the Data Protection key ring).
 
 ## How it runs
 
@@ -124,7 +143,10 @@ registration, so changing one means registering again.
   takes the Nextcloud user id from the same header. `AA-VERSION` is not checked, because HaRP
   rewrites it.
 - **User scoping**: every `/api` endpoint requires a non-empty user, and the user id comes only
-  from the verified header. From phase 2, every account, folder and message query is scoped by it.
+  from the verified header. It is never taken from the request body. Account queries are scoped by
+  it twice: explicitly in `AccountService`, and by an EF Core query filter that hides other users'
+  rows from any query that forgets. Another user's account answers 404, exactly like a missing one.
+  `UserIsolationTests` tries every endpoint across users.
 - **Access levels**: `info.xml` declares `/api` as USER. HaRP and the PHP proxy reject
   anonymous requests before they reach the app, and the app checks again.
 - **CSRF**: neither proxy checks Nextcloud's request token. The app therefore rejects
@@ -137,11 +159,53 @@ registration, so changing one means registering again.
 - **Calls to Nextcloud** carry the same headers. With a user id the app acts as that user, and
   Nextcloud records this in `exapp_impersonation.log`.
 
+### Stored credentials
+
+Mail passwords are encrypted with ASP.NET Core Data Protection (AES-256-CBC + HMAC-SHA256). The
+protector purpose includes the account id, so a ciphertext copied into another account's row does
+not decrypt. The API never returns credentials.
+
+The Data Protection **key ring** lives in `keys/` on the same volume as the database. Unprotected,
+anyone holding a copy of the volume, such as a backup or snapshot, could decrypt every password.
+So the key ring itself is encrypted (AES-256-GCM) with a key derived from a secret kept elsewhere:
+
+- **`SOCKLESS_MAIL_ENCRYPTION_KEY`** when set. It is stored in Nextcloud's database (the deploy
+  options) and in the container's environment (visible in `docker inspect`), but not on the volume.
+  Keep a copy somewhere safe: without it the stored passwords cannot be recovered.
+- **`APP_SECRET`** otherwise, with a warning at startup. It is also kept in Nextcloud's database,
+  but AppAPI generates a new one whenever the app is **registered again**. `app:update` keeps it.
+  After a re-registration every user has to enter their passwords again.
+
+Each wrapped key records which secret protects it. Setting the variable later therefore keeps
+older keys readable, and only new keys use it. Removing or changing the variable makes the stored
+credentials unreadable: the app keeps running, and connection tests report
+`credential_unavailable`. Users then re-enter their password when editing the account.
+
+### Connections to mail servers
+
+Any user can make the app connect to a host and port of their choice. Without limits that would
+be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata endpoints). So:
+
+- The app resolves DNS itself and checks every address before connecting. It then hands the
+  already connected socket to MailKit, so DNS cannot change between the check and the connection
+  (DNS rebinding), and TLS still verifies the certificate against the host name.
+- Link-local (incl. `169.254.169.254`), multicast and unspecified addresses are always refused.
+  Private, loopback, unique-local and carrier-grade NAT addresses are refused unless
+  `SOCKLESS_MAIL_ALLOW_LOCAL_SERVERS=true`.
+- Connection tests are rate-limited to 10 per minute per user, and every connection has a
+  20-second timeout.
+- TLS certificates are validated strictly. Self-signed certificates are rejected with an
+  explanation (name mismatch, untrusted chain).
+
 ## Known limitations
 
 - The PHP proxy (manual-install) forwards only GET, HEAD, POST, PUT and DELETE, so the API uses
   no PATCH. It buffers responses, so the app polls instead of using WebSockets or SSE.
-- SQLite (from phase 2) limits the app to a single instance.
+- SQLite limits the app to a single instance.
+- One username and password per account, used for both IMAP and SMTP. OAuth2 (Gmail, Outlook)
+  is prepared in the data model (`AuthMethod` plus a typed credential) but not implemented yet.
+- Mail servers with self-signed certificates cannot be used. There is no "trust this certificate"
+  option yet.
 - Nextcloud installs translations only from app store release archives, so the UI is English
   until the app is published there.
 

@@ -1,6 +1,15 @@
+using System.Security.Claims;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
+using SocklessMail.Api;
+using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Api;
 using SocklessMail.Api.AppApi;
+using SocklessMail.Api.Data;
 using SocklessMail.Api.Hosting;
+using SocklessMail.Api.Mail;
+using SocklessMail.Api.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,15 +24,45 @@ else
 }
 
 var appApi = AppApiOptions.FromConfiguration(builder.Configuration);
+var options = SocklessMailOptions.FromConfiguration(builder.Configuration, builder.Environment.ContentRootPath);
 builder.Services.AddSingleton(appApi);
+builder.Services.AddSingleton(options);
 builder.ConfigureAppApiListener(appApi);
 
 builder.Services.AddAppApiAuthentication();
 builder.Services.AddHttpClient<NextcloudClient>(NextcloudClient.Configure);
 builder.Services.AddScoped<UiRegistration>();
 
+builder.Services.ConfigureHttpJsonOptions(json =>
+    json.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
+
+builder.Services.AddCredentialDataProtection(options, appApi);
+builder.Services.AddMailDatabase(options);
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<CredentialProtector>();
+builder.Services.AddSingleton(new ServerAddressPolicy(options.AllowLocalServers));
+builder.Services.AddSingleton<MailServerConnector>();
+builder.Services.AddSingleton<ConnectionTester>();
+builder.Services.AddScoped<AccountService>();
+
+// Connection tests open sockets to user-chosen hosts; keep them from being used as a scanner.
+builder.Services.AddRateLimiter(limiter =>
+{
+    limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    limiter.AddPolicy(AccountEndpoints.ConnectionTestRateLimit, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
+});
+
 var app = builder.Build();
 app.MakeHarpSocketAccessible(appApi);
+
+if (options.EncryptionKey is null)
+{
+    app.Logger.LogWarning(
+        "SOCKLESS_MAIL_ENCRYPTION_KEY is not set: stored mail credentials are protected with APP_SECRET, which AppAPI regenerates when the app is registered again (users would have to re-enter their passwords). See README, \"Security model\".");
+}
 
 app.UseMiddleware<RequestLogging>();
 // Before authentication: bundles and icons carry no secrets, and the top-menu icon is requested
@@ -38,17 +77,21 @@ app.UseRouting();
 app.UseMiddleware<ApiRequestGuard>();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapLifecycleEndpoints();
 
 var api = app.MapGroup("/api").RequireAuthorization(AppApiAuthentication.UserPolicy);
 api.MapMeEndpoints();
+api.MapAccountEndpoints();
 
 // Unmatched paths must answer 404, not the fallback policy's 401/403: AppAPI calls POST /init
 // with system credentials and treats only 404/501 as "no init needed".
 app.MapFallback("{*path}", () => Results.NotFound(new { error = "not_found" })).AllowAnonymous();
 
+await app.MigrateMailDatabaseAsync();
+
 app.Logger.LogInformation("Sockless Mail {Version} starting ({Mode})", appApi.AppVersion, appApi.IsHarp ? "HaRP" : "direct");
-app.Run();
+await app.RunAsync();
 
 public partial class Program;

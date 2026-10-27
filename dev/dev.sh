@@ -90,7 +90,7 @@ cmd_register_docker() {
     copy_info_xml
     occ app_api:app:unregister "$APP_ID" --force --silent || true
     occ app_api:app:register "$APP_ID" "$DAEMON_HARP" --info-xml "/tmp/$APP_ID-info.xml" \
-        --env "SOCKLESS_MAIL_ENCRYPTION_KEY=$ENCRYPTION_KEY" --wait-finish
+        --env "SOCKLESS_MAIL_ENCRYPTION_KEY=$ENCRYPTION_KEY" --env SOCKLESS_MAIL_ALLOW_LOCAL_SERVERS=true --wait-finish
 }
 
 cmd_update_docker() {

@@ -1,0 +1,147 @@
+import { reactive } from 'vue'
+import { apiGet, apiSend } from '../api.js'
+
+/**
+ * The user's mail accounts. The server is the source of truth: every change goes through the
+ * API first and the list is updated from its answer.
+ */
+export const accountsState = reactive({
+	accounts: [],
+	loading: true,
+	loadError: '',
+	selectedId: null,
+})
+
+/** Field errors from a 400 response, keyed by field path (e.g. "imap.host"). */
+export class ValidationError extends Error {
+	constructor(fieldErrors) {
+		super('Validation failed')
+		this.fieldErrors = fieldErrors
+	}
+}
+
+/**
+ * Turns an axios error into something the UI can show.
+ *
+ * @param {Error} e the error
+ */
+function rethrow(e) {
+	const data = e?.response?.data
+	if (e?.response?.status === 400 && data?.errors) {
+		const fieldErrors = Object.fromEntries(Object.entries(data.errors).map(([k, v]) => [k, v[0]]))
+		throw new ValidationError(fieldErrors)
+	}
+	throw new Error(data?.message ?? (e?.response ? `HTTP ${e.response.status}` : String(e)))
+}
+
+export async function loadAccounts() {
+	accountsState.loading = true
+	accountsState.loadError = ''
+	try {
+		accountsState.accounts = await apiGet('/accounts')
+		if (!accountsState.accounts.some((a) => a.id === accountsState.selectedId)) {
+			accountsState.selectedId = accountsState.accounts[0]?.id ?? null
+		}
+	} catch (e) {
+		accountsState.loadError = e?.response ? `HTTP ${e.response.status}` : String(e)
+	} finally {
+		accountsState.loading = false
+	}
+}
+
+/**
+ * @param {object} input account settings including the password
+ */
+export async function createAccount(input) {
+	try {
+		const account = await apiSend('POST', '/accounts', input)
+		accountsState.accounts.push(account)
+		accountsState.selectedId = account.id
+		return account
+	} catch (e) {
+		rethrow(e)
+	}
+}
+
+/**
+ * @param {string} id account id
+ * @param {object} input settings; an empty password keeps the stored one
+ */
+export async function updateAccount(id, input) {
+	try {
+		const account = await apiSend('PUT', `/accounts/${id}`, input)
+		const index = accountsState.accounts.findIndex((a) => a.id === id)
+		accountsState.accounts.splice(index, 1, account)
+		return account
+	} catch (e) {
+		rethrow(e)
+	}
+}
+
+/**
+ * @param {string} id account id
+ */
+export async function deleteAccount(id) {
+	try {
+		await apiSend('DELETE', `/accounts/${id}`)
+	} catch (e) {
+		rethrow(e)
+	}
+	accountsState.accounts = accountsState.accounts.filter((a) => a.id !== id)
+	if (accountsState.selectedId === id) {
+		accountsState.selectedId = accountsState.accounts[0]?.id ?? null
+	}
+}
+
+/**
+ * Moves an account one place up (-1) or down (+1).
+ *
+ * @param {string} id account id
+ * @param {number} delta -1 or +1
+ */
+export async function moveAccount(id, delta) {
+	const order = accountsState.accounts.map((a) => a.id)
+	const from = order.indexOf(id)
+	const to = from + delta
+	if (from < 0 || to < 0 || to >= order.length) {
+		return
+	}
+	order.splice(to, 0, order.splice(from, 1)[0])
+	try {
+		await apiSend('PUT', '/accounts/order', { accountIds: order })
+	} catch (e) {
+		rethrow(e)
+	}
+	accountsState.accounts = order.map((oid) => accountsState.accounts.find((a) => a.id === oid))
+}
+
+/**
+ * Tests unsaved settings. Without a password, the stored one of accountId is used.
+ *
+ * @param {object} input account settings
+ * @param {string|null} accountId account being edited, if any
+ */
+export async function testConnection(input, accountId) {
+	try {
+		return await apiSend('POST', '/accounts/test', { ...input, accountId })
+	} catch (e) {
+		if (e?.response?.status === 429) {
+			throw new Error('Too many connection tests. Wait a minute and try again.')
+		}
+		rethrow(e)
+	}
+}
+
+/**
+ * @param {string} id account id
+ */
+export async function testStoredAccount(id) {
+	try {
+		return await apiSend('POST', `/accounts/${id}/test`)
+	} catch (e) {
+		if (e?.response?.status === 429) {
+			throw new Error('Too many connection tests. Wait a minute and try again.')
+		}
+		rethrow(e)
+	}
+}

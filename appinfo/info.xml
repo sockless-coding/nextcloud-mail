@@ -7,7 +7,7 @@
 	<description><![CDATA[Sockless Mail is a webmail client that runs as a Nextcloud External App (AppAPI).
 Each user can connect any number of IMAP/SMTP accounts. The backend is written in C# on ASP.NET Core.]]></description>
 	<!-- Keep <version> and <image-tag> equal: AppAPI deploys <image-tag>, app:update compares <version>. -->
-	<version>0.1.0</version>
+	<version>0.2.0</version>
 	<licence>MIT</licence>
 	<author>Jimmy Everling</author>
 	<namespace>SocklessMail</namespace>
@@ -22,7 +22,7 @@ Each user can connect any number of IMAP/SMTP accounts. The backend is written i
 			     Set the real registry and image before publishing a release. -->
 			<registry>sockless.local</registry>
 			<image>sockless_mail</image>
-			<image-tag>0.1.0</image-tag>
+			<image-tag>0.2.0</image-tag>
 		</docker-install>
 		<routes>
 			<!-- Bundles and icons; no secrets. The top-menu icon is fetched without user context. -->
@@ -43,7 +43,13 @@ Each user can connect any number of IMAP/SMTP accounts. The backend is written i
 			<variable>
 				<name>SOCKLESS_MAIL_ENCRYPTION_KEY</name>
 				<display-name>Credential encryption key</display-name>
-				<description>Protects the key ring that encrypts stored mail account passwords. Keep it outside backups of the app's data volume. See the README, "Security model".</description>
+				<description>Protects the key ring that encrypts stored mail account passwords. At least 32 characters. Keep it outside backups of the app's data volume. See the README, "Security model".</description>
+			</variable>
+			<variable>
+				<name>SOCKLESS_MAIL_ALLOW_LOCAL_SERVERS</name>
+				<display-name>Allow mail servers on local networks</display-name>
+				<description>"true" lets users connect to mail servers on private, loopback or carrier-grade NAT addresses (for an internal mail server). Off by default, so users cannot probe the network the app runs in.</description>
+				<default>false</default>
 			</variable>
 		</environment-variables>
 	</external-app>
