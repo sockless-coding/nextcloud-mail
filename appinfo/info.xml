@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>sockless_mail</id>
+	<name>Sockless Mail</name>
+	<summary>Webmail client for Nextcloud with multiple IMAP/SMTP accounts per user</summary>
+	<description><![CDATA[Sockless Mail is a webmail client that runs as a Nextcloud External App (AppAPI).
+Each user can connect any number of IMAP/SMTP accounts. The backend is written in C# on ASP.NET Core.]]></description>
+	<!-- Keep <version> and <image-tag> equal: AppAPI deploys <image-tag>, app:update compares <version>. -->
+	<version>0.1.0</version>
+	<licence>MIT</licence>
+	<author>Jimmy Everling</author>
+	<namespace>SocklessMail</namespace>
+	<category>social</category>
+	<category>office</category>
+	<dependencies>
+		<nextcloud min-version="32" max-version="36"/>
+	</dependencies>
+	<external-app>
+		<docker-install>
+			<!-- Fictional registry for local images (dev/dev.sh maps it to "local").
+			     Set the real registry and image before publishing a release. -->
+			<registry>sockless.local</registry>
+			<image>sockless_mail</image>
+			<image-tag>0.1.0</image-tag>
+		</docker-install>
+		<routes>
+			<!-- Bundles and icons; no secrets. The top-menu icon is fetched without user context. -->
+			<route>
+				<url>^/(js|css|img)/.*$</url>
+				<verb>GET</verb>
+				<access_level>PUBLIC</access_level>
+			</route>
+			<!-- No PATCH: AppAPI's PHP proxy only forwards GET, HEAD, POST, PUT and DELETE. -->
+			<route>
+				<url>^/api(/.*)?$</url>
+				<verb>GET,POST,PUT,DELETE</verb>
+				<access_level>USER</access_level>
+			</route>
+		</routes>
+		<environment-variables>
+			<!-- No <default>: an empty default element reaches the container as the string "Array". -->
+			<variable>
+				<name>SOCKLESS_MAIL_ENCRYPTION_KEY</name>
+				<display-name>Credential encryption key</display-name>
+				<description>Protects the key ring that encrypts stored mail account passwords. Keep it outside backups of the app's data volume. See the README, "Security model".</description>
+			</variable>
+		</environment-variables>
+	</external-app>
+</info>

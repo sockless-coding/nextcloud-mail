@@ -55,3 +55,9 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Sockless Mail
+node_modules/
+src/SocklessMail.Api/wwwroot/js/
+src/SocklessMail.Api/wwwroot/css/
+dev/data/

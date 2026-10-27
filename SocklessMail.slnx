@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SocklessMail.Api/SocklessMail.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SocklessMail.Tests/SocklessMail.Tests.csproj" />
+  </Folder>
+</Solution>

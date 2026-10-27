@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/node_modules/
+src/SocklessMail.Api/wwwroot/js/
+src/SocklessMail.Api/wwwroot/css/
+tests/
+dev/
+.git/
+.vs/
+.vscode/
+*.md

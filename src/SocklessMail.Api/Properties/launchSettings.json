@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "manual-install": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "APP_ID": "sockless_mail",
+        "APP_VERSION": "0.1.0",
+        "APP_SECRET": "dev-only-secret-sockless-mail-0123456789",
+        "APP_HOST": "0.0.0.0",
+        "APP_PORT": "9080",
+        "NEXTCLOUD_URL": "http://localhost:8180",
+        "APP_PERSISTENT_STORAGE": "../../dev/data/app"
+      }
+    }
+  }
+}
