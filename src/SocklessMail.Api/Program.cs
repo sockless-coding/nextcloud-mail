@@ -6,6 +6,7 @@ using SocklessMail.Api;
 using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Api;
 using SocklessMail.Api.AppApi;
+using SocklessMail.Api.Compose;
 using SocklessMail.Api.Data;
 using SocklessMail.Api.Hosting;
 using SocklessMail.Api.Mail;
@@ -50,6 +51,8 @@ builder.Services.AddHostedService<ImapConnectionJanitor>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<MailboxService>();
 builder.Services.AddSingleton<ImageProxyTokens>();
+builder.Services.AddSingleton<AttachmentUploads>();
+builder.Services.AddHostedService<AttachmentUploadJanitor>();
 builder.Services.AddSingleton<ImageProxy>();
 ImageProxy.ConfigureServices(builder.Services);
 
@@ -61,6 +64,11 @@ builder.Services.AddRateLimiter(limiter =>
         RateLimitPartition.GetFixedWindowLimiter(
             context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
+    // Sending: generous for people, a brake for a hijacked session or a runaway script.
+    limiter.AddPolicy(ComposeEndpoints.SendRateLimit, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(10) }));
 });
 
 var app = builder.Build();
@@ -93,6 +101,7 @@ var api = app.MapGroup("/api").RequireAuthorization(AppApiAuthentication.UserPol
 api.MapMeEndpoints();
 api.MapAccountEndpoints();
 api.MapMailboxEndpoints();
+api.MapComposeEndpoints();
 
 // Unmatched paths must answer 404, not the fallback policy's 401/403: AppAPI calls POST /init
 // with system credentials and treats only 404/501 as "no init needed".

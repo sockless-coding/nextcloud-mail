@@ -19,6 +19,11 @@
 				:error="!!errors.displayName"
 				:helper-text="errors.displayName ?? ''"
 				@update:model-value="touched.displayName = true" />
+			<NcTextField v-model="form.senderName"
+				:label="t('sockless_mail', 'Your name')"
+				:error="!!errors.senderName"
+				:helper-text="errors.senderName ?? t('sockless_mail', 'Shown to recipients next to your address.')"
+				autocomplete="name" />
 			<NcTextField v-model="form.username"
 				:label="t('sockless_mail', 'Username')"
 				:error="!!errors.username"
@@ -72,6 +77,7 @@ const emit = defineEmits(['close', 'saved'])
 const form = reactive(props.account
 	? {
 		displayName: props.account.displayName,
+		senderName: props.account.senderName ?? '',
 		emailAddress: props.account.emailAddress,
 		username: props.account.username,
 		password: '',
@@ -80,6 +86,7 @@ const form = reactive(props.account
 	}
 	: {
 		displayName: '',
+		senderName: '',
 		emailAddress: '',
 		username: '',
 		password: '',
@@ -129,6 +136,7 @@ function suggestFromEmail(email) {
 function payload() {
 	return {
 		displayName: form.displayName,
+		senderName: form.senderName || null,
 		emailAddress: form.emailAddress,
 		username: form.username,
 		password: form.password || null,

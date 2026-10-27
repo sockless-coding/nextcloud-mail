@@ -4,6 +4,7 @@ using MailKit.Search;
 using MimeKit;
 using MimeKit.Text;
 using SocklessMail.Api.Accounts;
+using SocklessMail.Api.Compose;
 using SocklessMail.Api.Mail;
 
 namespace SocklessMail.Api.Mailbox;
@@ -18,7 +19,9 @@ public sealed record PartContent(string FileName, string ContentType, Func<Strea
 /// bodies are fetched with BODY.PEEK, so reading does not change \Seen; marking messages as read
 /// is an explicit action.
 /// </summary>
-public sealed partial class MailboxService(ImapConnections imap, CredentialProtector credentials, ImageProxyTokens proxyTokens)
+public sealed partial class MailboxService(
+    ImapConnections imap, CredentialProtector credentials, ImageProxyTokens proxyTokens,
+    MailServerConnector connector, AttachmentUploads uploads, TimeProvider clock, ILogger<MailboxService> logger)
 {
     public const int DefaultPageSize = 50;
     public const int MaxPageSize = 100;
@@ -125,12 +128,14 @@ public sealed partial class MailboxService(ImapConnections imap, CredentialProte
                 sanitized.Html,
                 sanitized.HasRemoteContent,
                 allowRemote,
-                summary.Attachments.Select(a => new AttachmentDto(
-                    MailboxIds.PartId(a.PartSpecifier),
-                    FileNameOf(a),
-                    a.ContentType.MimeType.ToLowerInvariant(),
-                    a.Octets > 0 ? a.Octets : null)).ToArray());
+                summary.Attachments.Select(ToAttachmentDto).ToArray());
         }, ct);
+
+    private static AttachmentDto ToAttachmentDto(BodyPartBasic part) => new(
+        MailboxIds.PartId(part.PartSpecifier),
+        FileNameOf(part),
+        part.ContentType.MimeType.ToLowerInvariant(),
+        part.Octets > 0 ? part.Octets : null);
 
     public Task<PartContent> GetPartAsync(MailAccount account, string folderId, string messageId, string partId, CancellationToken ct) =>
         Run(account, async (client, token) =>
@@ -188,14 +193,14 @@ public sealed partial class MailboxService(ImapConnections imap, CredentialProte
         !folder.Attributes.HasFlag(FolderAttributes.NoSelect) && !folder.Attributes.HasFlag(FolderAttributes.NonExistent);
 
     private static async Task<(IMailFolder Folder, UniqueId Uid)> OpenMessageAsync(
-        ImapClient client, string folderId, string messageId, CancellationToken ct)
+        ImapClient client, string folderId, string messageId, CancellationToken ct, FolderAccess access = FolderAccess.ReadOnly)
     {
         if (!MailboxIds.TryParseMessageId(messageId, out var uidValidity, out var uid))
         {
             throw new MailboxNotFoundException("The message");
         }
 
-        var folder = await OpenFolderAsync(client, folderId, ct);
+        var folder = await OpenFolderAsync(client, folderId, ct, access);
         // A different UIDVALIDITY means the server renumbered the folder: the id is stale.
         if (folder.UidValidity != uidValidity)
         {

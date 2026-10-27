@@ -2,9 +2,11 @@
 	<NcContent app-name="sockless_mail">
 		<NcAppNavigation :aria-label="t('sockless_mail', 'Mail accounts and folders')">
 			<template #list>
-				<NcAppNavigationNew :text="t('sockless_mail', 'Add account')" @click="openDialog(null)">
+				<NcAppNavigationNew :text="t('sockless_mail', 'New message')"
+					:disabled="accountsState.accounts.length === 0"
+					@click="composeNew">
 					<template #icon>
-						<NcIconSvgWrapper :path="mdiPlus" />
+						<NcIconSvgWrapper :path="mdiPencilOutline" />
 					</template>
 				</NcAppNavigationNew>
 				<NcAppNavigationItem v-for="(account, index) in accountsState.accounts"
@@ -75,6 +77,16 @@
 						:folder="folder" />
 				</NcAppNavigationItem>
 			</template>
+			<template #footer>
+				<div class="navigation-footer">
+					<NcButton variant="tertiary" wide @click="openDialog(null)">
+						<template #icon>
+							<NcIconSvgWrapper :path="mdiPlus" />
+						</template>
+						{{ t('sockless_mail', 'Add account') }}
+					</NcButton>
+				</div>
+			</template>
 		</NcAppNavigation>
 
 		<NcAppContent v-if="accountsState.loading || accountsState.loadError || accountsState.accounts.length === 0">
@@ -114,6 +126,8 @@
 			</NcEmptyContent>
 		</NcAppContent>
 
+		<Composer v-if="composer.draft" />
+
 		<AccountDialog v-if="dialog.open"
 			:account="dialog.account"
 			@saved="onSaved"
@@ -144,7 +158,7 @@
 </template>
 
 <script setup>
-import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiDelete, mdiEmailOpenOutline, mdiEmailOutline, mdiFolderPlusOutline, mdiPencil, mdiPlus, mdiRefresh } from '@mdi/js'
+import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiDelete, mdiEmailOpenOutline, mdiEmailOutline, mdiFolderPlusOutline, mdiPencil, mdiPencilOutline, mdiPlus, mdiRefresh } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -160,6 +174,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import AccountDialog from './components/AccountDialog.vue'
+import Composer from './components/Composer.vue'
 import FolderItem from './components/FolderItem.vue'
 import FolderNameDialog from './components/FolderNameDialog.vue'
 import MessageList from './components/MessageList.vue'
@@ -167,6 +182,7 @@ import MessageView from './components/MessageView.vue'
 import MoveDialog from './components/MoveDialog.vue'
 import { accountsState, deleteAccount, loadAccounts, moveAccount } from './store/accounts.js'
 import { askNewFolder, dialogs, removePermanently } from './store/actions.js'
+import { composeNew, composer } from './store/compose.js'
 import { closeMessage, forgetAccount, hasPendingWrites, loadFolders, mailboxState, refreshMessages, selectFolder } from './store/mailbox.js'
 
 /** No push channel to the browser (see README); new mail is found by polling. */
@@ -310,6 +326,10 @@ onBeforeUnmount(() => {
 	align-items: center;
 	justify-content: center;
 	height: 100%;
+}
+
+.navigation-footer {
+	padding: 8px;
 }
 
 .account-entry__error :deep(.app-navigation-entry__name) {

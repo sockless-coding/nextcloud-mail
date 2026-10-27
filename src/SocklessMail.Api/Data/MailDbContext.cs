@@ -26,6 +26,7 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             account.HasIndex(a => new { a.OwnerUserId, a.SortOrder });
             account.Property(a => a.OwnerUserId).HasMaxLength(64);
             account.Property(a => a.DisplayName).HasMaxLength(200);
+            account.Property(a => a.SenderName).HasMaxLength(200);
             account.Property(a => a.EmailAddress).HasMaxLength(320);
             account.Property(a => a.ImapHost).HasMaxLength(253);
             account.Property(a => a.SmtpHost).HasMaxLength(253);

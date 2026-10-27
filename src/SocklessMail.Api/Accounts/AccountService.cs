@@ -174,6 +174,7 @@ public sealed class AccountService(
     private static void Apply(MailAccount account, AccountInput input)
     {
         account.DisplayName = input.DisplayName.Trim();
+        account.SenderName = string.IsNullOrWhiteSpace(input.SenderName) ? null : input.SenderName.Trim();
         account.EmailAddress = input.EmailAddress.Trim();
         account.Username = input.Username.Trim();
         account.ImapHost = input.Imap.Host.Trim();

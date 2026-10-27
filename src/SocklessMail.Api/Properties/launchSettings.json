@@ -8,7 +8,7 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "APP_ID": "sockless_mail",
-        "APP_VERSION": "0.4.3",
+        "APP_VERSION": "0.5.1",
         "APP_SECRET": "dev-only-secret-sockless-mail-0123456789",
         "APP_HOST": "0.0.0.0",
         "APP_PORT": "9080",

@@ -63,6 +63,10 @@ namespace SocklessMail.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SenderName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SmtpHost")
                         .IsRequired()
                         .HasMaxLength(253)

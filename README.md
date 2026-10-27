@@ -5,10 +5,11 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 4 (actions)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> Status: **phase 5 (send)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
 > (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
-> with remote images blocked by default, attachments) and works with it: mark read/unread, flag,
-> move, delete via Trash, create and rename folders. Sending comes in phase 5.
+> with remote images blocked by default, attachments), works with it (read/unread, flag, move,
+> delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
+> with a copy saved to Sent. Phase 6 covers sync (IDLE/CONDSTORE), search, unified inbox and OAuth2.
 
 ## Layout
 
@@ -51,6 +52,7 @@ cd tests/e2e && npm ci
 node accounts.mjs    # add/test/validate/reorder/delete accounts
 node mail.mjs        # paging, sanitized view, remote images, attachments, polling
 node actions.mjs     # read/unread, flag, delete (with and without Trash), move, create/rename folders
+node compose.mjs     # new message with attachment, validation, reply, forward, copies in Sent
 ```
 
 They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console errors.
@@ -197,6 +199,33 @@ Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_
   - While changes are in flight, and for snapshots requested before them, polling results are
     discarded so they cannot overwrite the newer local state.
   - After a move or delete, the counts and the target folder (if shown) are reloaded.
+- **Writing** happens in four steps:
+  1. **Attachments** are uploaded first (`POST /api/uploads`, at most 25 MB each and in total).
+     They wait in `uploads/` on the data volume, in a directory per user named by a hash of the
+     user id, until the message is sent or discarded (then deleted), or for 24 hours at most.
+     Another user's upload id is simply not found.
+  2. **Replies and forwards** start from a draft the server builds
+     (`GET …/messages/{id}/draft?mode=reply|replyAll|forward`):
+     - Recipients follow Reply-To. Reply all copies everyone, and the account's own address is
+       never added.
+     - The subject gets one `Re:`/`Fwd:` prefix.
+     - The original is quoted as plain text; HTML-only mail is converted.
+     - A forward lists the original's attachments, and the user can drop any of them.
+  3. **Sending** (`POST /api/accounts/{id}/send`): MimeKit builds the message.
+     - Headers: `From` (the account's sender name and address), a new `Message-ID`, and for
+       replies `In-Reply-To` and `References`, so mail clients thread it.
+     - The body is plain text for now.
+     - It goes out over SMTP through the same address-checked connector as the connection test.
+     - The `Bcc` header is explicitly left out of what the SMTP server receives. Bcc recipients
+       get the message, nobody else sees them, and only the copy in Sent keeps the header.
+     - Limits: 100 recipients, 25 attachments, 30 sends per 10 minutes per user.
+  4. **After sending** the message is appended to Sent with `\Seen` (RFC 6154 or a common name).
+     The original is flagged `\Answered` (reply) or `$Forwarded` (forward). These steps are best
+     effort: if they fail, the answer says the message *was* sent and what did not work, so the
+     user does not send it twice. If the connection breaks during the SMTP transfer, the error
+     says to check Sent first.
+- **In the composer**, Escape and clicking outside do not close it, so a half-written message
+  cannot vanish by accident. Discard and Send are the only ways out.
 - **Message list** pages are newest first, 50 per page. The cursor is a UID
   (`?before=<uid>`), so mail arriving between page loads neither shifts nor duplicates entries.
   Message ids are `<UIDVALIDITY>-<UID>`, so an id becomes 404 when the server renumbers the folder.
@@ -317,6 +346,12 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
   404 ("No defined route"), although the routes were in Nextcloud's database. Disabling and
   enabling the app fixes it, because that pushes the app's metadata to HaRP again.
   `dev/dev.sh update-docker` does this automatically. This looks like an upstream issue.
+- Writing is plain text only, with no drafts saved to the server, no address-book
+  autocompletion and no signature yet.
+- Some providers (Gmail, Outlook) store a copy of everything sent over their SMTP in Sent
+  themselves, so the app's own copy duplicates it. This needs a per-account setting.
+- Upload sizes through AppAPI's PHP proxy (manual-install) are also limited by PHP's
+  `upload_max_filesize` and `post_max_size`.
 - Actions work on one message at a time in the UI. The API takes up to 500 ids, so selecting
   several messages is a UI addition only. Folders cannot be deleted from the UI yet, and there is
   no undo after a move or delete (Trash is the safety net).

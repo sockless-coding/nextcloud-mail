@@ -39,3 +39,20 @@ export async function apiSend(method, path, body) {
 	const { data } = await axios.request({ method, url: apiBase + path, data: body, headers })
 	return data
 }
+
+/**
+ * Uploads one file as multipart form data.
+ *
+ * @param {string} path API path
+ * @param {File} file the file
+ * @param {(fraction: number) => void} [onProgress] upload progress 0..1
+ */
+export async function apiUpload(path, file, onProgress) {
+	const form = new FormData()
+	form.append('file', file, file.name)
+	const { data } = await axios.post(apiBase + path, form, {
+		headers,
+		onUploadProgress: (e) => onProgress?.(e.total ? e.loaded / e.total : 0),
+	})
+	return data
+}

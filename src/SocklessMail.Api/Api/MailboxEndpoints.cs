@@ -120,10 +120,10 @@ public static class MailboxEndpoints
         });
     }
 
-    private static IResult NotFound() => Results.Json(new { error = "not_found" }, statusCode: StatusCodes.Status404NotFound);
+    internal static IResult NotFound() => Results.Json(new { error = "not_found" }, statusCode: StatusCodes.Status404NotFound);
 
     /// <summary>Maps mail failures to responses the UI can explain. Message texts never contain credentials.</summary>
-    private sealed class MailErrorFilter(ILogger<MailErrorFilter> logger) : IEndpointFilter
+    internal sealed class MailErrorFilter(ILogger<MailErrorFilter> logger) : IEndpointFilter
     {
         public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
         {

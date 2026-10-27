@@ -26,6 +26,24 @@
 					<NcDateTime class="message-view__date" :timestamp="Date.parse(message.date)" :format="{ dateStyle: 'medium', timeStyle: 'short' }" :relative-time="false" />
 				</div>
 				<div class="message-view__toolbar" role="toolbar" :aria-label="t('sockless_mail', 'Message actions')">
+					<NcButton variant="secondary" @click="reply('reply')">
+						<template #icon>
+							<NcIconSvgWrapper :path="mdiReply" />
+						</template>
+						{{ t('sockless_mail', 'Reply') }}
+					</NcButton>
+					<NcButton variant="tertiary" @click="reply('replyAll')">
+						<template #icon>
+							<NcIconSvgWrapper :path="mdiReplyAll" />
+						</template>
+						{{ t('sockless_mail', 'Reply all') }}
+					</NcButton>
+					<NcButton variant="tertiary" @click="reply('forward')">
+						<template #icon>
+							<NcIconSvgWrapper :path="mdiShare" />
+						</template>
+						{{ t('sockless_mail', 'Forward') }}
+					</NcButton>
 					<NcButton variant="tertiary" @click="toggleSeen(message)">
 						<template #icon>
 							<NcIconSvgWrapper :path="message.seen ? mdiEmailOutline : mdiEmailOpenOutline" />
@@ -83,7 +101,8 @@
 </template>
 
 <script setup>
-import { mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFolderMoveOutline, mdiPaperclip, mdiStar, mdiStarOutline } from '@mdi/js'
+import { mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFolderMoveOutline, mdiPaperclip, mdiReply, mdiReplyAll, mdiShare, mdiStar, mdiStarOutline } from '@mdi/js'
+import { showError } from '@nextcloud/dialogs/toast'
 import { getCanonicalLocale, n, t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -94,6 +113,7 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { computed } from 'vue'
 import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
+import { composeReply } from '../store/compose.js'
 import { mailboxState, openMessage, partUrl } from '../store/mailbox.js'
 import MessageBody from './MessageBody.vue'
 
@@ -102,6 +122,14 @@ const selected = computed(() => mailboxState.selected)
 const message = computed(() => open.message)
 const sender = computed(() => message.value?.from[0] ?? null)
 const senderName = computed(() => sender.value?.name || sender.value?.address || t('sockless_mail', 'Unknown sender'))
+
+async function reply(mode) {
+	try {
+		await composeReply(mode)
+	} catch (e) {
+		showError(t('sockless_mail', 'Could not prepare the message: {error}', { error: e.message }))
+	}
+}
 
 function formatList(addresses) {
 	return addresses.map((a) => a.name || a.address).join(', ')

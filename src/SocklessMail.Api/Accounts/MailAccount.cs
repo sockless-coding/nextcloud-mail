@@ -22,7 +22,13 @@ public sealed class MailAccount
     public required string OwnerUserId { get; init; }
 
     public int SortOrder { get; set; }
+
+    /// <summary>Label in the navigation, e.g. "Work".</summary>
     public required string DisplayName { get; set; }
+
+    /// <summary>The name recipients see in From; null sends the address alone.</summary>
+    public string? SenderName { get; set; }
+
     public required string EmailAddress { get; set; }
 
     public required string ImapHost { get; set; }

@@ -15,7 +15,8 @@ public sealed record AccountInput(
     string Username,
     string? Password,
     ServerSettings Imap,
-    ServerSettings Smtp);
+    ServerSettings Smtp,
+    string? SenderName = null);
 
 public sealed record ConnectionTestInput(
     string DisplayName,
@@ -35,6 +36,7 @@ public sealed record ReorderInput(IReadOnlyList<Guid> AccountIds);
 public sealed record AccountDto(
     Guid Id,
     string DisplayName,
+    string? SenderName,
     string EmailAddress,
     string Username,
     MailAuthMethod AuthMethod,
@@ -43,7 +45,7 @@ public sealed record AccountDto(
     int SortOrder)
 {
     public static AccountDto From(MailAccount a) => new(
-        a.Id, a.DisplayName, a.EmailAddress, a.Username, a.AuthMethod,
+        a.Id, a.DisplayName, a.SenderName, a.EmailAddress, a.Username, a.AuthMethod,
         new ServerSettings(a.ImapHost, a.ImapPort, a.ImapSecurity),
         new ServerSettings(a.SmtpHost, a.SmtpPort, a.SmtpSecurity),
         a.SortOrder);
@@ -73,6 +75,8 @@ public static class AccountValidation
 
         Check(!string.IsNullOrWhiteSpace(input.DisplayName), "displayName", "Enter a name for the account.");
         Check(input.DisplayName is null || input.DisplayName.Length <= 200, "displayName", "Use at most 200 characters.");
+
+        Check(input.SenderName is null || input.SenderName.Length <= 200, "senderName", "Use at most 200 characters.");
 
         Check(IsEmailAddress(input.EmailAddress), "emailAddress", "Enter a valid email address.");
 
