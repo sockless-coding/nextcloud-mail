@@ -112,6 +112,7 @@ public sealed class MailServerConnector(PolicySocketConnector sockets, ImapFeatu
         credential switch
         {
             PasswordCredential password => client.AuthenticateAsync(username, password.Password, ct),
+            AccessTokenCredential token => client.AuthenticateAsync(new SaslMechanismOAuth2(username, token.AccessToken), ct),
             _ => throw new NotSupportedException($"Credential type {credential.GetType().Name} is not supported yet."),
         };
 

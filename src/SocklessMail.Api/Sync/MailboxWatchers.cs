@@ -6,6 +6,7 @@ using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Data;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Mailbox;
+using SocklessMail.Api.OAuth;
 
 namespace SocklessMail.Api.Sync;
 
@@ -39,7 +40,7 @@ public sealed record WatcherOptions
 /// </summary>
 public sealed class MailboxWatchers(
     WatcherOptions options, UserActivity activity, IServiceScopeFactory scopes, MailServerConnector connector,
-    CredentialProtector credentials, SyncLocks syncLocks, TimeProvider clock, ILogger<MailboxWatchers> logger) : BackgroundService
+    MailLogins logins, SyncLocks syncLocks, TimeProvider clock, ILogger<MailboxWatchers> logger) : BackgroundService
 {
     private static readonly TimeSpan CloseTimeout = TimeSpan.FromSeconds(5);
 
@@ -262,7 +263,7 @@ public sealed class MailboxWatchers(
             return false;
         }
 
-        var credential = credentials.Unprotect(account.Id, account.ProtectedCredential);
+        var credential = await logins.ForConnectionAsync(account, ct);
         var client = await connector.ConnectImapAsync(
             new MailEndpoint(account.ImapHost, account.ImapPort, account.ImapSecurity), account.Username, credential, ct);
         var inbox = client.Inbox;

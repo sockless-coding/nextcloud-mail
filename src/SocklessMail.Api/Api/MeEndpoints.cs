@@ -5,19 +5,22 @@ namespace SocklessMail.Api.Api;
 
 public static class MeEndpoints
 {
-    public sealed record MeResponse(string UserId, string? DisplayName);
+    /// <summary><see cref="IsAdmin"/> shows the admin settings; the admin endpoints check it again.</summary>
+    public sealed record MeResponse(string UserId, string? DisplayName, bool IsAdmin);
 
     public static void MapMeEndpoints(this RouteGroupBuilder api)
     {
         // The user id comes from the verified AppAPI header; the display name is a round trip to
         // Nextcloud as that user, which exercises the outgoing authentication as well.
-        api.MapGet("/me", async (ClaimsPrincipal principal, NextcloudClient nextcloud, ILogger<MeResponse> logger, CancellationToken ct) =>
+        api.MapGet("/me", async (ClaimsPrincipal principal, NextcloudClient nextcloud, NextcloudAdmins admins, ILogger<MeResponse> logger, CancellationToken ct) =>
         {
             var userId = principal.GetNextcloudUserId();
             string? displayName = null;
+            var isAdmin = false;
             try
             {
                 var user = await nextcloud.OcsAsync(HttpMethod.Get, "cloud/user", userId: userId, ct: ct);
+                isAdmin = admins.Remember(userId, user);
                 if (user.ValueKind == System.Text.Json.JsonValueKind.Object
                     && user.TryGetProperty("displayname", out var name))
                 {
@@ -29,7 +32,7 @@ public static class MeEndpoints
                 logger.LogWarning(e, "Could not fetch the display name from Nextcloud");
             }
 
-            return new MeResponse(userId, displayName);
+            return new MeResponse(userId, displayName, isAdmin);
         });
     }
 }

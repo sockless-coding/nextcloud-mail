@@ -97,6 +97,15 @@
 						</template>
 						{{ t('sockless_mail', 'Add account') }}
 					</NcButton>
+					<NcButton v-if="oauthState.isAdmin"
+						variant="tertiary"
+						wide
+						@click="oauthSettingsOpen = true">
+						<template #icon>
+							<NcIconSvgWrapper :path="mdiCogOutline" />
+						</template>
+						{{ t('sockless_mail', 'Sign-in providers') }}
+					</NcButton>
 				</div>
 			</template>
 		</NcAppNavigation>
@@ -145,6 +154,8 @@
 			@saved="onSaved"
 			@close="dialog.open = false" />
 
+		<OAuthSettingsDialog v-if="oauthSettingsOpen" @close="oauthSettingsOpen = false" />
+
 		<MoveDialog v-if="dialogs.move"
 			:request="dialogs.move"
 			@close="dialogs.move = null" />
@@ -170,7 +181,7 @@
 </template>
 
 <script setup>
-import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiDelete, mdiEmailOpenOutline, mdiEmailOutline, mdiFolderPlusOutline, mdiInboxMultipleOutline, mdiPencil, mdiPencilOutline, mdiPlus, mdiRefresh } from '@mdi/js'
+import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiCogOutline, mdiDelete, mdiEmailOpenOutline, mdiEmailOutline, mdiFolderPlusOutline, mdiInboxMultipleOutline, mdiPencil, mdiPencilOutline, mdiPlus, mdiRefresh } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -193,6 +204,8 @@ import FolderNameDialog from './components/FolderNameDialog.vue'
 import MessageList from './components/MessageList.vue'
 import MessageView from './components/MessageView.vue'
 import MoveDialog from './components/MoveDialog.vue'
+import OAuthSettingsDialog from './components/OAuthSettingsDialog.vue'
+import { loadOAuthState, oauthState } from './store/oauth.js'
 import { accountsState, deleteAccount, loadAccounts, moveAccount } from './store/accounts.js'
 import { askNewFolder, dialogs, removePermanently } from './store/actions.js'
 import { composeNew, composer } from './store/compose.js'
@@ -211,6 +224,7 @@ let pollCount = 0
 
 const dialog = reactive({ open: false, account: null })
 const accountToDelete = ref(null)
+const oauthSettingsOpen = ref(false)
 const expanded = reactive({})
 let pollTimer = null
 
@@ -336,6 +350,8 @@ function openUnified() {
 }
 
 onMounted(async () => {
+	// Not awaited: the mail view does not depend on it.
+	loadOAuthState()
 	await loadAccounts()
 	// With several accounts, start with all their inboxes together.
 	if (accountsState.accounts.length > 1) {

@@ -33,6 +33,8 @@ json_info() {
     cat <<EOF
 {"id":"$APP_ID","name":"Sockless Mail","version":"$VERSION","secret":"$APP_SECRET","port":$APP_PORT,
  "routes":[{"url":"^/(js|css|img)/.*\$","verb":"GET","access_level":0},
+           {"url":"^/oauth/callback\$","verb":"GET","access_level":0},
+           {"url":"^/api/admin(/.*)?\$","verb":"GET,PUT","access_level":2},
            {"url":"^/api(/.*)?\$","verb":"GET,POST,PUT,DELETE","access_level":1}]}
 EOF
 }

@@ -98,6 +98,38 @@ namespace SocklessMail.Api.Data.Migrations
                     b.ToTable("accounts", (string)null);
                 });
 
+            modelBuilder.Entity("SocklessMail.Api.OAuth.OAuthClient", b =>
+                {
+                    b.Property<string>("ProviderId")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedClientSecret")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RedirectUri")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Tenant")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ProviderId");
+
+                    b.ToTable("oauth_clients", (string)null);
+                });
+
             modelBuilder.Entity("SocklessMail.Api.Sync.CachedFolder", b =>
                 {
                     b.Property<Guid>("Id")

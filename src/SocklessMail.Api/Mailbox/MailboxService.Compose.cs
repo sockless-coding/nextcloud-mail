@@ -78,7 +78,7 @@ public sealed partial class MailboxService
                 ?? throw new MailboxValidationException("attachmentIds", "An attachment has expired or was removed. Attach it again."));
         }
 
-        var credential = credentials.Unprotect(account.Id, account.ProtectedCredential);
+        var credential = await logins.ForConnectionAsync(account, ct);
         var original = input.Source is { } source ? await LoadSourceAsync(account, source, forwardPartIds, ct) : null;
 
         var message = new MimeMessage();

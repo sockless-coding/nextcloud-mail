@@ -5,14 +5,15 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 6c (unified inbox)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> Status: **phase 6d (OAuth2)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
 > (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
 > with remote images blocked by default, attachments), works with it (read/unread, flag, move,
 > delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
 > with a copy saved to Sent. Message lists come from a local header cache kept in sync with
 > QRESYNC/CONDSTORE and IMAP IDLE. Search covers the open folder on the server (message text
 > included) or all accounts from the cache. With several accounts, "All inboxes" shows every
-> account's inbox in one list. Still to come in phase 6: OAuth2 (6d).
+> account's inbox in one list. Google and Microsoft accounts can be added by signing in (OAuth2),
+> once an admin has registered the app with them.
 
 ## Layout
 
@@ -59,6 +60,7 @@ node actions.mjs     # read/unread, flag, delete (with and without Trash), move,
 node compose.mjs     # new message with attachment, validation, reply, forward, copies in Sent
 node search.mjs      # folder search (body text), search across accounts, opening a result
 node unified.mjs     # all inboxes: merged order, reading, deleting and new mail across accounts
+node oauth.mjs       # admin sign-in settings, Google popup with PKCE, callback through HaRP, non-admin user
 ```
 
 They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console errors.
@@ -147,6 +149,28 @@ registration, so changing one means registering again.
 
 Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_data`):
 `sockless_mail.db` (SQLite, WAL mode) and `keys/` (the Data Protection key ring).
+
+### Signing in with Google and Microsoft (OAuth2)
+
+Users can add Gmail/Google Workspace and Outlook/Microsoft 365 accounts by signing in instead of
+creating app passwords. A Nextcloud admin enables this once, in the app: **Sign-in providers** at
+the bottom of the navigation (shown to members of the `admin` group only). The dialog shows the
+callback URL to register, e.g. `https://cloud.example.com/exapps/sockless_mail/oauth/callback`
+under HaRP (`…/index.php/apps/app_api/proxy/sockless_mail/oauth/callback` without it).
+
+- **Google** (Google Cloud console → APIs & Services → Credentials): create an OAuth client of
+  type *Web application* with the callback URL as an authorized redirect URI. The consent screen
+  needs the scopes `https://mail.google.com/`, `openid`, `email` and `profile`. The Gmail scope is
+  "restricted": until Google verifies the app, only test users listed on the consent screen can
+  sign in (fine for one organization; publishing to everyone requires Google's review).
+- **Microsoft** (Entra admin center → App registrations): register a *Web* platform with the
+  callback URL, create a client secret, and add the delegated permissions `IMAP.AccessAsUser.All`
+  and `SMTP.Send` (Office 365 Exchange Online) plus `offline_access`, `openid`, `email`,
+  `profile`. Tenant: `common` (work and personal accounts), `organizations`, `consumers`, or your
+  tenant id. SMTP AUTH must be enabled for the mailboxes in Exchange.
+
+Enter the client id and secret and save. Saving an empty client id turns the provider off;
+existing accounts then fail with `oauth_not_configured` until it is set up again.
 
 ## How it runs
 
@@ -335,8 +359,21 @@ Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_
   it twice: explicitly in `AccountService`, and by an EF Core query filter that hides other users'
   rows from any query that forgets. Another user's account answers 404, exactly like a missing one.
   `UserIsolationTests` tries every endpoint across users.
-- **Access levels**: `info.xml` declares `/api` as USER. HaRP and the PHP proxy reject
-  anonymous requests before they reach the app, and the app checks again.
+- **Access levels**: `info.xml` declares `/api` as USER and `/api/admin` (listed first, since
+  both proxies apply the first matching route) as ADMIN. HaRP and the PHP proxy reject other
+  requests before they reach the app, and the app checks again: a user id for `/api`, and
+  membership in Nextcloud's `admin` group (asked from Nextcloud, remembered for a minute) for
+  `/api/admin`. `/oauth/callback` is PUBLIC, see below.
+- **OAuth2 sign-in** uses the authorization code flow with PKCE (S256). A sign-in in progress is
+  held in memory for 10 minutes and identified by two random 256-bit values: the `state` sent to
+  the provider, and a flow id the user's browser polls. The provider's redirect is a cross-site
+  navigation that may arrive without a Nextcloud session, so `/oauth/callback` needs only AppAPI's
+  signature; it finds the flow by `state`, and refuses it when a signed-in user other than the one
+  who started it is on the request. The code is exchanged there, once. The grant is then handed
+  only to the user who started the flow, once, and signing in again for an existing account must
+  name the same address. ID tokens are read without checking their signature: they come straight
+  from the provider's token endpoint over TLS, in exchange for the client secret (OpenID Connect
+  Core 3.1.3.7).
 - **CSRF**: neither proxy checks Nextcloud's request token. The app therefore rejects
   `POST`/`PUT`/`DELETE` on `/api` without `X-Sockless-Request: 1`, and any `/api` request marked
   `Sec-Fetch-Site: cross-site`.
@@ -368,6 +405,12 @@ Each wrapped key records which secret protects it. Setting the variable later th
 older keys readable, and only new keys use it. Removing or changing the variable makes the stored
 credentials unreadable: the app keeps running, and connection tests report
 `credential_unavailable`. Users then re-enter their password when editing the account.
+
+OAuth2 accounts store their refresh token the same way. Access tokens are kept in memory only
+and refreshed shortly before they expire; when a provider rotates the refresh token, the new one is
+saved. A refused refresh token (revoked, password changed) shows as `oauth_signin_required`, and
+the account settings offer "Sign in again". The admins' client secrets are encrypted with the same
+key ring (purpose bound to the provider) and never returned by the API.
 
 ### Displaying mail
 
@@ -458,8 +501,12 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
 - Message parts are held in memory while they are served, so very large attachments cost
   memory in proportion to their size.
 - The frontend bundle is about 1.2 MB (355 kB gzipped), mostly the Nextcloud component library.
-- One username and password per account, used for both IMAP and SMTP. OAuth2 (Gmail, Outlook)
-  is prepared in the data model (`AuthMethod` plus a typed credential) but not implemented yet.
+- One login per account, used for both IMAP and SMTP: a username and password, or an OAuth2
+  sign-in with Google or Microsoft. Other OAuth2 providers (Yahoo, Fastmail, AOL) are not
+  supported. OAuth2 accounts use the provider's standard servers.
+- Sign-ins in progress live in memory: a restart during a sign-in means starting it again. The
+  callback page carries no script, so the popup is closed by the app's window when it sees the
+  result.
 - Mail servers with self-signed certificates cannot be used. There is no "trust this certificate"
   option yet.
 - Nextcloud installs translations only from app store release archives, so the UI is English

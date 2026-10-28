@@ -6,17 +6,33 @@ using Microsoft.AspNetCore.DataProtection;
 namespace SocklessMail.Api.Accounts;
 
 /// <summary>
-/// What an account authenticates with. Stored only in encrypted form. OAuth2 adds a second
-/// subtype (access/refresh token) later; <see cref="MailAccount.AuthMethod"/> records which.
+/// What an account authenticates with. Stored only in encrypted form;
+/// <see cref="MailAccount.AuthMethod"/> records which subtype it is.
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(PasswordCredential), "password")]
+[JsonDerivedType(typeof(OAuthCredential), "oauth")]
 public abstract record MailCredential;
 
 public sealed record PasswordCredential(string Password) : MailCredential
 {
     // Keep the password out of logs and debugger displays.
     public override string ToString() => "PasswordCredential { Password = *** }";
+}
+
+/// <summary>An OAuth2 grant: the refresh token, from which access tokens are fetched as needed.</summary>
+public sealed record OAuthCredential(string Provider, string RefreshToken) : MailCredential
+{
+    public override string ToString() => $"OAuthCredential {{ Provider = {Provider}, RefreshToken = *** }}";
+}
+
+/// <summary>
+/// A current OAuth2 access token for one login (XOAUTH2). Never stored: resolved from an
+/// <see cref="OAuthCredential"/> right before connecting (see <see cref="OAuth.MailLogins"/>).
+/// </summary>
+public sealed record AccessTokenCredential(string AccessToken) : MailCredential
+{
+    public override string ToString() => "AccessTokenCredential { AccessToken = *** }";
 }
 
 /// <summary>Thrown when a stored credential cannot be decrypted (key ring lost or key changed).</summary>

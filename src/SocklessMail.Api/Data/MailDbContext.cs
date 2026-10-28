@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Mailbox;
+using SocklessMail.Api.OAuth;
 using SocklessMail.Api.Sync;
 
 namespace SocklessMail.Api.Data;
@@ -25,6 +26,9 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
     public DbSet<CachedFolder> Folders => Set<CachedFolder>();
     public DbSet<CachedMessage> Messages => Set<CachedMessage>();
     public DbSet<RemovedMessage> RemovedMessages => Set<RemovedMessage>();
+
+    /// <summary>Instance-wide OAuth app registrations (admin settings); not user-owned, so not filtered.</summary>
+    public DbSet<OAuthClient> OAuthClients => Set<OAuthClient>();
 
     // SQLite cannot order or compare DateTimeOffset natively; store UTC ticks.
     private static readonly ValueConverter<DateTimeOffset, long> UtcTicks =
@@ -100,6 +104,17 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             removed.Property(r => r.OwnerUserId).HasMaxLength(64);
             removed.Property(r => r.RemovedAt).HasConversion(UtcTicks);
             removed.HasQueryFilter(r => r.OwnerUserId == _userId);
+        });
+
+        model.Entity<OAuthClient>(client =>
+        {
+            client.ToTable("oauth_clients");
+            client.HasKey(c => c.ProviderId);
+            client.Property(c => c.ProviderId).HasMaxLength(32);
+            client.Property(c => c.ClientId).HasMaxLength(500);
+            client.Property(c => c.Tenant).HasMaxLength(100);
+            client.Property(c => c.RedirectUri).HasMaxLength(2000);
+            client.Property(c => c.UpdatedAt).HasConversion(UtcTicks);
         });
     }
 }

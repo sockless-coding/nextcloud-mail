@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -10,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SocklessMail.Api.AppApi;
 using SocklessMail.Api.Data;
+using SocklessMail.Api.OAuth;
 using SocklessMail.Api.Sync;
 
 namespace SocklessMail.Tests;
@@ -40,6 +43,9 @@ public sealed class TestApp(string? storageDirectory = null, IReadOnlyDictionary
 
     public FakeNextcloud Nextcloud { get; } = new();
 
+    /// <summary>Every OAuth2 provider's token endpoint.</summary>
+    public FakeTokenEndpoint TokenEndpoint { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -58,6 +64,7 @@ public sealed class TestApp(string? storageDirectory = null, IReadOnlyDictionary
         builder.ConfigureTestServices(services =>
         {
             services.AddHttpClient<NextcloudClient>().ConfigurePrimaryHttpMessageHandler(() => Nextcloud);
+            services.AddHttpClient(OAuthTokens.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => TokenEndpoint);
             // Test accounts point at made-up servers; no background IMAP connections.
             services.AddSingleton(new WatcherOptions { MaxWatchers = 0 });
         });
@@ -127,5 +134,37 @@ public sealed class FakeNextcloud : HttpMessageHandler
         {
             Content = new StringContent(json ?? """{"ocs":{"meta":{"status":"ok"},"data":[]}}""", Encoding.UTF8, "application/json"),
         };
+    }
+}
+
+/// <summary>Answers token requests with <see cref="Respond"/> (default: a fresh grant for alice@gmail.com) and records the forms.</summary>
+public sealed class FakeTokenEndpoint : HttpMessageHandler
+{
+    public ConcurrentQueue<(Uri Url, Dictionary<string, string> Form)> Requests { get; } = new();
+
+    public Func<Dictionary<string, string>, (HttpStatusCode Status, object Body)> Respond { get; set; } =
+        _ => (HttpStatusCode.OK, Grant("alice@gmail.com"));
+
+    /// <summary>A token response with an (unsigned) ID token for <paramref name="email"/>.</summary>
+    public static object Grant(string email, string accessToken = "access-1", string? refreshToken = "refresh-1", int expiresIn = 3600) => new
+    {
+        access_token = accessToken,
+        refresh_token = refreshToken,
+        expires_in = expiresIn,
+        token_type = "Bearer",
+        id_token = IdToken(new { email, name = "Alice Example" }),
+    };
+
+    public static string IdToken(object claims) =>
+        $"e30.{Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(claims))}.sig";
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        var form = (await request.Content!.ReadAsStringAsync(ct)).Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Select(pair => pair.Split('=', 2))
+            .ToDictionary(p => Uri.UnescapeDataString(p[0].Replace('+', ' ')), p => Uri.UnescapeDataString(p[1].Replace('+', ' ')));
+        Requests.Enqueue((request.RequestUri!, form));
+        var (status, body) = Respond(form);
+        return new HttpResponseMessage(status) { Content = JsonContent.Create(body) };
     }
 }

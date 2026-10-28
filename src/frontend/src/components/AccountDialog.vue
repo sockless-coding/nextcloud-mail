@@ -7,9 +7,38 @@
 		:open="true"
 		@update:open="(open) => !open && emit('close')">
 		<div class="account-dialog">
+			<div v-if="!account && oauthState.providers.length" class="account-dialog__providers">
+				<NcButton v-for="provider in oauthState.providers"
+					:key="provider.id"
+					wide
+					:disabled="!!signingIn"
+					@click="signInWith(provider)">
+					<template #icon>
+						<NcLoadingIcon v-if="signingIn === provider.id" :size="20" />
+						<NcIconSvgWrapper v-else :path="mdiLogin" />
+					</template>
+					{{ t('sockless_mail', 'Sign in with {provider}', { provider: provider.name }) }}
+				</NcButton>
+				<p class="account-dialog__hint">
+					{{ t('sockless_mail', 'Or enter the server settings of any other provider:') }}
+				</p>
+			</div>
+			<NcNoteCard v-if="isOAuth" type="info">
+				<div class="account-dialog__oauth">
+					<span>{{ t('sockless_mail', 'This account signs in through its provider as {address}; no password is stored.', { address: account.username }) }}</span>
+					<NcButton :disabled="!!signingIn" @click="signInAgain">
+						<template #icon>
+							<NcLoadingIcon v-if="signingIn" :size="20" />
+							<NcIconSvgWrapper v-else :path="mdiLogin" />
+						</template>
+						{{ t('sockless_mail', 'Sign in again') }}
+					</NcButton>
+				</div>
+			</NcNoteCard>
 			<NcTextField v-model="form.emailAddress"
 				type="email"
 				:label="t('sockless_mail', 'Email address')"
+				:disabled="isOAuth"
 				:error="!!errors.emailAddress"
 				:helper-text="errors.emailAddress ?? ''"
 				autocomplete="email"
@@ -24,29 +53,32 @@
 				:error="!!errors.senderName"
 				:helper-text="errors.senderName ?? t('sockless_mail', 'Shown to recipients next to your address.')"
 				autocomplete="name" />
-			<NcTextField v-model="form.username"
-				:label="t('sockless_mail', 'Username')"
-				:error="!!errors.username"
-				:helper-text="errors.username ?? ''"
-				autocomplete="off"
-				@update:model-value="touched.username = true" />
-			<NcPasswordField v-model="form.password"
-				:label="t('sockless_mail', 'Password')"
-				:placeholder="account ? t('sockless_mail', 'Unchanged') : ''"
-				:error="!!errors.password"
-				:helper-text="errors.password ?? (account ? t('sockless_mail', 'Leave empty to keep the stored password.') : '')"
-				autocomplete="new-password" />
+			<!-- Accounts signed in with OAuth use the provider's servers and the address that signed in. -->
+			<template v-if="!isOAuth">
+				<NcTextField v-model="form.username"
+					:label="t('sockless_mail', 'Username')"
+					:error="!!errors.username"
+					:helper-text="errors.username ?? ''"
+					autocomplete="off"
+					@update:model-value="touched.username = true" />
+				<NcPasswordField v-model="form.password"
+					:label="t('sockless_mail', 'Password')"
+					:placeholder="account ? t('sockless_mail', 'Unchanged') : ''"
+					:error="!!errors.password"
+					:helper-text="errors.password ?? (account ? t('sockless_mail', 'Leave empty to keep the stored password.') : '')"
+					autocomplete="new-password" />
 
-			<ServerFields :legend="t('sockless_mail', 'Incoming mail (IMAP)')"
-				prefix="imap"
-				:server="form.imap"
-				:errors="errors"
-				@input="touched.imap = true" />
-			<ServerFields :legend="t('sockless_mail', 'Outgoing mail (SMTP)')"
-				prefix="smtp"
-				:server="form.smtp"
-				:errors="errors"
-				@input="touched.smtp = true" />
+				<ServerFields :legend="t('sockless_mail', 'Incoming mail (IMAP)')"
+					prefix="imap"
+					:server="form.imap"
+					:errors="errors"
+					@input="touched.imap = true" />
+				<ServerFields :legend="t('sockless_mail', 'Outgoing mail (SMTP)')"
+					prefix="smtp"
+					:server="form.smtp"
+					:errors="errors"
+					@input="touched.smtp = true" />
+			</template>
 
 			<NcNoteCard v-if="form.imap.security === 'none' || form.smtp.security === 'none'"
 				type="warning"
@@ -58,13 +90,18 @@
 </template>
 
 <script setup>
+import { mdiLogin } from '@mdi/js'
 import { t } from '@nextcloud/l10n'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
+import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcPasswordField from '@nextcloud/vue/components/NcPasswordField'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
-import { computed, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref } from 'vue'
 import { createAccount, testConnection, updateAccount, ValidationError } from '../store/accounts.js'
+import { createOAuthAccount, oauthState, replaceGrant, signIn } from '../store/oauth.js'
 import ConnectionResult from './ConnectionResult.vue'
 import ServerFields from './ServerFields.vue'
 
@@ -73,6 +110,49 @@ const props = defineProps({
 	account: { type: Object, default: null },
 })
 const emit = defineEmits(['close', 'saved'])
+
+const isOAuth = computed(() => props.account?.authMethod === 'oAuth2')
+/** The provider id (new account) or true (signing in again) while a sign-in runs. */
+const signingIn = ref(null)
+const cancelSignIn = new AbortController()
+onBeforeUnmount(() => cancelSignIn.abort())
+
+/** A new account from a provider sign-in; names typed in the form so far are kept. */
+async function signInWith(provider) {
+	errors.value = {}
+	generalError.value = ''
+	signingIn.value = provider.id
+	try {
+		const { flowId } = await signIn({ provider: provider.id }, cancelSignIn.signal)
+		const account = await createOAuthAccount(flowId, {
+			displayName: touched.displayName ? form.displayName : null,
+			senderName: form.senderName,
+		})
+		emit('saved', account)
+	} catch (e) {
+		if (!cancelSignIn.signal.aborted) {
+			generalError.value = e.message
+		}
+	} finally {
+		signingIn.value = null
+	}
+}
+
+async function signInAgain() {
+	errors.value = {}
+	generalError.value = ''
+	signingIn.value = true
+	try {
+		const { flowId } = await signIn({ accountId: props.account.id }, cancelSignIn.signal)
+		emit('saved', await replaceGrant(props.account.id, flowId))
+	} catch (e) {
+		if (!cancelSignIn.signal.aborted) {
+			generalError.value = e.message
+		}
+	} finally {
+		signingIn.value = null
+	}
+}
 
 const form = reactive(props.account
 	? {
@@ -187,5 +267,24 @@ async function save() {
 	flex-direction: column;
 	gap: 8px;
 	padding-bottom: 8px;
+}
+
+.account-dialog__providers {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.account-dialog__hint {
+	margin-top: 8px;
+	color: var(--color-text-maxcontrast);
+}
+
+.account-dialog__oauth {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
 }
 </style>

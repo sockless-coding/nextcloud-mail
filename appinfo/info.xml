@@ -7,7 +7,7 @@
 	<description><![CDATA[Sockless Mail is a webmail client that runs as a Nextcloud External App (AppAPI).
 Each user can connect any number of IMAP/SMTP accounts. The backend is written in C# on ASP.NET Core.]]></description>
 	<!-- Keep <version> and <image-tag> equal: AppAPI deploys <image-tag>, app:update compares <version>. -->
-	<version>0.6.2</version>
+	<version>0.7.1</version>
 	<licence>MIT</licence>
 	<author>Jimmy Everling</author>
 	<namespace>SocklessMail</namespace>
@@ -22,7 +22,7 @@ Each user can connect any number of IMAP/SMTP accounts. The backend is written i
 			     Set the real registry and image before publishing a release. -->
 			<registry>sockless.local</registry>
 			<image>sockless_mail</image>
-			<image-tag>0.6.2</image-tag>
+			<image-tag>0.7.1</image-tag>
 		</docker-install>
 		<routes>
 			<!-- Bundles and icons; no secrets. The top-menu icon is fetched without user context. -->
@@ -30,6 +30,19 @@ Each user can connect any number of IMAP/SMTP accounts. The backend is written i
 				<url>^/(js|css|img)/.*$</url>
 				<verb>GET</verb>
 				<access_level>PUBLIC</access_level>
+			</route>
+			<!-- The OAuth2 provider redirects the browser here, possibly without a Nextcloud
+			     session; the flow's random state identifies it (OAuthEndpoints.cs). -->
+			<route>
+				<url>^/oauth/callback$</url>
+				<verb>GET</verb>
+				<access_level>PUBLIC</access_level>
+			</route>
+			<!-- Before the general /api route: AppAPI and HaRP apply the first route that matches. -->
+			<route>
+				<url>^/api/admin(/.*)?$</url>
+				<verb>GET,PUT</verb>
+				<access_level>ADMIN</access_level>
 			</route>
 			<!-- No PATCH: AppAPI's PHP proxy only forwards GET, HEAD, POST, PUT and DELETE. -->
 			<route>

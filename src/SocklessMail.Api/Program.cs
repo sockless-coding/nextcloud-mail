@@ -11,6 +11,7 @@ using SocklessMail.Api.Data;
 using SocklessMail.Api.Hosting;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Mailbox;
+using SocklessMail.Api.OAuth;
 using SocklessMail.Api.Security;
 using SocklessMail.Api.Sync;
 
@@ -54,6 +55,14 @@ builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<MailboxService>();
 builder.Services.AddScoped<FolderCache>();
 builder.Services.AddScoped<UnifiedInbox>();
+builder.Services.AddSingleton(OAuthProviderCatalog.Default);
+builder.Services.AddScoped<OAuthClientStore>();
+builder.Services.AddSingleton<OAuthFlows>();
+builder.Services.AddSingleton<OAuthTokens>();
+builder.Services.AddHttpClient(OAuthTokens.HttpClientName, http => http.Timeout = TimeSpan.FromSeconds(20));
+builder.Services.AddSingleton<MailLogins>();
+builder.Services.AddSingleton<AdminCache>();
+builder.Services.AddScoped<NextcloudAdmins>();
 builder.Services.AddSingleton<SyncLocks>();
 builder.Services.AddSingleton(new WatcherOptions());
 builder.Services.AddSingleton<UserActivity>();
@@ -113,6 +122,8 @@ api.MapMeEndpoints();
 api.MapAccountEndpoints();
 api.MapMailboxEndpoints();
 api.MapComposeEndpoints();
+api.MapOAuthEndpoints();
+app.MapOAuthCallback();
 
 // Unmatched paths must answer 404, not the fallback policy's 401/403: AppAPI calls POST /init
 // with system credentials and treats only 404/501 as "no init needed".

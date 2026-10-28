@@ -7,6 +7,7 @@ using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Compose;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Sync;
+using SocklessMail.Api.OAuth;
 
 namespace SocklessMail.Api.Mailbox;
 
@@ -22,7 +23,7 @@ public sealed record PartContent(string FileName, string ContentType, Func<Strea
 /// after a sync; the sync is skipped while an IDLE watcher keeps the folder current.
 /// </summary>
 public sealed partial class MailboxService(
-    ImapConnections imap, CredentialProtector credentials, ImageProxyTokens proxyTokens,
+    ImapConnections imap, MailLogins logins, ImageProxyTokens proxyTokens,
     MailServerConnector connector, AttachmentUploads uploads, FolderCache cache, SyncLocks syncLocks,
     MailboxWatchers watchers, TimeProvider clock, ILogger<MailboxService> logger)
 {
@@ -244,8 +245,8 @@ public sealed partial class MailboxService(
         }, ct);
 
     /// <param name="retry">Repeat on a fresh connection if the pooled one turned out dead; only for operations safe to repeat.</param>
-    private Task<T> Run<T>(MailAccount account, Func<ImapClient, CancellationToken, Task<T>> action, CancellationToken ct, bool retry = true) =>
-        imap.RunAsync(account, credentials.Unprotect(account.Id, account.ProtectedCredential), action, ct, retry);
+    private async Task<T> Run<T>(MailAccount account, Func<ImapClient, CancellationToken, Task<T>> action, CancellationToken ct, bool retry = true) =>
+        await imap.RunAsync(account, await logins.ForConnectionAsync(account, ct), action, ct, retry);
 
     private static async Task<IMailFolder> FindFolderAsync(ImapClient client, string folderId, CancellationToken ct)
     {

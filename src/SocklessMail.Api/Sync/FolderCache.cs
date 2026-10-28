@@ -537,7 +537,21 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
             state.ChangeSeq = seq;
         }
 
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // The account was deleted while its folder was being synced: its rows' foreign key fails.
+            if (await db.Accounts.IgnoreQueryFilters().AnyAsync(a => a.Id == account.Id, ct))
+            {
+                throw;
+            }
+
+            throw new MailboxNotFoundException("The account");
+        }
+
         await transaction.CommitAsync(ct);
         return state;
     }
