@@ -5,7 +5,7 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 7b (previews and filters)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> Status: **phase 7c (reading, writing, shortcuts)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
 > (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
 > with remote images blocked by default, attachments), works with it (read/unread, flag, move,
 > delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
@@ -16,8 +16,8 @@ the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with
 > once an admin has registered the app with them. The interface follows desktop mail programs:
 > an account rail with a colour and unread count per account, a folder pane, a command bar, a
 > message list grouped by day with a line of each message's text, hover actions, multi-select
-> and quick filters (Unread, Flagged, Attachments), and a reading pane on the right, at the
-> bottom or off.
+> and quick filters (Unread, Flagged, Attachments), a reading pane on the right, at the bottom
+> or off, a composer window docked at the bottom, and Outlook's keyboard shortcuts.
 
 ## Layout
 
@@ -61,12 +61,13 @@ cd tests/e2e && npm ci
 node accounts.mjs    # add/test/validate/reorder/delete accounts
 node mail.mjs        # paging, sanitized view, remote images, attachments, polling (new and removed mail)
 node actions.mjs     # read/unread, flag, delete (with and without Trash), move, create/rename folders
-node compose.mjs     # new message with attachment, validation, reply, forward, copies in Sent
+node compose.mjs     # new message with attachment, validation (invalid recipient chip), reply, forward, copies in Sent
 node search.mjs      # folder search (body text), search across accounts, opening a result
 node unified.mjs     # all inboxes: merged order, reading, deleting and new mail across accounts
 node oauth.mjs       # admin sign-in settings, Google popup with PKCE, callback through HaRP, non-admin user
 node layout.mjs      # multi-select and actions on it, reading pane and density (kept on reload), folder pane
 node filters.mjs     # previews, Unread/Flagged/Attachments in a folder and in all inboxes, polling in a filter
+node workspace.mjs   # sender details, attachment cards, composer window, recipient chips, keyboard shortcuts
 ```
 
 They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console errors.
@@ -261,8 +262,23 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
      effort: if they fail, the answer says the message *was* sent and what did not work, so the
      user does not send it twice. If the connection breaks during the SMTP transfer, the error
      says to check Sent first.
-- **In the composer**, Escape and clicking outside do not close it, so a half-written message
-  cannot vanish by accident. Discard and Send are the only ways out.
+- **The composer** is a window docked at the bottom right, not a modal dialog, so the mailbox
+  stays usable while writing. It can be minimised to its title bar, or popped out to a large
+  window. One message is written at a time: New message, reply or forward while a draft is open
+  brings that draft back instead of replacing it.
+  - Escape and clicking elsewhere do not close it, so a half-written message cannot vanish by
+    accident. Send (also Ctrl+Enter) and Discard are the only ways out. Discard asks first when
+    something was typed or attached.
+  - Recipients are chips. What is still being typed counts too, so sending without finishing an
+    entry loses nothing; invalid addresses are marked. Suggestions come from the addresses of
+    mail the app has loaded (lists, search results, all inboxes); there is no address book
+    lookup yet.
+- **Keyboard shortcuts** follow Outlook, with single keys for the ones browsers keep for
+  themselves (Ctrl+N opens a window): N or Ctrl+Shift+M new message; R or Ctrl+R reply; Shift+R
+  or Ctrl+Shift+R reply all; F or Ctrl+Shift+F forward; Delete; Ctrl+Q read; Ctrl+U unread;
+  Insert flag; / or Alt+Q search; Esc clears the selection or closes the message; ? lists them.
+  In the list, the arrow keys move between messages and Ctrl+A selects all loaded ones. They are
+  off while typing and while a dialog is open.
 - **Message lists come from a header cache** in the database (`folders`, `messages` and
   `removed_messages` tables): subject, addresses, date, flags, size, has-attachments, and a
   preview of up to 200 characters of text. Bodies are never cached; opening a message still

@@ -278,6 +278,11 @@ function onKey(row, index, event) {
 		onClick(row, event)
 		return
 	}
+	if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+		event.preventDefault()
+		selection.rows = [...rows.value]
+		return
+	}
 	const step = { ArrowDown: 1, ArrowUp: -1 }[event.key]
 	const next = step && rows.value[index + step]
 	if (!next) {

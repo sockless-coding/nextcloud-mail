@@ -75,6 +75,8 @@
 
 		<OAuthSettingsDialog v-if="dialogs.oauthSettings" @close="dialogs.oauthSettings = false" />
 
+		<ShortcutsDialog v-if="dialogs.shortcuts" @close="dialogs.shortcuts = false" />
+
 		<MoveDialog v-if="dialogs.move"
 			:request="dialogs.move"
 			@close="dialogs.move = null" />
@@ -119,6 +121,7 @@ import MessageList from './components/MessageList.vue'
 import MessageView from './components/MessageView.vue'
 import MoveDialog from './components/MoveDialog.vue'
 import OAuthSettingsDialog from './components/OAuthSettingsDialog.vue'
+import ShortcutsDialog from './components/ShortcutsDialog.vue'
 import { accountsState, loadAccounts } from './store/accounts.js'
 import { dialogs, removePermanently } from './store/actions.js'
 import { composer } from './store/compose.js'
@@ -127,6 +130,7 @@ import { hasPendingWrites, loadFolders, mailboxState, refreshMessages } from './
 import { accountSaved, loadAllFolders, openUnified, removeAccount, selectAccount } from './store/navigation.js'
 import { loadOAuthState } from './store/oauth.js'
 import { clearSelection, selection } from './store/selection.js'
+import { installShortcuts } from './store/shortcuts.js'
 import { refreshUnified } from './store/unified.js'
 
 /**
@@ -139,6 +143,7 @@ const POLL_INTERVAL_MS = 15_000
 const FOLDER_POLL_EVERY = 4
 let pollCount = 0
 let pollTimer = null
+let removeShortcuts = null
 
 /** With the reading pane off, the list and the open message take turns. */
 const listShown = computed(() => readingPane.value !== 'off' || !mailboxState.open.id || selection.rows.length > 0)
@@ -247,11 +252,13 @@ onMounted(async () => {
 	}
 	pollTimer = window.setInterval(poll, POLL_INTERVAL_MS)
 	document.addEventListener('visibilitychange', poll)
+	removeShortcuts = installShortcuts()
 })
 
 onBeforeUnmount(() => {
 	window.clearInterval(pollTimer)
 	document.removeEventListener('visibilitychange', poll)
+	removeShortcuts?.()
 })
 </script>
 

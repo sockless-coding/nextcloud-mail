@@ -20,6 +20,8 @@ export const dialogs = reactive({
 	/** Account waiting for confirmation to be removed. */
 	accountToDelete: null,
 	oauthSettings: false,
+	/** The keyboard shortcut help. */
+	shortcuts: false,
 })
 
 function fail(what, e) {

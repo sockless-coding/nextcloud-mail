@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import { mailboxState } from './mailbox.js'
 
 /**
  * Messages selected in the list (checkboxes, Ctrl- and Shift-click) for actions on several at
@@ -50,3 +51,12 @@ export function pruneSelection(rows) {
 	selection.rows = selection.rows.filter((r) => byKey.has(r.key)).map((r) => byKey.get(r.key))
 }
 
+
+/** What commands (command bar, keyboard) act on: the selected messages, or else the open one. */
+export function commandTargets() {
+	if (selection.rows.length) {
+		return selection.rows
+	}
+	const open = mailboxState.open
+	return open.message ? [{ accountId: open.accountId, folderId: open.folderId, message: open.message }] : []
+}

@@ -104,14 +104,22 @@
 				@update:model-value="layout.density = option.value">
 				{{ option.label }}
 			</NcActionRadio>
+			<NcActionSeparator />
+			<NcActionButton close-after-click @click="dialogs.shortcuts = true">
+				<template #icon>
+					<NcIconSvgWrapper :path="mdiKeyboardOutline" />
+				</template>
+				{{ t('sockless_mail', 'Keyboard shortcuts') }}
+			</NcActionButton>
 		</NcActions>
 	</div>
 </template>
 
 <script setup>
-import { mdiArchiveArrowDownOutline, mdiClose, mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFolderMoveOutline, mdiMagnify, mdiMenu, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiViewSplitVertical } from '@mdi/js'
+import { mdiArchiveArrowDownOutline, mdiClose, mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFolderMoveOutline, mdiKeyboardOutline, mdiMagnify, mdiMenu, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiViewSplitVertical } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -119,12 +127,12 @@ import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { computed } from 'vue'
 import { accountsState } from '../store/accounts.js'
-import { askMoveRows, canMoveRows, moveTo, removeRows, setFlaggedRows, setSeenRows } from '../store/actions.js'
+import { askMoveRows, canMoveRows, dialogs, moveTo, removeRows, setFlaggedRows, setSeenRows } from '../store/actions.js'
 import { composeNew, composeReply } from '../store/compose.js'
 import { folderPaneShown, layout, toggleFolderPane, viewport } from '../store/layout.js'
 import { mailboxState } from '../store/mailbox.js'
 import { clearQuery, currentScope, runSearch, searchState as search } from '../store/search.js'
-import { selection } from '../store/selection.js'
+import { commandTargets, selection } from '../store/selection.js'
 
 const REPLIES = [
 	{ id: 'reply', icon: mdiReply, label: t('sockless_mail', 'Reply') },
@@ -145,13 +153,7 @@ const DENSITIES = [
 
 const open = mailboxState.open
 
-/** What the commands act on: the selected messages, or else the open one. */
-const targets = computed(() => {
-	if (selection.rows.length) {
-		return selection.rows
-	}
-	return open.message ? [{ accountId: open.accountId, folderId: open.folderId, message: open.message }] : []
-})
+const targets = computed(() => commandTargets())
 
 const canReply = computed(() => !selection.rows.length && !!open.message)
 // Mixed states do what most of them need: read if any is unread, flag if any is not flagged.

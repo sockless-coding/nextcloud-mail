@@ -78,6 +78,8 @@ check(await until(async () => await dialog.locator('.composer__chip', { hasText:
 await dialog.getByRole('button', { name: 'Send' }).click()
 check(await until(async () => await dialog.getByText(/is not a valid/).count() > 0), 'invalid recipient is reported on the To field, the dialog stays open')
 
+// The invalid entry stays as a marked chip; remove it.
+await dialog.getByRole('button', { name: 'Remove not an address' }).click()
 await dialog.getByLabel('To', { exact: true }).fill('Alice <alice@example.test>')
 await sendAndWait(dialog)
 check(await page.getByText('Message sent').count() > 0, '"Message sent" toast')
@@ -91,7 +93,7 @@ await page.getByRole('toolbar').getByRole('button', { name: 'Reply', exact: true
 dialog = composerDialog()
 await dialog.waitFor()
 check(await dialog.getByLabel('Subject').inputValue() === `Re: ${subject}`, 'reply subject is "Re: …"')
-check((await dialog.getByLabel('To', { exact: true }).inputValue()).includes('alice@example.test'), 'reply goes to the sender')
+check((await dialog.getByRole('group', { name: 'To recipients' }).locator('.recipients__chip').first().getAttribute('title')) === 'alice@example.test', 'reply goes to the sender')
 check((await dialog.getByLabel('Message').inputValue()).includes('> Hello from the e2e check.'), 'the original is quoted')
 await dialog.getByLabel('Message').press('Control+Home')
 await dialog.getByLabel('Message').pressSequentially('Thanks!')

@@ -4,15 +4,63 @@ import { reactive } from 'vue'
 import { apiGet, apiSend, apiUpload } from '../api.js'
 import { accountsState } from './accounts.js'
 import { ActionError, loadFolders, mailboxState, messagesById, openLocation, refreshMessages } from './mailbox.js'
+import { searchState } from './search.js'
+import { unifiedState } from './unified.js'
 
 /**
  * The message being written. One composer at a time; it is rendered by App.vue whenever
- * composer.draft is set.
+ * composer.draft is set, as a window docked at the bottom that can be minimised (to read mail
+ * meanwhile) or popped out to a large one.
  */
 export const composer = reactive({
 	/** { accountId, to, cc, bcc, subject, text, source, forwarded: [{partId, fileName, size, include}], uploads: [...] } */
 	draft: null,
+	minimized: false,
+	expanded: false,
 })
+
+/** Another message is being written: show it instead of replacing it. */
+function busy() {
+	if (!composer.draft) {
+		return false
+	}
+	composer.minimized = false
+	showWarning(t('sockless_mail', 'Send or discard the message you are writing first.'))
+	return true
+}
+
+function show(draft) {
+	Object.assign(composer, { draft, minimized: false })
+}
+
+/** Whether discarding the draft would lose anything the user typed or attached. */
+export function hasContent(draft = composer.draft) {
+	if (!draft) {
+		return false
+	}
+	// A reply starts with recipients, subject and quote filled in; only the user's own text counts there.
+	const typed = draft.source ? draft.text !== draft.initialText : !!(draft.to || draft.cc || draft.bcc || draft.subject || draft.text)
+	return typed || draft.uploads.length > 0
+}
+
+/** Addresses of mail the app has loaded (lists, search, unified inbox), for suggestions; newest first, once each. */
+export function knownAddresses() {
+	const seen = new Map()
+	const messages = [
+		...mailboxState.messages.list,
+		...unifiedState.list.map((h) => h.message),
+		...searchState.hits.map((h) => h.message),
+	]
+	for (const message of messages) {
+		for (const a of [...message.from, ...message.to]) {
+			const key = a.address.toLowerCase()
+			if (!seen.has(key)) {
+				seen.set(key, { name: a.name, address: a.address })
+			}
+		}
+	}
+	return [...seen.values()]
+}
 
 function emptyDraft(accountId) {
 	return { accountId, to: '', cc: '', bcc: '', subject: '', text: '', source: null, forwarded: [], uploads: [] }
@@ -21,8 +69,8 @@ function emptyDraft(accountId) {
 /** New message from the selected account (in the unified inbox: the open message's, or the first one). */
 export function composeNew() {
 	const accountId = mailboxState.selected.accountId ?? mailboxState.open.accountId ?? accountsState.accounts[0]?.id
-	if (accountId) {
-		composer.draft = emptyDraft(accountId)
+	if (accountId && !busy()) {
+		show(emptyDraft(accountId))
 	}
 }
 
@@ -32,6 +80,9 @@ export function composeNew() {
  * @param {'reply'|'replyAll'|'forward'} mode what to do
  */
 export async function composeReply(mode) {
+	if (busy()) {
+		return
+	}
 	const { accountId, folderId } = openLocation()
 	const messageId = mailboxState.open.id
 	let draft
@@ -40,15 +91,16 @@ export async function composeReply(mode) {
 	} catch (e) {
 		throw new ActionError(e)
 	}
-	composer.draft = {
+	show({
 		...emptyDraft(accountId),
 		to: draft.to,
 		cc: draft.cc,
 		subject: draft.subject,
 		text: draft.text,
+		initialText: draft.text,
 		source: draft.source,
 		forwarded: draft.forwardedAttachments.map((a) => ({ ...a, include: true })),
-	}
+	})
 }
 
 /**
@@ -78,7 +130,7 @@ export function detach(entry) {
 }
 
 /**
- * Called once the composer dialog has closed. A discarded draft's uploads are removed from the
+ * Called once the composer has closed. A discarded draft's uploads are removed from the
  * server right away (sent ones were removed by sending).
  *
  * @param {boolean} sent whether the draft was sent
@@ -91,7 +143,7 @@ export function closeComposer(sent) {
 			}
 		}
 	}
-	composer.draft = null
+	Object.assign(composer, { draft: null, minimized: false, expanded: false })
 }
 
 /**
@@ -125,7 +177,7 @@ export async function send() {
 		throw new ActionError(e)
 	}
 
-	// The composer closes itself (through its dialog) and then calls closeComposer().
+	// The composer closes itself and then calls closeComposer().
 	showSuccess(t('sockless_mail', 'Message sent'))
 	if (result.warning) {
 		showWarning(result.warning)
