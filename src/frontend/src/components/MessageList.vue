@@ -3,6 +3,15 @@
 		<header class="message-list__header">
 			<h2>{{ searching ? t('sockless_mail', 'Search') : listName }}</h2>
 			<span v-if="!view.loading && !view.error">{{ countText }}</span>
+			<button v-if="rows.length"
+				class="message-list__select"
+				:class="{ 'message-list__select--active': selection.mode }"
+				:aria-pressed="String(selection.mode)"
+				:title="t('sockless_mail', 'Select messages by clicking them')"
+				@click="selection.mode ? endSelectionMode() : (selection.mode = true)">
+				<NcIconSvgWrapper :path="mdiCheckboxMultipleMarkedCircleOutline" :size="18" />
+				{{ t('sockless_mail', 'Select') }}
+			</button>
 		</header>
 		<div class="message-list__filters" role="group" :aria-label="t('sockless_mail', 'Show')">
 			<button v-for="option in FILTERS"
@@ -12,6 +21,20 @@
 				:aria-pressed="String(search.filter === option.value)"
 				@click="setFilter(option.value)">
 				{{ option.label }}
+			</button>
+		</div>
+		<div v-if="selection.mode || selection.rows.length" class="message-list__selection">
+			<span class="message-list__selection-count" aria-live="polite">
+				{{ n('sockless_mail', '{count} selected', '{count} selected', selection.rows.length, { count: selection.rows.length }) }}
+			</span>
+			<button class="message-list__selection-button" :disabled="selection.rows.length === rows.length" @click="selectAll">
+				{{ t('sockless_mail', 'All') }}
+			</button>
+			<button class="message-list__selection-button" :disabled="!selection.rows.length" @click="clearSelection">
+				{{ t('sockless_mail', 'None') }}
+			</button>
+			<button class="message-list__selection-button message-list__selection-button--done" @click="endSelectionMode">
+				{{ t('sockless_mail', 'Done') }}
 			</button>
 		</div>
 		<p v-if="searching && search.source === 'cache'" class="message-list__hint">
@@ -46,13 +69,17 @@
 							'message-row--unread': !row.message.seen,
 							'message-row--open': isOpen(row),
 							'message-row--selected': isSelected(row),
-							'message-row--selecting': selection.rows.length > 0,
 						}"
 						:data-key="row.key"
 						tabindex="0"
 						:aria-current="isOpen(row) ? 'true' : undefined"
 						@click="onClick(row, $event)"
-						@keydown="onKey(row, index, $event)">
+						@keydown="onKey(row, index, $event)"
+						@pointerdown="startPress(row, $event)"
+						@pointerup="cancelPress"
+						@pointercancel="cancelPress"
+						@pointerleave="cancelPress"
+						@contextmenu="pressed && $event.preventDefault()">
 						<span class="message-row__stripe" />
 						<span class="message-row__avatar">
 							<NcAvatar :display-name="sender(row.message)"
@@ -64,14 +91,11 @@
 								class="message-row__account"
 								:style="{ background: accountColor(row.accountId) }"
 								:title="accountName(row.accountId)" />
-							<button class="message-row__check"
-								role="checkbox"
-								:aria-checked="String(isSelected(row))"
-								:aria-label="t('sockless_mail', 'Select {subject}', { subject: subjectOf(row.message) })"
-								@click.stop="toggleRow(row)">
-								<NcIconSvgWrapper :path="isSelected(row) ? mdiCheckCircle : mdiCheckboxBlankCircleOutline" :size="layout.density === 'compact' ? 20 : 24" />
-							</button>
+							<span v-if="isSelected(row)" class="message-row__check">
+								<NcIconSvgWrapper :path="mdiCheck" :size="layout.density === 'compact' ? 16 : 22" />
+							</span>
 						</span>
+						<span v-if="isSelected(row)" class="hidden-visually">{{ t('sockless_mail', 'Selected') }}</span>
 						<span class="message-row__from">{{ sender(row.message) }}</span>
 						<span class="message-row__date">{{ formatDate(row.message.date) }}</span>
 						<span class="message-row__subject">
@@ -127,7 +151,7 @@
 </template>
 
 <script setup>
-import { mdiCheckboxBlankCircleOutline, mdiCheckCircle, mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiMagnify, mdiPaperclip, mdiReply } from '@mdi/js'
+import { mdiCheck, mdiCheckboxMultipleMarkedCircleOutline, mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiMagnify, mdiPaperclip, mdiReply } from '@mdi/js'
 import { getCanonicalLocale, getFirstDay, n, t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -141,7 +165,7 @@ import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { layout, readingPane } from '../store/layout.js'
 import { loadMore, mailboxState, openMessage } from '../store/mailbox.js'
 import { searchMore, searchState as search, setFilter } from '../store/search.js'
-import { clearSelection, isSelected, pruneSelection, selectRange, selection, toggleRow } from '../store/selection.js'
+import { clearSelection, endSelectionMode, extendSelection, isSelected, pruneSelection, selectRange, selection, toggleRow } from '../store/selection.js'
 import { loadMoreUnified, unifiedState as unified } from '../store/unified.js'
 
 const FILTERS = [
@@ -247,14 +271,24 @@ function open(row) {
 	openMessage(row, row.message.id)
 }
 
-/** Click opens; Ctrl/Cmd-click adds to the selection, Shift-click selects a range (as in Outlook). */
+/**
+ * Click opens; Ctrl/Cmd-click adds to the selection, Shift-click selects a range (as in Outlook).
+ * In selection mode a plain click toggles the row.
+ */
 function onClick(row, event) {
+	if (pressed) {
+		// The long press already selected it.
+		pressed = false
+		return
+	}
 	const openRow = rows.value.find(isOpen)
 	if (event.shiftKey) {
 		if (!selection.anchor && openRow) {
 			selection.anchor = openRow.key
 		}
 		selectRange(rows.value, row)
+	} else if (selection.mode) {
+		toggleRow(row)
 	} else if (event.ctrlKey || event.metaKey) {
 		// The open message is part of what the user sees as selected.
 		if (!selection.rows.length && openRow && openRow !== row) {
@@ -268,19 +302,31 @@ function onClick(row, event) {
 	}
 }
 
-/** Enter opens; the arrow keys go to the next or previous message and open it when the reading pane shows it. */
+function selectAll() {
+	selection.rows = [...rows.value]
+}
+
+/**
+ * Enter opens and Space selects; the arrow keys go to the next or previous message and open it
+ * when the reading pane shows it, and with Shift extend the selection instead.
+ */
 function onKey(row, index, event) {
 	if (event.target !== event.currentTarget) {
 		return
 	}
-	if (event.key === 'Enter' || event.key === ' ') {
+	if (event.key === 'Enter') {
 		event.preventDefault()
 		onClick(row, event)
 		return
 	}
+	if (event.key === ' ') {
+		event.preventDefault()
+		event.shiftKey ? selectRange(rows.value, row) : toggleRow(row)
+		return
+	}
 	if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
 		event.preventDefault()
-		selection.rows = [...rows.value]
+		selectAll()
 		return
 	}
 	const step = { ArrowDown: 1, ArrowUp: -1 }[event.key]
@@ -290,11 +336,44 @@ function onKey(row, index, event) {
 	}
 	event.preventDefault()
 	event.currentTarget.parentElement.querySelector(`[data-key="${CSS.escape(next.key)}"]`)?.focus()
+	if (event.shiftKey) {
+		if (!selection.rows.length || !selection.anchor) {
+			selection.anchor = row.key
+		}
+		extendSelection(rows.value, next)
+		return
+	}
+	if (selection.mode) {
+		return
+	}
 	if (readingPane.value !== 'off') {
 		clearSelection()
 		selection.anchor = next.key
 		open(next)
 	}
+}
+
+/** A long press on a touch screen starts selection mode with that row selected. */
+const LONG_PRESS = 500
+let pressTimer = null
+let pressed = false
+
+function startPress(row, event) {
+	pressed = false
+	if (event.pointerType !== 'touch' || event.target.closest('button')) {
+		return
+	}
+	pressTimer = setTimeout(() => {
+		pressed = true
+		selection.mode = true
+		if (!isSelected(row)) {
+			toggleRow(row)
+		}
+	}, LONG_PRESS)
+}
+
+function cancelPress() {
+	clearTimeout(pressTimer)
 }
 
 const timeFormat = new Intl.DateTimeFormat(getCanonicalLocale(), { hour: 'numeric', minute: '2-digit' })
@@ -417,6 +496,95 @@ onBeforeUnmount(() => observer?.disconnect())
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.message-list__select {
+	--sm-button-background: transparent;
+	--sm-button-color: var(--color-text-maxcontrast);
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	align-self: center;
+	min-height: 0;
+	height: 28px;
+	margin: 0 0 0 auto;
+	padding: 0 10px;
+	border: 0;
+	border-radius: 14px;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font: inherit;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.message-list__select:hover {
+	--sm-button-background: var(--color-background-hover);
+	background: var(--color-background-hover);
+}
+
+.message-list__select--active,
+.message-list__select--active:hover {
+	--sm-button-background: var(--color-primary-element-light);
+	--sm-button-color: var(--color-primary-element-light-text);
+	background: var(--color-primary-element-light);
+	color: var(--color-primary-element-light-text);
+}
+
+.message-list__select:focus-visible,
+.message-list__selection-button:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 1px;
+}
+
+.message-list__selection {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin: 0 12px 8px;
+	padding: 4px 4px 4px 12px;
+	border-radius: var(--border-radius-large);
+	background: var(--color-primary-element-light);
+	color: var(--color-primary-element-light-text);
+}
+
+.message-list__selection-count {
+	flex: 1;
+	font-weight: 600;
+}
+
+.message-list__selection-button {
+	--sm-button-background: transparent;
+	--sm-button-color: var(--color-primary-element-light-text);
+	min-height: 0;
+	height: 28px;
+	margin: 0;
+	padding: 0 10px;
+	border: 0;
+	border-radius: 14px;
+	background: transparent;
+	color: var(--color-primary-element-light-text);
+	font: inherit;
+	cursor: pointer;
+}
+
+.message-list__selection-button:hover:not(:disabled) {
+	--sm-button-background: var(--color-primary-element-light-hover);
+	background: var(--color-primary-element-light-hover);
+}
+
+.message-list__selection-button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.message-list__selection-button--done,
+.message-list__selection-button--done:hover:not(:disabled) {
+	--sm-button-background: var(--color-primary-element);
+	--sm-button-color: var(--color-primary-element-text);
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
+	font-weight: 600;
 }
 
 .message-list__filters {
@@ -562,33 +730,15 @@ onBeforeUnmount(() => observer?.disconnect())
 	border-radius: 50%;
 }
 
-/* Checkbox over the avatar: on hover, and on every row while something is selected. */
+/* Selected rows show a check in place of the avatar. */
 .message-row__check {
 	position: absolute;
 	inset: 0;
-	display: none;
-	place-items: center;
-	min-height: 0;
-	margin: 0;
-	padding: 0;
-	border: 0;
-	border-radius: 50%;
-	--sm-button-background: var(--color-main-background);
-	--sm-button-color: var(--color-text-maxcontrast);
-	background: var(--color-main-background);
-	color: var(--color-text-maxcontrast);
-	cursor: pointer;
-}
-
-.message-row:hover .message-row__check,
-.message-row--selecting .message-row__check,
-.message-row__check:focus-visible {
 	display: grid;
-}
-
-.message-row--selected .message-row__check {
-	--sm-button-color: var(--color-primary-element);
-	color: var(--color-primary-element);
+	place-items: center;
+	border-radius: 50%;
+	background: var(--color-primary-element);
+	color: var(--color-primary-element-text);
 }
 
 .message-row__from {

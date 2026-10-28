@@ -5,7 +5,7 @@ import { askNewFolder } from './actions.js'
 import { closeDrawer } from './layout.js'
 import { forgetAccount, loadFolders, mailboxState, selectFolder } from './mailbox.js'
 import { clearSearch } from './search.js'
-import { clearSelection } from './selection.js'
+import { endSelectionMode } from './selection.js'
 import { showUnified } from './unified.js'
 
 /**
@@ -16,7 +16,7 @@ import { showUnified } from './unified.js'
 /** Opens an account and shows its inbox. */
 export async function selectAccount(account) {
 	clearSearch()
-	clearSelection()
+	endSelectionMode()
 	// Already showing one of this account's folders (checked again after loading, since the user
 	// may have picked a folder meanwhile): keep it instead of jumping back to the inbox.
 	if (mailboxState.selected.accountId === account.id) {
@@ -37,14 +37,14 @@ export async function selectAccount(account) {
 
 export function openFolder(accountId, folderId) {
 	clearSearch()
-	clearSelection()
+	endSelectionMode()
 	closeDrawer()
 	selectFolder(accountId, folderId)
 }
 
 export function openUnified() {
 	clearSearch()
-	clearSelection()
+	endSelectionMode()
 	closeDrawer()
 	showUnified()
 }

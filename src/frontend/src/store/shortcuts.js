@@ -4,7 +4,7 @@ import { dialogs, removeRows, setFlaggedRows, setSeenRows } from './actions.js'
 import { composeNew, composeReply } from './compose.js'
 import { readingPane } from './layout.js'
 import { closeMessage, mailboxState } from './mailbox.js'
-import { clearSelection, commandTargets, selection } from './selection.js'
+import { commandTargets, endSelectionMode, selection } from './selection.js'
 
 /**
  * Keyboard shortcuts in Outlook's layout, plus single keys (N, R, F, …) for the ones browsers
@@ -28,6 +28,8 @@ export const SHORTCUTS = [
 /** Handled where they apply, listed here for the help dialog. */
 export const LOCAL_SHORTCUTS = [
 	{ keys: ['↑', '↓'], label: t('sockless_mail', 'Previous or next message (in the list)') },
+	{ keys: ['Space'], label: t('sockless_mail', 'Select or deselect the message (in the list)') },
+	{ keys: ['Shift+↑', 'Shift+↓'], label: t('sockless_mail', 'Extend the selection (in the list)') },
 	{ keys: ['Ctrl+A'], label: t('sockless_mail', 'Select all loaded messages (in the list)') },
 	{ keys: ['Ctrl+Enter'], label: t('sockless_mail', 'Send (in the composer)') },
 ]
@@ -55,8 +57,8 @@ function focusSearch() {
 }
 
 function escape() {
-	if (selection.rows.length) {
-		clearSelection()
+	if (selection.rows.length || selection.mode) {
+		endSelectionMode()
 	} else if (readingPane.value === 'off' && mailboxState.open.id) {
 		closeMessage()
 	}

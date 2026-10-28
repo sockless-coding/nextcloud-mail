@@ -125,9 +125,17 @@
 				</ul>
 			</section>
 
-			<!-- Mail is written for a white page; it keeps one in dark mode too. -->
-			<div class="message-view__paper">
-				<MessageBody :key="`${message.id}/${message.remoteContentAllowed}`" :html="message.html" />
+			<!-- In a dark theme the mail is recoloured; its original white page is one click away. -->
+			<div class="message-view__paper" :class="{ 'message-view__paper--original': original || !darkTheme }">
+				<button v-if="darkTheme"
+					class="message-view__icon-button message-view__colors"
+					:aria-pressed="String(original)"
+					:aria-label="original ? t('sockless_mail', 'Show in dark colours') : t('sockless_mail', 'Show in original colours')"
+					:title="original ? t('sockless_mail', 'Show in dark colours') : t('sockless_mail', 'Show in original colours')"
+					@click="original = !original">
+					<NcIconSvgWrapper :path="original ? mdiWeatherNight : mdiWhiteBalanceSunny" :size="18" />
+				</button>
+				<MessageBody :key="`${message.id}/${message.remoteContentAllowed}/${original}`" :html="message.html" :original="original" />
 			</div>
 
 			<div class="message-view__quick">
@@ -149,7 +157,7 @@
 </template>
 
 <script setup>
-import { mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare } from '@mdi/js'
+import { mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { getCanonicalLocale, n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -165,6 +173,7 @@ import { computed, ref, watch } from 'vue'
 import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { composeEdit, composeReply } from '../store/compose.js'
 import { readingPane } from '../store/layout.js'
+import { pageColors } from '../mailColors.js'
 import { closeMessage, mailboxState, openMessage, partUrl } from '../store/mailbox.js'
 import MessageBody from './MessageBody.vue'
 
@@ -184,8 +193,13 @@ const details = ref(false)
 /** A saved draft: it is continued rather than replied to. */
 const isDraft = computed(() => mailboxState.folders[open.accountId]?.list.find((f) => f.id === open.folderId)?.specialUse === 'drafts')
 
+const darkTheme = pageColors().dark
+/** This message in the colours it was sent in, rather than recoloured for the dark theme. */
+const original = ref(false)
+
 watch(() => open.id, () => {
 	details.value = false
+	original.value = false
 })
 
 /** Every address in full, for the details under the sender card. */
@@ -471,11 +485,40 @@ function formatFileSize(bytes) {
 }
 
 .message-view__paper {
+	position: relative;
 	margin-top: 16px;
 	padding: 8px 12px;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-container, 12px);
+	background: var(--color-main-background);
+}
+
+.message-view__paper--original {
 	background: #fff;
+}
+
+/* Over the mail's top corner, out of the way until hovered. */
+.message-view__colors {
+	position: absolute;
+	top: 6px;
+	inset-inline-end: 6px;
+	z-index: 1;
+	opacity: 0.6;
+	--sm-button-background: var(--color-main-background);
+	background: var(--color-main-background);
+	box-shadow: 0 0 0 1px var(--color-border);
+}
+
+.message-view__colors:hover,
+.message-view__colors:focus-visible {
+	opacity: 1;
+}
+
+.message-view__paper--original .message-view__colors {
+	--sm-button-background: #fff;
+	--sm-button-color: #222;
+	background: #fff;
+	color: #222;
 }
 
 .message-view__quick {
