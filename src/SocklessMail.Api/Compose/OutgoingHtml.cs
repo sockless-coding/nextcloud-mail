@@ -1,17 +1,19 @@
 using System.Globalization;
 using System.Net;
 using System.Text;
+using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 using Ganss.Xss;
 using MimeKit;
+using SocklessMail.Api.Mail;
 
 namespace SocklessMail.Api.Compose;
 
 /// <summary>
 /// HTML the app sends: what the editor produced, and the quoted original of a reply or forward.
 /// Both go through one allowlist, so nothing active (scripts, event handlers, forms, frames)
-/// reaches a recipient, and no image is quoted: the editor would load remote ones in the user's
-/// browser, and inline ones would need their parts attached.
+/// reaches a recipient, and no image is quoted, not even as a CSS background: the editor would
+/// load remote ones in the user's browser, and inline ones would need their parts attached.
 /// </summary>
 public static class OutgoingHtml
 {
@@ -29,6 +31,16 @@ public static class OutgoingHtml
         sanitizer.AllowedSchemes.Add("mailto");
         // Classes mean nothing without the sender's stylesheet.
         sanitizer.AllowedAttributes.Remove("class");
+        // The editor never refers to a resource from CSS; a quoted original's url() would load in
+        // the recipient's mail program. By now the CSS is reserialized, escapes and all.
+        sanitizer.PostProcessNode += (_, e) =>
+        {
+            if (e.Node is IElement element && element.GetAttribute("style") is { } style
+                && style.Contains("url(", StringComparison.OrdinalIgnoreCase))
+            {
+                element.SetAttribute("style", MessageHtmlSanitizer.CssUrl().Replace(style, "none"));
+            }
+        };
         return sanitizer;
     }
 

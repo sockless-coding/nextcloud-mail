@@ -18,7 +18,8 @@ public sealed record SanitizedHtml(string Html, bool HasRemoteContent);
 /// allowed, images are routed through the app's image proxy; otherwise they are removed and
 /// <see cref="SanitizedHtml.HasRemoteContent"/> is set so the UI can offer to load them.</item>
 /// <item>cid: references to inline parts become links to the message part.</item>
-/// <item>Links open in a new tab without access to the opener.</item>
+/// <item>Links (and image map areas) keep only http(s) and mailto targets and open in a new tab
+/// without access to the opener.</item>
 /// </list>
 /// Rewritten image sources are API-relative paths in <c>data-sockless-src</c>; the frontend turns
 /// them into URLs, since only it knows whether the API is reached through HaRP or the PHP proxy.
@@ -34,7 +35,7 @@ public static partial class MessageHtmlSanitizer
         ["data:image/png;", "data:image/jpeg;", "data:image/jpg;", "data:image/gif;", "data:image/webp;"];
 
     [GeneratedRegex(@"url\(\s*(['""]?)(.*?)\1\s*\)", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
-    private static partial Regex CssUrl();
+    internal static partial Regex CssUrl();
 
     /// <param name="html">The message's HTML (or plain text already converted to HTML).</param>
     /// <param name="resolveContentId">Maps a Content-ID to the API-relative path of that part, or null.</param>
@@ -77,7 +78,8 @@ public static partial class MessageHtmlSanitizer
                 element.RemoveAttribute("srcset");
                 RewriteImageSource(element, resolveContentId, proxyRemote, ref hasRemote);
                 break;
-            case "a":
+            // Image map areas are links too, and data: is an allowed scheme for images.
+            case "a" or "area":
                 RewriteLink(element);
                 break;
             case "style":

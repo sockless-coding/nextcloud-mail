@@ -101,6 +101,54 @@ public sealed class MessageHtmlSanitizerTests
         Assert.Null(dom.QuerySelector("a")!.GetAttribute("href"));
     }
 
+    [Theory]
+    [InlineData("<map name=m><area href=\"data:text/html,&lt;script&gt;alert(1)&lt;/script&gt;\"></map>")]
+    [InlineData("<map name=m><area href=\"javascript:alert(1)\"></map>")]
+    [InlineData("<a href=\"java&#x09;script:alert(1)\">x</a>")]
+    [InlineData("<a href=\" javascript:alert(1)\">x</a>")]
+    [InlineData("<svg><a href=\"javascript:alert(1)\"><text>x</text></a></svg>")]
+    [InlineData("<blockquote cite=\"javascript:alert(1)\">q</blockquote>")]
+    public void Link_targets_are_only_web_or_mail_addresses(string html)
+    {
+        var result = Clean(html).Html;
+        Assert.DoesNotContain("javascript:", result);
+        Assert.DoesNotContain("data:", result);
+    }
+
+    [Theory]
+    [InlineData("<details open ontoggle=alert(1)>x</details>")]
+    [InlineData("<noscript><p title=\"</noscript><img src=x onerror=alert(1)>\"></noscript>")]
+    [InlineData("<template><img src=x onerror=alert(1)></template>")]
+    [InlineData("<iframe srcdoc=\"&lt;script&gt;alert(1)&lt;/script&gt;\"></iframe>")]
+    [InlineData("<body onload=alert(1)><p>x</p></body>")]
+    [InlineData("<input type=image src=x onerror=alert(1)>")]
+    [InlineData("<img src=\"data:image/svg+xml,&lt;svg onload=alert(1)&gt;\">")]
+    public void Unusual_script_vectors_are_removed(string html)
+    {
+        var result = Clean(html).Html;
+        Assert.DoesNotContain("alert(1)", result);
+        Assert.DoesNotContain("<iframe", result);
+        Assert.DoesNotContain("svg", result);
+    }
+
+    [Fact]
+    public void Image_sources_cannot_be_smuggled_in_as_data_attributes()
+    {
+        var dom = Dom(Clean("<img data-sockless-src=\"accounts/x/folders\"><p data-sockless-src=\"y\">t</p>").Html);
+        Assert.Null(dom.QuerySelector("[data-sockless-src]"));
+    }
+
+    [Theory]
+    [InlineData("<style>@import url(https://tracker.example/x.css); p { color: red }</style><p>x</p>")]
+    [InlineData("<style>@font-face { font-family: x; src: url(https://tracker.example/f.woff) }</style>")]
+    [InlineData("<div style=\"background:u\\72l(https://tracker.example/a.png)\">x</div>")]
+    [InlineData("<div style=\"background-image:image-set('https://tracker.example/a.png' 1x)\">x</div>")]
+    [InlineData("<video poster=\"https://tracker.example/v.png\" src=\"https://tracker.example/v.mp4\"></video>")]
+    public void Css_and_media_cannot_load_remote_resources(string html)
+    {
+        Assert.DoesNotContain("tracker.example", Clean(html).Html);
+    }
+
     [Fact]
     public void Links_open_in_a_new_tab_without_opener()
     {

@@ -21,6 +21,33 @@ public sealed class OutgoingHtmlTests
         Assert.Contains("href=\"mailto:a@example.test\"", html);
     }
 
+    [Theory]
+    [InlineData("<div style=\"background:url(https://tracker.example/a.png)\">x</div>")]
+    [InlineData("<div style=\"background:u\\72l(https://tracker.example/a.png)\">x</div>")]
+    [InlineData("<div style=\"background-image:image-set('https://tracker.example/a.png' 1x)\">x</div>")]
+    [InlineData("<ul style=\"list-style-image:url('https://tracker.example/a.png')\"><li>x</li></ul>")]
+    [InlineData("<style>p { background: url(https://tracker.example/a.png) }</style><p>x</p>")]
+    public void Quoted_css_cannot_load_remote_resources(string html)
+    {
+        var result = OutgoingHtml.Sanitize(html);
+        Assert.DoesNotContain("tracker.example", result);
+        Assert.Contains("x", result);
+    }
+
+    [Theory]
+    [InlineData("<svg><a href=\"javascript:x()\"><text>x</text></a></svg>")]
+    [InlineData("<map name=m><area href=\"javascript:x()\"></map>")]
+    [InlineData("<a href=\"java&#x09;script:x()\">x</a>")]
+    [InlineData("<a href=\"data:text/html,<script>x()</script>\">x</a>")]
+    [InlineData("<details open ontoggle=x()>x</details>")]
+    [InlineData("<noscript><p title=\"</noscript><img src=x onerror=x()>\"></noscript>")]
+    public void Active_content_from_a_quoted_original_is_removed(string html)
+    {
+        var result = OutgoingHtml.Sanitize(html);
+        Assert.DoesNotContain("x()", result);
+        Assert.DoesNotContain("<img", result);
+    }
+
     [Fact]
     public void Formatting_from_the_editor_is_kept()
     {
