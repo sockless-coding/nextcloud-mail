@@ -1,0 +1,179 @@
+<template>
+	<nav class="account-rail" :aria-label="t('sockless_mail', 'Accounts')">
+		<button v-if="accountsState.accounts.length > 1"
+			class="account-rail__button account-rail__button--unified"
+			:class="{ 'account-rail__button--active': mailboxState.selected.unified }"
+			:aria-label="t('sockless_mail', 'All inboxes')"
+			:aria-current="mailboxState.selected.unified ? 'page' : undefined"
+			:title="t('sockless_mail', 'All inboxes')"
+			@click="openUnified">
+			<NcIconSvgWrapper :path="mdiInboxMultipleOutline" />
+			<span v-if="unifiedState.unread" class="account-rail__badge">{{ badge(unifiedState.unread) }}</span>
+		</button>
+		<button v-for="account in accountsState.accounts"
+			:key="account.id"
+			class="account-rail__button account-rail__account"
+			:class="{ 'account-rail__button--active': isCurrent(account) }"
+			:style="{ '--account-color': accountColor(account.id) }"
+			:aria-label="account.displayName"
+			:aria-current="isCurrent(account) ? 'page' : undefined"
+			:title="`${account.displayName} · ${account.emailAddress}`"
+			@click="selectAccount(account)">
+			<span aria-hidden="true">{{ accountInitials(account) }}</span>
+			<span v-if="inboxUnread(account.id)" class="account-rail__badge">{{ badge(inboxUnread(account.id)) }}</span>
+		</button>
+		<button class="account-rail__button account-rail__tool"
+			:aria-label="t('sockless_mail', 'Add account')"
+			:title="t('sockless_mail', 'Add account')"
+			@click="dialogs.accountForm = { account: null }">
+			<NcIconSvgWrapper :path="mdiPlus" />
+		</button>
+		<span class="account-rail__spacer" />
+		<button v-if="oauthState.isAdmin"
+			class="account-rail__button account-rail__tool"
+			:aria-label="t('sockless_mail', 'Sign-in providers')"
+			:title="t('sockless_mail', 'Sign-in providers')"
+			@click="dialogs.oauthSettings = true">
+			<NcIconSvgWrapper :path="mdiShieldAccountOutline" />
+		</button>
+	</nav>
+</template>
+
+<script setup>
+import { mdiInboxMultipleOutline, mdiPlus, mdiShieldAccountOutline } from '@mdi/js'
+import { t } from '@nextcloud/l10n'
+import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import { accountColor, accountInitials, accountsState } from '../store/accounts.js'
+import { dialogs } from '../store/actions.js'
+import { mailboxState } from '../store/mailbox.js'
+import { inboxUnread, openUnified, selectAccount } from '../store/navigation.js'
+import { oauthState } from '../store/oauth.js'
+import { unifiedState } from '../store/unified.js'
+
+function isCurrent(account) {
+	return !mailboxState.selected.unified && mailboxState.selected.accountId === account.id
+}
+
+function badge(count) {
+	return count > 99 ? '99+' : String(count)
+}
+</script>
+
+<style scoped>
+.account-rail {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	width: 60px;
+	flex: none;
+	padding: 12px 0;
+	overflow-y: auto;
+	background: var(--sm-pane-background);
+	border-inline-end: 1px solid var(--color-border);
+}
+
+.account-rail__button {
+	position: relative;
+	display: grid;
+	place-items: center;
+	width: 40px;
+	height: 40px;
+	min-height: 40px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 12px;
+	font-weight: 600;
+	font-size: 14px;
+	cursor: pointer;
+	color: var(--color-main-text);
+	background: transparent;
+	transition: border-radius 0.15s;
+}
+
+.account-rail__button:hover {
+	--sm-button-background: var(--color-background-hover);
+	background: var(--sm-button-background);
+}
+
+.account-rail__button:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 2px;
+}
+
+.account-rail__account,
+.account-rail__account:hover {
+	--sm-button-background: var(--account-color);
+	--sm-button-color: #fff;
+	color: #fff;
+	background: var(--account-color);
+}
+
+.account-rail__account:hover,
+.account-rail__button--active {
+	border-radius: 10px;
+}
+
+.account-rail__button--unified {
+	--sm-button-background: var(--color-background-hover);
+	background: var(--color-background-hover);
+}
+
+/* The current account: a bar at the rail's edge, like the active app in a dock. */
+.account-rail__button--active::before {
+	content: '';
+	position: absolute;
+	inset-inline-start: -10px;
+	top: 8px;
+	bottom: 8px;
+	width: 4px;
+	border-radius: 2px;
+	background: var(--color-primary-element);
+}
+
+.account-rail__button--unified.account-rail__button--active {
+	--sm-button-background: var(--color-primary-element-light);
+	--sm-button-color: var(--color-primary-element-light-text);
+	color: var(--color-primary-element-light-text);
+	background: var(--color-primary-element-light);
+}
+
+.account-rail__tool {
+	color: var(--color-text-maxcontrast);
+}
+
+.account-rail__badge {
+	position: absolute;
+	top: -4px;
+	inset-inline-end: -6px;
+	min-width: 18px;
+	height: 18px;
+	padding: 0 4px;
+	border: 2px solid var(--sm-pane-background);
+	border-radius: 9px;
+	box-sizing: content-box;
+	font-size: 10px;
+	line-height: 18px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: #fff;
+	background: var(--color-element-error, var(--color-error));
+}
+
+.account-rail__spacer {
+	flex: 1;
+}
+
+@media (max-width: 800px) {
+	.account-rail {
+		width: 52px;
+	}
+
+	.account-rail__button {
+		width: 36px;
+		height: 36px;
+		min-height: 36px;
+	}
+}
+</style>

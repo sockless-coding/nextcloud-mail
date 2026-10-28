@@ -57,16 +57,62 @@ export function check(ok, description) {
 	}
 }
 
-/** Account names in the navigation, top to bottom. */
+const exact = (name) => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`)
+
+/** Account names in the account rail, top to bottom. */
 export async function accountNames(page) {
-	return (await page.locator('li.account-entry > .app-navigation-entry .app-navigation-entry__name').allInnerTexts()).map((s) => s.trim())
+	return page.locator('.account-rail__account').evaluateAll((buttons) => buttons.map((b) => b.getAttribute('aria-label')))
 }
 
-/** Opens an account's action menu and clicks an entry. */
+/** Shows an account (its folders and inbox) by clicking it in the rail; name is a string or RegExp. */
+export async function openAccount(page, name) {
+	await page.locator('.account-rail__account').first().waitFor()
+	const pattern = typeof name === 'string' ? exact(name) : name
+	await page.getByRole('navigation', { name: 'Accounts' }).getByRole('button', { name: pattern }).first().click()
+}
+
+/** Opens an account's action menu (in the folder pane, once the account is shown) and clicks an entry. */
 export async function accountAction(page, name, action) {
-	// The account's own row: its <li> also contains the folder rows, which have their own hover state.
-	const row = page.locator('li.account-entry > .app-navigation-entry', { has: page.locator('.app-navigation-entry__name', { hasText: new RegExp(`^${name}$`) }) }).first()
+	await openAccount(page, name)
+	await page.locator('.folder-pane__account-name', { hasText: exact(name) }).waitFor()
+	await page.locator('.folder-pane__account').getByRole('button', { name: 'Account actions' }).click()
+	await page.getByRole('menuitem', { name: action }).click()
+}
+
+/** The message rows of the list. */
+export function messageRows(page) {
+	return page.locator('.message-list li.message-row')
+}
+
+/** Whether a message row is shown as unread. */
+export async function isUnread(row) {
+	return (await row.getAttribute('class')).includes('message-row--unread')
+}
+
+/** Clicks one of a message row's hover actions ("Delete", "Mark as read", "Flag", "Move…", ...). */
+export async function rowAction(row, action) {
 	await row.hover()
-	await row.getByRole('button', { name: 'Actions' }).click()
+	await row.locator('.message-row__actions').getByRole('button', { name: action, exact: true }).click()
+}
+
+/** A folder in the folder pane, by its exact name. */
+export function folderRow(page, name) {
+	return page.locator('.folder-row', { has: page.locator('.folder-row__name', { hasText: exact(name) }) }).first()
+}
+
+export async function folderNames(page) {
+	return (await page.locator('.folder-row__name').allInnerTexts()).map((s) => s.trim())
+}
+
+/** The unread count a folder shows, 0 without one. */
+export async function folderUnread(page, name) {
+	const counter = folderRow(page, name).locator('.folder-row__count')
+	return (await counter.count()) ? Number((await counter.innerText()).trim()) : 0
+}
+
+export async function folderAction(page, name, action) {
+	const row = folderRow(page, name)
+	await row.hover()
+	await row.getByRole('button', { name: 'Folder actions' }).click()
 	await page.getByRole('menuitem', { name: action }).click()
 }

@@ -2,7 +2,7 @@
 // Works on three messages it sends itself, so it does not depend on other checks or earlier runs.
 // Needs: dev/dev.sh up, the app deployed, and an account for alice@example.test (node mail.mjs creates one).
 import { execSync } from 'node:child_process'
-import { check, start } from './lib.mjs'
+import { accountAction, check, folderAction, folderNames, folderRow, folderUnread, isUnread, messageRows, openAccount, rowAction, start } from './lib.mjs'
 
 const suffix = Date.now().toString().slice(-6)
 const [readMe, deleteMe, moveMe] = ['read', 'delete', 'move'].map((what) => `Action ${what} ${suffix}`)
@@ -13,15 +13,10 @@ for (const subject of [moveMe, deleteMe, readMe]) {
 
 // Only now load the page, so the initial folder counts already include the new messages.
 const { page, step, finish } = await start()
-const items = page.locator('.message-list li.list-item__wrapper')
+const items = messageRows(page)
 const item = (subject) => items.filter({ hasText: subject }).first()
-const navRow = (name) => page.locator('.app-navigation-entry', { has: page.locator(':scope > a .app-navigation-entry__name, :scope > div .app-navigation-entry__name', { hasText: new RegExp(`^${name}$`) }) }).first()
-const navNames = async () => (await page.locator('.app-navigation-entry__name').allInnerTexts()).map((s) => s.trim())
-const unread = async (folder) => {
-	const counter = navRow(folder).locator('.counter-bubble__counter')
-	return (await counter.count()) ? Number((await counter.innerText()).trim()) : 0
-}
-const isBold = (subject) => item(subject).locator('.list-item-content__subname--bold').count().then((n) => n > 0)
+const unread = (folder) => folderUnread(page, folder)
+const isBold = (subject) => isUnread(item(subject))
 
 /** Polls an async condition (UI updates follow requests), up to 10 seconds. */
 async function until(condition) {
@@ -34,14 +29,8 @@ async function until(condition) {
 	return false
 }
 
-async function rowAction(row, action) {
-	await row.hover()
-	await row.getByRole('button', { name: 'Actions' }).first().click()
-	await page.getByRole('menuitem', { name: action }).click()
-}
-
 async function openFolder(name) {
-	await navRow(name).locator('a').first().click()
+	await folderRow(page, name).locator('.folder-row__main').click()
 	await page.locator('.message-list__header h2', { hasText: new RegExp(`^${name}$`) }).waitFor()
 }
 
@@ -50,11 +39,11 @@ async function submitFolderName(name) {
 	await dialog.getByLabel('Folder name').fill(name)
 	await dialog.getByRole('button', { name: /^(Create|Rename)$/ }).click()
 	await dialog.waitFor({ state: 'detached' })
-	await page.locator('.app-navigation-entry__name', { hasText: new RegExp(`^${name}$`) }).first().waitFor()
+	await folderRow(page, name).waitFor()
 }
 
-const aliceRow = page.locator('li.account-entry > .app-navigation-entry').filter({ hasText: /^Alice/ }).first()
-await aliceRow.locator('a').first().click()
+await openAccount(page, /^Alice/)
+const aliceName = (await page.locator('.folder-pane__account-name').innerText()).trim()
 await openFolder('Inbox')
 await item(readMe).waitFor()
 
@@ -67,20 +56,20 @@ check(await until(async () => await unread('Inbox') === unreadBefore - 1), `open
 check(await until(async () => !(await isBold(readMe))), 'opened message is no longer bold')
 
 await rowAction(item(readMe), 'Mark as unread')
-check(await until(async () => await unread('Inbox') === unreadBefore && await isBold(readMe)), '"Mark as unread" from the list menu')
+check(await until(async () => await unread('Inbox') === unreadBefore && await isBold(readMe)), '"Mark as unread" from the hover actions of the row')
 await page.getByRole('toolbar').getByRole('button', { name: 'Flag' }).click()
-await item(readMe).locator('.message-list__flag').waitFor()
-check(true, '"Flag" from the toolbar shows the star in the list')
+await item(readMe).locator('.message-row__flag').waitFor()
+check(true, '"Flag" from the command bar shows the flag in the list')
 
 // Without a Trash folder, delete asks first; then Trash is created and delete moves into it.
-if (!(await navNames()).includes('Trash')) {
+if (!(await folderNames(page)).includes('Trash')) {
 	await rowAction(item(deleteMe), 'Delete')
 	const confirm = page.getByRole('dialog', { name: 'Delete permanently?' })
 	await confirm.waitFor()
 	await confirm.getByRole('button', { name: 'Cancel' }).click()
 	await confirm.waitFor({ state: 'detached' })
 	check(await item(deleteMe).count() === 1, 'no Trash: "Delete permanently?" asked, Cancel keeps the message')
-	await rowAction(aliceRow, 'New folder')
+	await accountAction(page, aliceName, 'New folder')
 	await submitFolderName('Trash')
 	step('created folder "Trash"')
 }
@@ -91,7 +80,7 @@ check(await until(async () => await item(deleteMe).count() === 1), 'and is in Tr
 
 // Move into a new folder through the dialog, then rename that folder.
 const folder = `E2E ${suffix}`
-await rowAction(aliceRow, 'New folder')
+await accountAction(page, aliceName, 'New folder')
 await submitFolderName(folder)
 await openFolder('Inbox')
 await rowAction(item(moveMe), 'Move…')
@@ -102,7 +91,7 @@ await moveDialog.getByRole('button', { name: 'Move' }).click()
 await moveDialog.waitFor({ state: 'detached' })
 check(await until(async () => await item(moveMe).count() === 0), 'moved message leaves the Inbox')
 
-await rowAction(navRow(folder), 'Rename')
+await folderAction(page, folder, 'Rename')
 await submitFolderName(`${folder} renamed`)
 await openFolder(`${folder} renamed`)
 check(await until(async () => await item(moveMe).count() === 1), 'renamed folder contains the moved message')

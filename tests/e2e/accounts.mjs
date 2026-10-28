@@ -74,7 +74,7 @@ await accountAction(page, second, 'Move up')
 await page.waitForTimeout(500)
 step(`after "Move up": ${ours(await accountNames(page)).join(', ')}`)
 await page.reload()
-await page.locator('li.account-entry').first().waitFor()
+await page.locator('.account-rail__account').first().waitFor()
 step(`after reload: ${ours(await accountNames(page)).join(', ')}`)
 
 for (const name of [second, first]) {

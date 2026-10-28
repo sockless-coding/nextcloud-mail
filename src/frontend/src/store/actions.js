@@ -15,6 +15,11 @@ export const dialogs = reactive({
 	confirmPermanent: null,
 	/** Folder name prompt: { title, label, value, submit(name) -> Promise } */
 	folderName: null,
+	/** Account form: { account } (account null for a new one). */
+	accountForm: null,
+	/** Account waiting for confirmation to be removed. */
+	accountToDelete: null,
+	oauthSettings: false,
 })
 
 function fail(what, e) {
@@ -35,6 +40,52 @@ export async function toggleFlagged(where, message) {
 	} catch (e) {
 		fail(t('sockless_mail', 'Flagging'), e)
 	}
+}
+
+/**
+ * Actions on several rows at once ({ accountId, folderId, message }, see selection.js); the
+ * rows may come from different folders and accounts, so each folder gets its own request.
+ */
+function byFolder(rows) {
+	const groups = new Map()
+	for (const row of rows) {
+		const key = `${row.accountId}/${row.folderId}`
+		if (!groups.has(key)) {
+			groups.set(key, { where: { accountId: row.accountId, folderId: row.folderId }, ids: [] })
+		}
+		groups.get(key).ids.push(row.message.id)
+	}
+	return [...groups.values()]
+}
+
+export async function setSeenRows(rows, seen) {
+	try {
+		await Promise.all(byFolder(rows).map(({ where, ids }) => setFlags(where, ids, { seen })))
+	} catch (e) {
+		fail(seen ? t('sockless_mail', 'Marking as read') : t('sockless_mail', 'Marking as unread'), e)
+	}
+}
+
+export async function setFlaggedRows(rows, flagged) {
+	try {
+		await Promise.all(byFolder(rows).map(({ where, ids }) => setFlags(where, ids, { flagged })))
+	} catch (e) {
+		fail(t('sockless_mail', 'Flagging'), e)
+	}
+}
+
+export async function removeRows(rows) {
+	await Promise.all(byFolder(rows).map(({ where, ids }) => remove(where, ids)))
+}
+
+/** Moving needs one source folder: the target is chosen among that account's folders. */
+export function canMoveRows(rows) {
+	return rows.length > 0 && byFolder(rows).length === 1
+}
+
+export async function askMoveRows(rows) {
+	const [{ where, ids }] = byFolder(rows)
+	await askMove(where, ids)
 }
 
 export async function askMove(where, messageIds) {

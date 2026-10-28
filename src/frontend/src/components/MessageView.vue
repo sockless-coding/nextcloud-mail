@@ -8,11 +8,20 @@
 			:description="open.error.message" />
 		<article v-else-if="message">
 			<header class="message-view__header">
-				<h2>{{ message.subject || t('sockless_mail', '(no subject)') }}</h2>
+				<div class="message-view__title">
+					<button v-if="readingPane === 'off'"
+						class="message-view__back"
+						:aria-label="t('sockless_mail', 'Back to the list')"
+						:title="t('sockless_mail', 'Back to the list')"
+						@click="closeMessage">
+						<NcIconSvgWrapper :path="mdiArrowLeft" />
+					</button>
+					<h2>{{ message.subject || t('sockless_mail', '(no subject)') }}</h2>
+				</div>
 				<div class="message-view__meta">
 					<NcAvatar :display-name="senderName" is-no-user disable-menu :size="44" />
 					<div class="message-view__people">
-						<div>
+						<div class="message-view__sender">
 							<strong>{{ senderName }}</strong>
 							<span v-if="sender?.name" class="message-view__address">{{ " " }}&lt;{{ sender.address }}&gt;</span>
 						</div>
@@ -22,52 +31,9 @@
 								· {{ t('sockless_mail', 'Cc: {recipients}', { recipients: formatList(message.cc) }) }}
 							</template>
 						</div>
+						<NcDateTime class="message-view__date" :timestamp="Date.parse(message.date)" :format="{ dateStyle: 'full', timeStyle: 'short' }" :relative-time="false" />
 					</div>
-					<NcDateTime class="message-view__date" :timestamp="Date.parse(message.date)" :format="{ dateStyle: 'medium', timeStyle: 'short' }" :relative-time="false" />
-				</div>
-				<div class="message-view__toolbar" role="toolbar" :aria-label="t('sockless_mail', 'Message actions')">
-					<NcButton variant="secondary" @click="reply('reply')">
-						<template #icon>
-							<NcIconSvgWrapper :path="mdiReply" />
-						</template>
-						{{ t('sockless_mail', 'Reply') }}
-					</NcButton>
-					<NcButton variant="tertiary" @click="reply('replyAll')">
-						<template #icon>
-							<NcIconSvgWrapper :path="mdiReplyAll" />
-						</template>
-						{{ t('sockless_mail', 'Reply all') }}
-					</NcButton>
-					<NcButton variant="tertiary" @click="reply('forward')">
-						<template #icon>
-							<NcIconSvgWrapper :path="mdiShare" />
-						</template>
-						{{ t('sockless_mail', 'Forward') }}
-					</NcButton>
-					<NcButton variant="tertiary" @click="toggleSeen(where, message)">
-						<template #icon>
-							<NcIconSvgWrapper :path="message.seen ? mdiEmailOutline : mdiEmailOpenOutline" />
-						</template>
-						{{ message.seen ? t('sockless_mail', 'Mark as unread') : t('sockless_mail', 'Mark as read') }}
-					</NcButton>
-					<NcButton variant="tertiary" :pressed="message.flagged" @click="toggleFlagged(where, message)">
-						<template #icon>
-							<NcIconSvgWrapper :path="message.flagged ? mdiStar : mdiStarOutline" />
-						</template>
-						{{ message.flagged ? t('sockless_mail', 'Flagged') : t('sockless_mail', 'Flag') }}
-					</NcButton>
-					<NcButton variant="tertiary" @click="askMove(where, [message.id])">
-						<template #icon>
-							<NcIconSvgWrapper :path="mdiFolderMoveOutline" />
-						</template>
-						{{ t('sockless_mail', 'Move…') }}
-					</NcButton>
-					<NcButton variant="tertiary" @click="remove(where, [message.id])">
-						<template #icon>
-							<NcIconSvgWrapper :path="mdiDeleteOutline" />
-						</template>
-						{{ t('sockless_mail', 'Delete') }}
-					</NcButton>
+					<NcIconSvgWrapper v-if="message.flagged" :path="mdiFlag" class="message-view__flag" :name="t('sockless_mail', 'Flagged')" />
 				</div>
 			</header>
 
@@ -101,8 +67,7 @@
 </template>
 
 <script setup>
-import { mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFolderMoveOutline, mdiPaperclip, mdiReply, mdiReplyAll, mdiShare, mdiStar, mdiStarOutline } from '@mdi/js'
-import { showError } from '@nextcloud/dialogs/toast'
+import { mdiArrowLeft, mdiFlag, mdiPaperclip } from '@mdi/js'
 import { getCanonicalLocale, n, t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -112,9 +77,8 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { computed } from 'vue'
-import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
-import { composeReply } from '../store/compose.js'
-import { mailboxState, openMessage, partUrl } from '../store/mailbox.js'
+import { readingPane } from '../store/layout.js'
+import { closeMessage, mailboxState, openMessage, partUrl } from '../store/mailbox.js'
 import MessageBody from './MessageBody.vue'
 
 const open = mailboxState.open
@@ -123,14 +87,6 @@ const where = computed(() => ({ accountId: open.accountId, folderId: open.folder
 const message = computed(() => open.message)
 const sender = computed(() => message.value?.from[0] ?? null)
 const senderName = computed(() => sender.value?.name || sender.value?.address || t('sockless_mail', 'Unknown sender'))
-
-async function reply(mode) {
-	try {
-		await composeReply(mode)
-	} catch (e) {
-		showError(t('sockless_mail', 'Could not prepare the message: {error}', { error: e.message }))
-	}
-}
 
 function formatList(addresses) {
 	return addresses.map((a) => a.name || a.address).join(', ')
@@ -147,7 +103,7 @@ function formatFileSize(bytes) {
 
 <style scoped>
 .message-view {
-	padding: 16px 24px;
+	padding: 16px 28px 28px;
 	max-width: 1000px;
 }
 
@@ -157,16 +113,50 @@ function formatFileSize(bytes) {
 	padding: 48px;
 }
 
-.message-view__header h2 {
-	margin: 8px 0 16px;
+.message-view__title {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.message-view__title h2 {
+	margin: 4px 0 14px;
+	font-size: 21px;
+	font-weight: 600;
+	line-height: 1.3;
 	overflow-wrap: anywhere;
 }
 
+.message-view__back {
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	flex: none;
+	border: 0;
+	border-radius: var(--border-radius-element, 8px);
+	background: none;
+	color: var(--color-main-text);
+	cursor: pointer;
+}
+
+.message-view__back:hover {
+	--sm-button-background: var(--color-background-hover);
+	background: var(--color-background-hover);
+}
+
+/* Sender card. */
 .message-view__meta {
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: 12px;
 	margin-bottom: 16px;
+	padding: 14px 16px;
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-container, 12px);
 }
 
 .message-view__people {
@@ -174,10 +164,15 @@ function formatFileSize(bytes) {
 	min-width: 0;
 }
 
+.message-view__sender {
+	overflow-wrap: anywhere;
+}
+
 .message-view__address,
 .message-view__recipients,
 .message-view__date {
 	color: var(--color-text-maxcontrast);
+	font-size: 13px;
 }
 
 .message-view__recipients {
@@ -186,11 +181,8 @@ function formatFileSize(bytes) {
 	white-space: nowrap;
 }
 
-.message-view__toolbar {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 4px;
-	margin-bottom: 12px;
+.message-view__flag {
+	color: var(--color-error-text);
 }
 
 .message-view__remote {
@@ -221,5 +213,11 @@ function formatFileSize(bytes) {
 
 .message-view__attachment-size {
 	color: var(--color-text-maxcontrast);
+}
+
+@media (max-width: 800px) {
+	.message-view {
+		padding: 12px 16px 24px;
+	}
 }
 </style>

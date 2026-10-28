@@ -123,3 +123,23 @@ export async function testConnection(input, accountId) {
 		rethrow(e)
 	}
 }
+
+/**
+ * A colour per account for the account rail and the dots in mixed lists. Derived from the id, so
+ * it stays the same across sessions and devices; all of them carry white text in both themes.
+ */
+const ACCOUNT_COLORS = ['#0f62d6', '#1d7f52', '#c13a3a', '#7346c2', '#a85a0b', '#0e7584', '#a3306f', '#4f5d75']
+
+export function accountColor(id) {
+	let hash = 0
+	for (const c of String(id)) {
+		hash = (hash * 31 + c.charCodeAt(0)) >>> 0
+	}
+	return ACCOUNT_COLORS[hash % ACCOUNT_COLORS.length]
+}
+
+/** One or two letters for the account rail. */
+export function accountInitials(account) {
+	const words = (account.displayName || account.emailAddress || '?').split(/[\s@._-]+/).filter(Boolean)
+	return (words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2)).toUpperCase()
+}

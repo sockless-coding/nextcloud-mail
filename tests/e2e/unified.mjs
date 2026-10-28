@@ -2,7 +2,7 @@
 // Needs: dev/dev.sh up and the app deployed. Adds accounts for alice@example.test and
 // bob@example.test (GreenMail users) if the user has none for those addresses.
 import { execSync } from 'node:child_process'
-import { appPage, base, check, mailHost, start } from './lib.mjs'
+import { appPage, base, check, isUnread, mailHost, messageRows, openAccount, rowAction, start } from './lib.mjs'
 
 const suffix = Date.now().toString().slice(-6)
 const [aliceSubject, bobSubject, laterSubject] = ['alice', 'bob', 'later'].map((who) => `Unified ${who} ${suffix}`)
@@ -10,12 +10,13 @@ const send = (to, subject) => execSync(`curl -s --url smtp://127.0.0.1:3025 --ma
 	{ input: `From: Unified <unified@example.test>\r\nTo: ${to}\r\nSubject: ${subject}\r\n\r\nhello\r\n` })
 
 const { page, step, finish } = await start()
-const items = page.locator('.message-list li.list-item__wrapper')
+const items = messageRows(page)
 const item = (subject) => items.filter({ hasText: subject }).first()
 const header = page.locator('.message-list__header h2')
-const unifiedEntry = page.locator('.unified-entry')
+const unifiedEntry = page.getByRole('navigation', { name: 'Accounts' }).getByRole('button', { name: 'All inboxes' })
+// The folder pane's count: the rail's badge stops at 99+.
 const unifiedUnread = async () => {
-	const counter = unifiedEntry.locator('.counter-bubble__counter')
+	const counter = page.locator('.folder-pane__unified .folder-pane__count')
 	return (await counter.count()) ? Number((await counter.innerText()).trim()) : 0
 }
 
@@ -75,13 +76,11 @@ const unreadBefore = await unifiedUnread()
 await item(aliceSubject).click()
 await page.locator('.message-view h2', { hasText: aliceSubject }).waitFor({ timeout: 20000 })
 check(await until(async () => (await unifiedUnread()) === unreadBefore - 1), 'opening a message lowers the unread count of all inboxes')
-check(await until(async () => (await item(aliceSubject).locator('.list-item-content__subname--bold').count()) === 0), 'the opened message is shown as read')
+check(await until(async () => !(await isUnread(item(aliceSubject)))), 'the opened message is shown as read')
 check((await header.innerText()).includes('All inboxes'), 'opening a message stays in the unified inbox')
 
 step('delete from the list')
-await item(bobSubject).hover()
-await item(bobSubject).getByRole('button', { name: 'Actions' }).first().click()
-await page.getByRole('menuitem', { name: 'Delete' }).click()
+await rowAction(item(bobSubject), 'Delete')
 // GreenMail has no Trash folder: confirm deleting permanently.
 const confirm = page.getByRole('dialog', { name: 'Delete permanently?' })
 if (await until(async () => (await confirm.count()) > 0, 3)) {
@@ -97,10 +96,10 @@ check(await until(async () => (await item(laterSubject).count()) > 0, 40), 'new 
 check((await items.first().innerText()).includes(laterSubject), 'new mail goes on top')
 
 step('switching views')
-await page.locator('li.account-entry .app-navigation-entry__name', { hasText: new RegExp(`^${bobName}$`) }).first().click()
+await openAccount(page, bobName)
 await header.filter({ hasText: 'Inbox' }).waitFor()
 check(await until(async () => (await item(laterSubject).count()) > 0), 'the account inbox shows its own mail')
-await unifiedEntry.locator('a').first().click()
+await unifiedEntry.click()
 await header.filter({ hasText: 'All inboxes' }).waitFor()
 check(await until(async () => (await item(aliceSubject).count()) > 0 && (await item(laterSubject).count()) > 0), 'back in all inboxes')
 

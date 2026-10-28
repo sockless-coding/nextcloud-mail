@@ -2,7 +2,7 @@
 // Needs: dev/dev.sh up, the app deployed, dev/dev.sh seed-mail. Adds an account for
 // alice@example.test if the user has none for that address.
 import { execFileSync, execSync } from 'node:child_process'
-import { appPage, base, mailHost, start } from './lib.mjs'
+import { appPage, base, mailHost, messageRows, openAccount, start } from './lib.mjs'
 
 const { page, step, finish } = await start()
 const dialogs = []
@@ -36,17 +36,17 @@ if (!accounts.some((a) => a.emailAddress === 'alice@example.test')) {
 
 const aliceName = (await (await page.request.get(`${base}${apiBase}/accounts`, { headers })).json())
 	.find((a) => a.emailAddress === 'alice@example.test').displayName
-await page.locator('li.account-entry .app-navigation-entry__name', { hasText: new RegExp(`^${aliceName}$`) }).first().click()
+await openAccount(page, aliceName)
 // With several accounts the app opens on all inboxes; wait for the account's own inbox.
 await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor({ timeout: 30000 })
 
-const items = page.locator('.message-list li.list-item__wrapper')
+const items = messageRows(page)
 await items.first().waitFor({ timeout: 30000 })
 step(`list: "${(await page.locator('.message-list__header').innerText()).replace(/\s+/g, ' ')}", ${await items.count()} shown`)
 if (await page.getByRole('button', { name: 'Load older messages' }).count()) {
 	const before = await items.count()
 	await page.getByRole('button', { name: 'Load older messages' }).click()
-	await page.waitForFunction((n) => document.querySelectorAll('.message-list li.list-item__wrapper').length > n, before)
+	await page.waitForFunction((n) => document.querySelectorAll('.message-list li.message-row').length > n, before)
 	step(`after "Load older messages": ${await items.count()} shown`)
 }
 
@@ -83,7 +83,7 @@ const subject = `Polling check ${Date.now()}`
 execSync('curl -s --url smtp://127.0.0.1:3025 --mail-from poll@example.test --mail-rcpt alice@example.test --upload-file -',
 	{ input: `From: Poll <poll@example.test>\r\nTo: alice@example.test\r\nSubject: ${subject}\r\n\r\nhello\r\n` })
 await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
-await page.waitForFunction((s) => document.querySelector('.message-list li.list-item__wrapper')?.innerText.includes(s), subject, { timeout: 15000 })
+await page.waitForFunction((s) => document.querySelector('.message-list li.message-row')?.innerText.includes(s), subject, { timeout: 15000 })
 step('polling: new mail appeared at the top')
 
 // Deleted by another mail program: the next poll drops it from the list.
@@ -92,7 +92,7 @@ const uid = imap(`UID SEARCH SUBJECT "${subject}"`).match(/SEARCH (\d+)/)[1]
 imap(`UID STORE ${uid} +FLAGS (\\Deleted)`)
 imap('EXPUNGE')
 await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
-await page.waitForFunction((s) => ![...document.querySelectorAll('.message-list li.list-item__wrapper')].some((li) => li.innerText.includes(s)), subject, { timeout: 20000 })
+await page.waitForFunction((s) => ![...document.querySelectorAll('.message-list li.message-row')].some((li) => li.innerText.includes(s)), subject, { timeout: 20000 })
 step('polling: mail deleted elsewhere disappeared')
 
 console.log(`alert dialogs: ${dialogs.length ? dialogs.join(' | ') : 'none'}`)

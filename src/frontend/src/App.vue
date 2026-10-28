@@ -1,160 +1,79 @@
 <template>
 	<NcContent app-name="sockless_mail">
-		<NcAppNavigation :aria-label="t('sockless_mail', 'Mail accounts and folders')">
-			<template #list>
-				<NcAppNavigationNew :text="t('sockless_mail', 'New message')"
-					:disabled="accountsState.accounts.length === 0"
-					@click="composeNew">
-					<template #icon>
-						<NcIconSvgWrapper :path="mdiPencilOutline" />
-					</template>
-				</NcAppNavigationNew>
-				<NcAppNavigationItem v-if="accountsState.accounts.length > 1"
-					class="unified-entry"
-					:name="t('sockless_mail', 'All inboxes')"
-					:active="!!mailboxState.selected.unified"
-					@click="openUnified">
-					<template #icon>
-						<NcIconSvgWrapper :path="mdiInboxMultipleOutline" />
-					</template>
-					<template v-if="unifiedState.unread" #counter>
-						<NcCounterBubble :count="unifiedState.unread" />
-					</template>
-				</NcAppNavigationItem>
-				<NcAppNavigationItem v-for="(account, index) in accountsState.accounts"
-					:key="account.id"
-					class="account-entry"
-					:name="account.displayName"
-					allow-collapse
-					:open="!!expanded[account.id]"
-					@update:open="(isOpen) => toggleAccount(account, isOpen)"
-					@click="selectAccount(account)">
-					<template #icon>
-						<NcIconSvgWrapper :path="mdiEmailOutline" />
-					</template>
-					<template #actions>
-						<NcActionButton close-after-click @click="openDialog(account)">
-							<template #icon>
-								<NcIconSvgWrapper :path="mdiPencil" />
-							</template>
-							{{ t('sockless_mail', 'Edit account') }}
-						</NcActionButton>
-						<NcActionButton close-after-click @click="newFolder(account)">
-							<template #icon>
-								<NcIconSvgWrapper :path="mdiFolderPlusOutline" />
-							</template>
-							{{ t('sockless_mail', 'New folder') }}
-						</NcActionButton>
-						<NcActionButton close-after-click @click="refreshAccount(account)">
-							<template #icon>
-								<NcIconSvgWrapper :path="mdiRefresh" />
-							</template>
-							{{ t('sockless_mail', 'Refresh folders') }}
-						</NcActionButton>
-						<NcActionButton :disabled="index === 0" close-after-click @click="move(account, -1)">
-							<template #icon>
-								<NcIconSvgWrapper :path="mdiArrowUp" />
-							</template>
-							{{ t('sockless_mail', 'Move up') }}
-						</NcActionButton>
-						<NcActionButton :disabled="index === accountsState.accounts.length - 1" close-after-click @click="move(account, 1)">
-							<template #icon>
-								<NcIconSvgWrapper :path="mdiArrowDown" />
-							</template>
-							{{ t('sockless_mail', 'Move down') }}
-						</NcActionButton>
-						<NcActionButton close-after-click @click="accountToDelete = account">
-							<template #icon>
-								<NcIconSvgWrapper :path="mdiDelete" />
-							</template>
-							{{ t('sockless_mail', 'Delete account') }}
-						</NcActionButton>
-					</template>
+		<div class="sm-shell">
+			<AccountRail />
 
-					<NcAppNavigationItem v-if="folderState(account.id).loading && !folderState(account.id).list.length"
-						:name="t('sockless_mail', 'Loading folders…')"
-						loading />
-					<NcAppNavigationItem v-else-if="folderState(account.id).error"
-						class="account-entry__error"
-						:name="folderState(account.id).error.message"
-						:title="folderState(account.id).error.message"
-						@click="openDialog(account)">
-						<template #icon>
-							<NcIconSvgWrapper :path="mdiAlertCircleOutline" />
-						</template>
-					</NcAppNavigationItem>
-					<FolderItem v-for="folder in folderTree(account.id)"
-						:key="folder.id"
-						:account-id="account.id"
-						:folder="folder" />
-				</NcAppNavigationItem>
-			</template>
-			<template #footer>
-				<div class="navigation-footer">
-					<NcButton variant="tertiary" wide @click="openDialog(null)">
-						<template #icon>
-							<NcIconSvgWrapper :path="mdiPlus" />
-						</template>
-						{{ t('sockless_mail', 'Add account') }}
-					</NcButton>
-					<NcButton v-if="oauthState.isAdmin"
-						variant="tertiary"
-						wide
-						@click="oauthSettingsOpen = true">
-						<template #icon>
-							<NcIconSvgWrapper :path="mdiCogOutline" />
-						</template>
-						{{ t('sockless_mail', 'Sign-in providers') }}
-					</NcButton>
-				</div>
-			</template>
-		</NcAppNavigation>
-
-		<NcAppContent v-if="accountsState.loading || accountsState.loadError || accountsState.accounts.length === 0">
-			<div v-if="accountsState.loading" class="centered">
+			<div v-if="accountsState.loading" class="sm-shell__state">
 				<NcLoadingIcon :size="64" />
 			</div>
 			<NcEmptyContent v-else-if="accountsState.loadError"
+				class="sm-shell__state"
 				:name="t('sockless_mail', 'Could not load your accounts')"
 				:description="accountsState.loadError" />
-			<NcEmptyContent v-else
+			<NcEmptyContent v-else-if="accountsState.accounts.length === 0"
+				class="sm-shell__state"
 				:name="t('sockless_mail', 'No mail accounts yet')"
 				:description="t('sockless_mail', 'Connect an IMAP/SMTP account to read and send mail.')">
 				<template #icon>
 					<NcIconSvgWrapper :path="mdiEmailOutline" />
 				</template>
 				<template #action>
-					<NcButton variant="primary" @click="openDialog(null)">
+					<NcButton variant="primary" @click="dialogs.accountForm = { account: null }">
 						{{ t('sockless_mail', 'Add account') }}
 					</NcButton>
 				</template>
 			</NcEmptyContent>
-		</NcAppContent>
 
-		<NcAppContent v-else
-			:page-heading="t('sockless_mail', 'Mail')"
-			:show-details="!!mailboxState.open.id"
-			@update:show-details="(show) => !show && closeMessage()">
-			<template #list>
-				<MessageList v-if="mailboxState.selected.folderId || mailboxState.selected.unified" />
-				<NcEmptyContent v-else :name="t('sockless_mail', 'Choose a folder')" />
+			<template v-else>
+				<div v-if="viewport.narrowFolders && viewport.drawerOpen" class="sm-shell__scrim" @click="closeDrawer" />
+				<FolderPane v-show="folderPaneShown" :class="{ 'sm-shell__drawer': viewport.narrowFolders }" />
+				<main class="sm-shell__main">
+					<CommandBar />
+					<div ref="panes"
+						class="sm-panes"
+						:class="`sm-panes--${readingPane}`"
+						:style="paneSizes">
+						<section v-show="listShown" class="sm-panes__list" :aria-label="t('sockless_mail', 'Message list')">
+							<MessageList v-if="mailboxState.selected.folderId || mailboxState.selected.unified" />
+							<NcEmptyContent v-else :name="t('sockless_mail', 'Choose a folder')" />
+						</section>
+						<div v-if="readingPane !== 'off'"
+							class="sm-panes__splitter"
+							role="separator"
+							tabindex="0"
+							:aria-orientation="readingPane === 'right' ? 'vertical' : 'horizontal'"
+							:aria-label="t('sockless_mail', 'Resize the message list')"
+							@pointerdown="startResize"
+							@keydown="resizeByKey" />
+						<section v-show="readerShown" class="sm-panes__reader" :aria-label="t('sockless_mail', 'Reading pane')">
+							<div v-if="selection.rows.length" class="sm-selection">
+								<NcIconSvgWrapper :path="mdiCheckboxMultipleMarkedCircleOutline" :size="48" />
+								<h2>{{ n('sockless_mail', '{count} message selected', '{count} messages selected', selection.rows.length, { count: selection.rows.length }) }}</h2>
+								<p>{{ t('sockless_mail', 'Use the commands at the top for all of them.') }}</p>
+								<NcButton @click="clearSelection">
+									{{ t('sockless_mail', 'Clear selection') }}
+								</NcButton>
+							</div>
+							<MessageView v-else-if="mailboxState.open.id" />
+							<NcEmptyContent v-else :name="t('sockless_mail', 'No message selected')">
+								<template #icon>
+									<NcIconSvgWrapper :path="mdiEmailOpenOutline" />
+								</template>
+							</NcEmptyContent>
+						</section>
+					</div>
+				</main>
 			</template>
-			<MessageView v-if="mailboxState.open.id" />
-			<NcEmptyContent v-else :name="t('sockless_mail', 'No message selected')">
-				<template #icon>
-					<NcIconSvgWrapper :path="mdiEmailOpenOutline" />
-				</template>
-			</NcEmptyContent>
-		</NcAppContent>
+		</div>
 
 		<Composer v-if="composer.draft" />
 
-		<AccountDialog v-if="dialog.open"
-			:account="dialog.account"
-			@saved="onSaved"
-			@close="dialog.open = false" />
+		<AccountDialog v-if="dialogs.accountForm"
+			:account="dialogs.accountForm.account"
+			@saved="accountSaved"
+			@close="dialogs.accountForm = null" />
 
-		<OAuthSettingsDialog v-if="oauthSettingsOpen" @close="oauthSettingsOpen = false" />
+		<OAuthSettingsDialog v-if="dialogs.oauthSettings" @close="dialogs.oauthSettings = false" />
 
 		<MoveDialog v-if="dialogs.move"
 			:request="dialogs.move"
@@ -171,108 +90,116 @@
 			:open="true"
 			@update:open="(isOpen) => !isOpen && (dialogs.confirmPermanent = null)" />
 
-		<NcDialog v-if="accountToDelete"
+		<NcDialog v-if="dialogs.accountToDelete"
 			:name="t('sockless_mail', 'Delete account')"
-			:message="t('sockless_mail', 'Remove {name} from Sockless Mail? Mail on the server is not affected.', { name: accountToDelete.displayName })"
+			:message="t('sockless_mail', 'Remove {name} from Sockless Mail? Mail on the server is not affected.', { name: dialogs.accountToDelete.displayName })"
 			:buttons="deleteButtons"
 			:open="true"
-			@update:open="(isOpen) => !isOpen && (accountToDelete = null)" />
+			@update:open="(isOpen) => !isOpen && (dialogs.accountToDelete = null)" />
 	</NcContent>
 </template>
 
 <script setup>
-import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiCogOutline, mdiDelete, mdiEmailOpenOutline, mdiEmailOutline, mdiFolderPlusOutline, mdiInboxMultipleOutline, mdiPencil, mdiPencilOutline, mdiPlus, mdiRefresh } from '@mdi/js'
-import { showError } from '@nextcloud/dialogs/toast'
-import { t } from '@nextcloud/l10n'
-import NcActionButton from '@nextcloud/vue/components/NcActionButton'
-import NcAppContent from '@nextcloud/vue/components/NcAppContent'
-import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
-import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
-import NcAppNavigationNew from '@nextcloud/vue/components/NcAppNavigationNew'
+import { mdiCheckboxMultipleMarkedCircleOutline, mdiEmailOpenOutline, mdiEmailOutline } from '@mdi/js'
+import { n, t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcContent from '@nextcloud/vue/components/NcContent'
-import NcCounterBubble from '@nextcloud/vue/components/NcCounterBubble'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import AccountDialog from './components/AccountDialog.vue'
+import AccountRail from './components/AccountRail.vue'
+import CommandBar from './components/CommandBar.vue'
 import Composer from './components/Composer.vue'
-import FolderItem from './components/FolderItem.vue'
 import FolderNameDialog from './components/FolderNameDialog.vue'
+import FolderPane from './components/FolderPane.vue'
 import MessageList from './components/MessageList.vue'
 import MessageView from './components/MessageView.vue'
 import MoveDialog from './components/MoveDialog.vue'
 import OAuthSettingsDialog from './components/OAuthSettingsDialog.vue'
-import { loadOAuthState, oauthState } from './store/oauth.js'
-import { accountsState, deleteAccount, loadAccounts, moveAccount } from './store/accounts.js'
-import { askNewFolder, dialogs, removePermanently } from './store/actions.js'
-import { composeNew, composer } from './store/compose.js'
-import { closeMessage, forgetAccount, hasPendingWrites, loadFolders, mailboxState, refreshMessages, selectFolder } from './store/mailbox.js'
-import { clearSearch } from './store/search.js'
-import { refreshUnified, showUnified, unifiedState } from './store/unified.js'
+import { accountsState, loadAccounts } from './store/accounts.js'
+import { dialogs, removePermanently } from './store/actions.js'
+import { composer } from './store/compose.js'
+import { closeDrawer, folderPaneShown, layout, readingPane, viewport } from './store/layout.js'
+import { hasPendingWrites, loadFolders, mailboxState, refreshMessages } from './store/mailbox.js'
+import { accountSaved, loadAllFolders, openUnified, removeAccount, selectAccount } from './store/navigation.js'
+import { loadOAuthState } from './store/oauth.js'
+import { clearSelection, selection } from './store/selection.js'
+import { refreshUnified } from './store/unified.js'
 
 /**
  * No push channel to the browser (see README); new mail is found by polling. The open folder is
- * polled through the cheap changes endpoint, the folder list (LIST + STATUS on the server) only
- * every FOLDER_POLL_EVERY ticks and when the tab becomes visible.
+ * polled through the cheap changes endpoint, the folder lists (LIST + STATUS on the server, for
+ * the counts in the rail and the folder pane) only every FOLDER_POLL_EVERY ticks and when the tab
+ * becomes visible.
  */
 const POLL_INTERVAL_MS = 15_000
 const FOLDER_POLL_EVERY = 4
 let pollCount = 0
-
-const dialog = reactive({ open: false, account: null })
-const accountToDelete = ref(null)
-const oauthSettingsOpen = ref(false)
-const expanded = reactive({})
 let pollTimer = null
 
-const EMPTY_FOLDERS = { list: [], loading: false, error: null }
+/** With the reading pane off, the list and the open message take turns. */
+const listShown = computed(() => readingPane.value !== 'off' || !mailboxState.open.id || selection.rows.length > 0)
+const readerShown = computed(() => readingPane.value !== 'off' || !listShown.value)
 
-function folderState(accountId) {
-	return mailboxState.folders[accountId] ?? EMPTY_FOLDERS
-}
+const panes = ref(null)
 
-/** Nests the flat, server-ordered folder list. */
-function folderTree(accountId) {
-	const nodes = folderState(accountId).list.map((f) => ({ ...f, children: [] }))
-	const byId = new Map(nodes.map((n) => [n.id, n]))
-	const roots = []
-	for (const node of nodes) {
-		(byId.get(node.parentId)?.children ?? roots).push(node)
+const paneSizes = computed(() => {
+	if (readingPane.value === 'right') {
+		return { gridTemplateColumns: `${layout.listWidth}px 5px minmax(0, 1fr)` }
 	}
-	return roots
-}
-
-async function toggleAccount(account, isOpen) {
-	expanded[account.id] = isOpen
-	if (isOpen && !mailboxState.folders[account.id]) {
-		await loadFolders(account.id)
+	if (readingPane.value === 'bottom') {
+		return { gridTemplateRows: `${layout.listHeight}% 5px minmax(0, 1fr)` }
 	}
+	return {}
+})
+
+const MIN_LIST_WIDTH = 300
+const MIN_READER_WIDTH = 360
+
+function clampWidth(width) {
+	const total = panes.value?.clientWidth ?? 1200
+	return Math.round(Math.max(MIN_LIST_WIDTH, Math.min(width, total - MIN_READER_WIDTH)))
 }
 
-/** Clicking an account opens it and shows its inbox. */
-async function selectAccount(account) {
-	expanded[account.id] = true
-	clearSearch()
-	// Already showing one of this account's folders (checked again after loading, since the user
-	// may have picked a folder meanwhile): keep it instead of jumping back to the inbox.
-	if (mailboxState.selected.accountId === account.id) {
+function clampHeight(percent) {
+	return Math.round(Math.max(20, Math.min(percent, 80)))
+}
+
+/** Dragging the splitter between the list and the reading pane. */
+function startResize(event) {
+	const rect = panes.value.getBoundingClientRect()
+	const handle = event.currentTarget
+	handle.setPointerCapture(event.pointerId)
+	const move = (e) => {
+		if (readingPane.value === 'right') {
+			layout.listWidth = clampWidth(e.clientX - rect.left)
+		} else {
+			layout.listHeight = clampHeight(((e.clientY - rect.top) / rect.height) * 100)
+		}
+	}
+	const stop = () => {
+		handle.removeEventListener('pointermove', move)
+		handle.removeEventListener('pointerup', stop)
+	}
+	handle.addEventListener('pointermove', move)
+	handle.addEventListener('pointerup', stop)
+	event.preventDefault()
+}
+
+function resizeByKey(event) {
+	const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[event.key]
+	if (!step) {
 		return
 	}
-	const folders = mailboxState.folders[account.id]?.list.length ? mailboxState.folders[account.id].list : await loadFolders(account.id)
-	if (mailboxState.selected.accountId === account.id) {
-		return
+	event.preventDefault()
+	if (readingPane.value === 'right') {
+		layout.listWidth = clampWidth(layout.listWidth + step * 24)
+	} else {
+		layout.listHeight = clampHeight(layout.listHeight + step * 3)
 	}
-	const inbox = folders.find((f) => f.specialUse === 'inbox') ?? folders.find((f) => f.selectable)
-	if (inbox) {
-		selectFolder(account.id, inbox.id)
-	}
-}
-
-async function refreshAccount(account) {
-	await loadFolders(account.id)
 }
 
 const deleteButtons = computed(() => [
@@ -280,15 +207,7 @@ const deleteButtons = computed(() => [
 	{
 		label: t('sockless_mail', 'Delete'),
 		variant: 'error',
-		callback: async () => {
-			const id = accountToDelete.value.id
-			try {
-				await deleteAccount(id)
-				forgetAccount(id)
-			} catch (e) {
-				showError(t('sockless_mail', 'Could not delete the account: {error}', { error: e.message }))
-			}
-		},
+		callback: () => removeAccount(dialogs.accountToDelete),
 	},
 ])
 
@@ -303,59 +222,26 @@ const permanentButtons = computed(() => [
 	},
 ])
 
-async function newFolder(account) {
-	if (!mailboxState.folders[account.id]) {
-		await loadFolders(account.id)
-	}
-	expanded[account.id] = true
-	askNewFolder(account.id)
-}
-
-function openDialog(account) {
-	dialog.account = account
-	dialog.open = true
-}
-
-/** New or changed settings: drop cached folders and show the account's inbox. */
-async function onSaved(account) {
-	forgetAccount(account.id)
-	await selectAccount(account)
-}
-
-async function move(account, delta) {
-	try {
-		await moveAccount(account.id, delta)
-	} catch (e) {
-		showError(t('sockless_mail', 'Could not reorder the accounts: {error}', { error: e.message }))
-	}
-}
-
 async function poll(event) {
 	if (document.hidden || hasPendingWrites()) {
 		return
 	}
-	const { accountId, unified } = mailboxState.selected
 	const withFolders = event?.type === 'visibilitychange' || ++pollCount % FOLDER_POLL_EVERY === 0
-	// The unified inbox belongs to no account: refresh the counts of every account shown in the navigation.
-	const folderAccounts = !withFolders ? [] : unified ? Object.keys(mailboxState.folders) : [accountId].filter(Boolean)
 	await Promise.all([
-		unified ? refreshUnified() : refreshMessages(),
-		...folderAccounts.map((id) => loadFolders(id, true)),
+		mailboxState.selected.unified ? refreshUnified() : refreshMessages(),
+		...(withFolders ? Object.keys(mailboxState.folders).map((id) => loadFolders(id, true)) : []),
 	])
-}
-
-function openUnified() {
-	clearSearch()
-	showUnified()
 }
 
 onMounted(async () => {
 	// Not awaited: the mail view does not depend on it.
 	loadOAuthState()
 	await loadAccounts()
+	// The rail shows every account's unread count; not awaited either.
+	loadAllFolders()
 	// With several accounts, start with all their inboxes together.
 	if (accountsState.accounts.length > 1) {
-		showUnified()
+		openUnified()
 	} else if (accountsState.accounts.length) {
 		await selectAccount(accountsState.accounts[0])
 	}
@@ -370,18 +256,145 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.centered {
+.sm-shell {
+	/* Side panes: a shade off the main background, in either theme. */
+	--sm-pane-background: color-mix(in srgb, var(--color-main-text) 3%, var(--color-main-background));
+	position: relative;
+	display: flex;
+	flex: 1;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	background: var(--color-main-background);
+	color: var(--color-main-text);
+}
+
+.sm-shell__state {
+	flex: 1;
 	display: flex;
 	align-items: center;
 	justify-content: center;
+}
+
+.sm-shell__drawer {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	inset-inline-start: 60px;
+	z-index: 20;
+	box-shadow: 0 0 24px rgb(0 0 0 / 25%);
+}
+
+.sm-shell__scrim {
+	position: absolute;
+	inset: 0;
+	z-index: 19;
+	background: rgb(0 0 0 / 20%);
+}
+
+.sm-shell__main {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+}
+
+.sm-panes {
+	display: grid;
+	flex: 1;
+	min-height: 0;
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr);
+}
+
+.sm-panes__list,
+.sm-panes__reader {
+	min-width: 0;
+	min-height: 0;
+}
+
+.sm-panes__list {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.sm-panes__reader {
+	overflow-y: auto;
+}
+
+.sm-panes__splitter {
+	position: relative;
+	background: var(--color-border);
+	cursor: col-resize;
+	touch-action: none;
+	outline: none;
+}
+
+.sm-panes--right .sm-panes__splitter {
+	width: 1px;
+	margin: 0 2px;
+}
+
+.sm-panes--bottom .sm-panes__splitter {
+	height: 1px;
+	margin: 2px 0;
+	cursor: row-resize;
+}
+
+/* A wider grab area than the visible line. */
+.sm-panes__splitter::after {
+	content: '';
+	position: absolute;
+	inset: -4px;
+}
+
+.sm-panes__splitter:hover,
+.sm-panes__splitter:focus-visible {
+	background: var(--color-primary-element);
+}
+
+.sm-selection {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
 	height: 100%;
+	padding: 32px;
+	text-align: center;
+	color: var(--color-text-maxcontrast);
 }
 
-.navigation-footer {
-	padding: 8px;
+.sm-selection h2 {
+	margin: 0;
+	font-size: 18px;
+	color: var(--color-main-text);
 }
 
-.account-entry__error :deep(.app-navigation-entry__name) {
-	color: var(--color-error-text);
+.sm-selection p {
+	margin: 0 0 8px;
+}
+
+@media (max-width: 800px) {
+	.sm-shell__drawer {
+		inset-inline-start: 52px;
+	}
+}
+</style>
+
+<style>
+/*
+ * Nextcloud's server styles give every plain button a background and text colour on hover,
+ * focus, press and when disabled, with selectors no component rule outweighs. The app's own
+ * buttons draw their states themselves, through --sm-button-background and --sm-button-color.
+ */
+#content-vue .sm-shell button:not(.button-vue):is(:hover, :focus, :active, :disabled) {
+	border-color: transparent;
+	background-color: var(--sm-button-background, transparent);
+	color: var(--sm-button-color, inherit);
 }
 </style>

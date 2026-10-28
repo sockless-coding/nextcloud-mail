@@ -5,7 +5,7 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 6d (OAuth2)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> Status: **phase 7a (new layout)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
 > (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
 > with remote images blocked by default, attachments), works with it (read/unread, flag, move,
 > delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
@@ -13,7 +13,10 @@ the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with
 > QRESYNC/CONDSTORE and IMAP IDLE. Search covers the open folder on the server (message text
 > included) or all accounts from the cache. With several accounts, "All inboxes" shows every
 > account's inbox in one list. Google and Microsoft accounts can be added by signing in (OAuth2),
-> once an admin has registered the app with them.
+> once an admin has registered the app with them. The interface follows desktop mail programs:
+> an account rail with a colour and unread count per account, a folder pane, a command bar, a
+> message list grouped by day with hover actions and multi-select, and a reading pane on the
+> right, at the bottom or off.
 
 ## Layout
 
@@ -61,6 +64,7 @@ node compose.mjs     # new message with attachment, validation, reply, forward, 
 node search.mjs      # folder search (body text), search across accounts, opening a result
 node unified.mjs     # all inboxes: merged order, reading, deleting and new mail across accounts
 node oauth.mjs       # admin sign-in settings, Google popup with PKCE, callback through HaRP, non-admin user
+node layout.mjs      # multi-select and actions on it, reading pane and density (kept on reload), folder pane
 ```
 
 They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console errors.
@@ -154,7 +158,7 @@ Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_
 
 Users can add Gmail/Google Workspace and Outlook/Microsoft 365 accounts by signing in instead of
 creating app passwords. A Nextcloud admin enables this once, in the app: **Sign-in providers** at
-the bottom of the navigation (shown to members of the `admin` group only). The dialog shows the
+the bottom of the account rail (shown to members of the `admin` group only). The dialog shows the
 callback URL to register, e.g. `https://cloud.example.com/exapps/sockless_mail/oauth/callback`
 under HaRP (`…/index.php/apps/app_api/proxy/sockless_mail/oauth/callback` without it).
 
@@ -297,23 +301,24 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
   The answer says `reset: true` instead when the token is older than the kept removals, comes
   from before a rebuilt window, or more than 500 messages changed. The UI then reloads the list.
 - **New mail in the UI** is found by polling the changes endpoint every 15 seconds, and when the
-  tab becomes visible again. The folder list (LIST + STATUS) is reloaded every 60 seconds.
+  tab becomes visible again. The folder lists (LIST + STATUS) of every account are reloaded every
+  60 seconds, for the unread counts in the account rail.
   There is no WebSocket or SSE channel to the browser (see "Known limitations").
-- **Search** has two scopes, chosen with a switch above the message list:
+- **Search** has two scopes, chosen next to the search box in the command bar:
   - **This folder** (`GET …/folders/{id}/search?q=…&before=<uid>`) asks the mail server:
     `UID SEARCH TEXT <term> TEXT <term> …`. It matches headers and message text, finds old mail
     the cache has never seen, and pages newest first with the same UID cursor as the list. The
     server decides how terms match: Dovecot with a full-text index matches words, others (such
     as GreenMail) substrings. The results are not cached.
-  - **All accounts and folders** (`GET /api/search?q=…`) only asks the database:
+  - **All accounts** (`GET /api/search?q=…`) only asks the database:
     - It matches subject, sender and recipient names and addresses of cached messages, without
       regard to case (also beyond ASCII). Message text is not included.
     - It covers only what the cache holds: folders shown before, as far back as they were paged.
     - It returns the 50 newest matches, saying when there are more.
   - Every word or "quoted phrase" must match. A search has at most 10 terms and 200 characters.
   - Results from other folders show "Account › Folder". They open in place, and their actions
-    (also in the list's menu) go to the folder they are in. Clicking a folder or account in the
-    navigation leaves the search.
+    (also the row's hover actions) go to the folder they are in. Clicking a folder or account
+    leaves the search.
 - **All inboxes** (shown with two or more accounts, and opened first then) lists the INBOX of
   every account, newest first, from the header cache:
   - `GET /api/unified/messages?before=<cursor>` syncs every account's INBOX at once, each in its
@@ -474,6 +479,8 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
 - The PHP proxy (manual-install) forwards only GET, HEAD, POST, PUT and DELETE, so the API uses
   no PATCH. It buffers responses, so the app polls instead of using WebSockets or SSE.
 - SQLite limits the app to a single instance.
+- View settings (reading pane position, density, folder pane, pane sizes) are kept in the
+  browser's local storage per Nextcloud user, so they do not follow the user to another browser.
 - **AppAPI/HaRP route cache after `app:update`** (observed with Nextcloud 35.0.2 and the current
   HaRP release): after an update, HaRP answered every `/exapps/sockless_mail/...` request with
   404 ("No defined route"), although the routes were in Nextcloud's database. Disabling and

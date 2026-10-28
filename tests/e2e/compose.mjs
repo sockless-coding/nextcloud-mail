@@ -4,7 +4,7 @@
 import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { check, start } from './lib.mjs'
+import { accountAction, check, folderNames, folderRow, messageRows, openAccount, start } from './lib.mjs'
 
 const { page, step, finish } = await start()
 const suffix = Date.now().toString().slice(-6)
@@ -13,10 +13,9 @@ const attachmentName = `notes-${suffix}.txt`
 const attachmentPath = join(tmpdir(), attachmentName)
 writeFileSync(attachmentPath, `Attachment of ${subject}\n`)
 
-const items = page.locator('.message-list li.list-item__wrapper')
+const items = messageRows(page)
 // Exact subject match: "Re: X" must not count as X.
 const exactItem = (text) => items.filter({ has: page.getByText(text, { exact: true }) }).first()
-const navRow = (name) => page.locator('.app-navigation-entry', { has: page.locator(':scope > a .app-navigation-entry__name, :scope > div .app-navigation-entry__name', { hasText: new RegExp(`^${name}$`) }) }).first()
 
 async function until(condition, timeoutMs = 15000) {
 	for (let waited = 0; waited < timeoutMs; waited += 250) {
@@ -37,7 +36,7 @@ async function pollFor(text) {
 }
 
 async function openFolder(name) {
-	await navRow(name).locator('a').first().click()
+	await folderRow(page, name).locator('.folder-row__main').click()
 	await page.locator('.message-list__header h2', { hasText: new RegExp(`^${name}$`) }).waitFor()
 }
 
@@ -53,15 +52,13 @@ async function sendAndWait(dialog) {
 	await dialog.waitFor({ state: 'detached', timeout: 30000 })
 }
 
-const aliceRow = page.locator('li.account-entry > .app-navigation-entry').filter({ hasText: /^Alice/ }).first()
-await aliceRow.locator('a').first().click()
+await openAccount(page, /^Alice/)
+const aliceName = (await page.locator('.folder-pane__account-name').innerText()).trim()
 await openFolder('Inbox')
 
 // Keep a copy in Sent: create the folder if the dev mailbox has none yet.
-if (!(await page.locator('.app-navigation-entry__name').allInnerTexts()).map((s) => s.trim()).includes('Sent')) {
-	await aliceRow.hover()
-	await aliceRow.getByRole('button', { name: 'Actions' }).first().click()
-	await page.getByRole('menuitem', { name: 'New folder' }).click()
+if (!(await folderNames(page)).includes('Sent')) {
+	await accountAction(page, aliceName, 'New folder')
 	await page.getByRole('dialog').getByLabel('Folder name').fill('Sent')
 	await page.getByRole('dialog').getByRole('button', { name: 'Create' }).click()
 	await page.getByRole('dialog').waitFor({ state: 'detached' })
