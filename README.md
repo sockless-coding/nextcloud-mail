@@ -5,7 +5,7 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 7a (new layout)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> Status: **phase 7b (previews and filters)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
 > (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
 > with remote images blocked by default, attachments), works with it (read/unread, flag, move,
 > delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
@@ -15,8 +15,9 @@ the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with
 > account's inbox in one list. Google and Microsoft accounts can be added by signing in (OAuth2),
 > once an admin has registered the app with them. The interface follows desktop mail programs:
 > an account rail with a colour and unread count per account, a folder pane, a command bar, a
-> message list grouped by day with hover actions and multi-select, and a reading pane on the
-> right, at the bottom or off.
+> message list grouped by day with a line of each message's text, hover actions, multi-select
+> and quick filters (Unread, Flagged, Attachments), and a reading pane on the right, at the
+> bottom or off.
 
 ## Layout
 
@@ -65,6 +66,7 @@ node search.mjs      # folder search (body text), search across accounts, openin
 node unified.mjs     # all inboxes: merged order, reading, deleting and new mail across accounts
 node oauth.mjs       # admin sign-in settings, Google popup with PKCE, callback through HaRP, non-admin user
 node layout.mjs      # multi-select and actions on it, reading pane and density (kept on reload), folder pane
+node filters.mjs     # previews, Unread/Flagged/Attachments in a folder and in all inboxes, polling in a filter
 ```
 
 They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console errors.
@@ -262,8 +264,13 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
 - **In the composer**, Escape and clicking outside do not close it, so a half-written message
   cannot vanish by accident. Discard and Send are the only ways out.
 - **Message lists come from a header cache** in the database (`folders`, `messages` and
-  `removed_messages` tables): subject, addresses, date, flags, size, has-attachments. Bodies are
-  never cached; opening a message still fetches it from the server.
+  `removed_messages` tables): subject, addresses, date, flags, size, has-attachments, and a
+  preview of up to 200 characters of text. Bodies are never cached; opening a message still
+  fetches it from the server.
+  - **Previews** come with the list fields: MailKit uses the server's `PREVIEW` extension
+    (RFC 8970) where there is one, and otherwise fetches the first bytes of the text part
+    (`BODY.PEEK[n]<0.512>`, converted from HTML when needed). Whitespace is collapsed. Rows
+    cached before previews existed are filled in by later syncs, 100 per sync, newest first.
   - Per folder, the cache holds a contiguous window of UIDs. It starts with the newest page (50)
     the first time the folder is shown, grows downwards when older pages are requested, and new
     mail extends it upwards. More than 500 new messages since the last sync rebuild the window
@@ -316,9 +323,21 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
     - It covers only what the cache holds: folders shown before, as far back as they were paged.
     - It returns the 50 newest matches, saying when there are more.
   - Every word or "quoted phrase" must match. A search has at most 10 terms and 200 characters.
+  - A quick filter (`&filter=unread|flagged|attachments`) narrows either scope, and can also
+    be used without words.
   - Results from other folders show "Account › Folder". They open in place, and their actions
     (also the row's hover actions) go to the folder they are in. Clicking a folder or account
     leaves the search.
+- **Quick filters** (the Unread, Flagged and Attachments chips above the list) ask the mail
+  server, so they cover the whole folder, not only what the cache holds:
+  - Unread and Flagged are `UID SEARCH UNSEEN` and `UID SEARCH FLAGGED`.
+  - IMAP cannot search for attachments. The server finds candidates by their header
+    (`HEADER Content-Type multipart/mixed` or `multipart/signed`) and keeps those whose
+    BODYSTRUCTURE has an attachment, reading more candidates until the page is full (at most 5
+    rounds per request). The total is left out when not every candidate was checked.
+  - While a filter is shown without words, polling keeps it current: new mail that passes the
+    filter is added, removed mail leaves. A message that stops passing (read while the Unread
+    filter is shown) stays until the filter is shown again, as in Outlook.
 - **All inboxes** (shown with two or more accounts, and opened first then) lists the INBOX of
   every account, newest first, from the header cache:
   - `GET /api/unified/messages?before=<cursor>` syncs every account's INBOX at once, each in its
@@ -335,6 +354,9 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
   - `GET /api/unified/changes?since=<token>` answers like the folder changes endpoint. The token
     holds each INBOX's change token; when an inbox appeared or went away since (account added,
     deleted or first reached), the answer is `reset: true` and the UI reloads the list.
+  - `GET /api/unified/filter?filter=…&before=<cursor>` is a quick filter over all inboxes. It
+    asks each mail server (like a folder filter) rather than the cache, which holds only part of
+    each inbox, and merges the matches by date. The cursor holds where each account stands.
   - Every list entry carries its account and folder, so reading, flags, move and delete go to
     the message's own account; reply and forward send from it. Search in this view covers all
     accounts and folders.

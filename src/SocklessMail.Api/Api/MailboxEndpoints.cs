@@ -48,10 +48,10 @@ public static class MailboxEndpoints
                 : NotFound());
 
         account.MapGet("/folders/{folderId}/search", async (
-                Guid accountId, string folderId, string? q, uint? before, int? limit,
+                Guid accountId, string folderId, string? q, string? filter, uint? before, int? limit,
                 ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
             await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
-                ? Results.Ok(await mailbox.SearchFolderAsync(a, folderId, q, before,
+                ? Results.Ok(await mailbox.SearchFolderAsync(a, folderId, q, MessageFilters.Parse(filter), before,
                     Math.Clamp(limit ?? MailboxService.DefaultPageSize, 1, MailboxService.MaxPageSize), ct))
                 : NotFound());
 
@@ -120,19 +120,21 @@ public static class MailboxEndpoints
                 : NotFound());
 
         // Across all accounts and folders, from the header cache only: no IMAP traffic.
-        api.MapGet("/search", async (string? q, int? limit, ClaimsPrincipal user, FolderCache cache, CancellationToken ct) =>
+        api.MapGet("/search", async (string? q, string? filter, int? limit, ClaimsPrincipal user, FolderCache cache, CancellationToken ct) =>
         {
             IReadOnlyList<string> terms;
+            MessageFilter messageFilter;
             try
             {
                 terms = SearchTerms.Parse(q);
+                messageFilter = MessageFilters.Parse(filter);
             }
             catch (MailboxValidationException e)
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]> { [e.Field] = [e.Message] });
             }
 
-            return Results.Ok(await cache.SearchAsync(user.GetNextcloudUserId(), terms,
+            return Results.Ok(await cache.SearchAsync(user.GetNextcloudUserId(), terms, messageFilter,
                 Math.Clamp(limit ?? MailboxService.DefaultPageSize, 1, MailboxService.MaxPageSize), ct));
         });
 
@@ -141,6 +143,19 @@ public static class MailboxEndpoints
         unified.MapGet("/messages", async (string? before, int? limit, ClaimsPrincipal user, UnifiedInbox inbox, CancellationToken ct) =>
             Results.Ok(await inbox.GetPageAsync(user.GetNextcloudUserId(), UnifiedCursor.Parse(before),
                 Math.Clamp(limit ?? MailboxService.DefaultPageSize, 1, MailboxService.MaxPageSize), ct)));
+
+        // A filter over all inboxes, asked of the mail servers.
+        unified.MapGet("/filter", async (string? filter, string? before, int? limit, ClaimsPrincipal user, UnifiedInbox inbox, CancellationToken ct) =>
+        {
+            var messageFilter = MessageFilters.Parse(filter);
+            if (messageFilter == MessageFilter.None)
+            {
+                throw new MailboxValidationException("filter", "Choose a filter.");
+            }
+
+            return Results.Ok(await inbox.GetFilteredAsync(user.GetNextcloudUserId(), messageFilter, before,
+                Math.Clamp(limit ?? MailboxService.DefaultPageSize, 1, MailboxService.MaxPageSize), ct));
+        });
 
         unified.MapGet("/changes", async (string? since, ClaimsPrincipal user, UnifiedInbox inbox, CancellationToken ct) =>
             Results.Ok(await inbox.GetChangesAsync(user.GetNextcloudUserId(), since, ct)));

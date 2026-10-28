@@ -1,6 +1,6 @@
 import { reactive } from 'vue'
 import { apiBase, apiGet, apiSend } from '../api.js'
-import { dropHits, searchState } from './search.js'
+import { dropHits, mergeFolderChanges, searchState } from './search.js'
 import { INBOX_ID, refreshUnified, unifiedState } from './unified.js'
 
 /**
@@ -185,6 +185,7 @@ export async function refreshMessages() {
 		state.total = changes.total
 		state.token = changes.token
 		updateFolderCounts(changes)
+		mergeFolderChanges({ accountId, folderId }, changes.messages, changes.removed)
 	} catch {
 		// Polling failures stay silent; the next explicit action shows errors.
 	}

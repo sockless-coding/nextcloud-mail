@@ -62,6 +62,8 @@ await page.locator('.message-row').first().waitFor({ timeout: 30000 })
 check(await page.locator('.sm-panes--bottom').count() === 1 && await page.locator('.message-list--compact').count() === 1, 'both are kept after a reload')
 await viewSetting('Off')
 await openAccount(page, /^Alice/)
+// The reload opened all inboxes, which list the same message: wait for the account's own list.
+await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor()
 await item(subjects[1]).click()
 await page.locator('.message-view h2', { hasText: subjects[1] }).waitFor()
 check(!(await page.locator('.sm-panes__list').isVisible()), 'reading pane off: the message replaces the list')

@@ -31,7 +31,8 @@ public sealed record MessageSummaryDto(
     bool Flagged,
     bool Answered,
     bool HasAttachments,
-    long Size);
+    long Size,
+    string? Preview);
 
 /// <summary>
 /// Newest first. <see cref="NextBefore"/> is the cursor for the next (older) page; null at the end.
@@ -93,8 +94,12 @@ public static class MailboxIds
 /// <summary>The requested folder or message does not exist (any more); answered with 404.</summary>
 public sealed class MailboxNotFoundException(string what) : Exception($"{what} was not found.");
 
-/// <summary>Matches of a folder search, newest first, paged like <see cref="MessagePage"/>; <see cref="Total"/> counts all matches.</summary>
-public sealed record SearchPage(IReadOnlyList<MessageSummaryDto> Messages, uint? NextBefore, int Total, uint UidValidity);
+/// <summary>
+/// Matches of a folder search or filter, newest first, paged like <see cref="MessagePage"/>.
+/// <see cref="Total"/> counts all matches; null when only the pages read so far were checked (the
+/// attachments filter, see <see cref="MessageFilters.ImapQuery"/>).
+/// </summary>
+public sealed record SearchPage(IReadOnlyList<MessageSummaryDto> Messages, uint? NextBefore, int? Total, uint UidValidity);
 
 /// <summary>A cached message matching a search across folders, with where it lives.</summary>
 public sealed record SearchHit(Guid AccountId, string FolderId, string FolderFullName, MessageSummaryDto Message);
@@ -115,6 +120,12 @@ public sealed record UnifiedPage(
 public sealed record UnifiedChanges(
     string Token, bool Reset, int Total, int? Unread,
     IReadOnlyList<SearchHit> Messages, IReadOnlyList<RemovedHit> Removed, IReadOnlyList<AccountError> Errors);
+
+/// <summary>
+/// A filter over the inboxes of all accounts, newest first, from each mail server. <see cref="NextBefore"/>
+/// holds where each account stands; <see cref="Total"/> is null when not every match was counted.
+/// </summary>
+public sealed record UnifiedFilterPage(IReadOnlyList<SearchHit> Messages, string? NextBefore, int? Total, IReadOnlyList<AccountError> Errors);
 
 public sealed record RemovedHit(Guid AccountId, string FolderId, string MessageId);
 

@@ -216,6 +216,10 @@ namespace SocklessMail.Api.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Preview")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SearchText")
                         .IsRequired()
                         .HasMaxLength(4000)

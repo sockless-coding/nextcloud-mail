@@ -40,9 +40,13 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
 
     public static readonly TimeSpan RemovedRetention = TimeSpan.FromDays(1);
 
+    /// <summary>Cached rows without a preview (from before previews were cached) filled in per sync.</summary>
+    public const int PreviewBackfill = 100;
+
     internal const MessageSummaryItems ListItems =
         MessageSummaryItems.UniqueId | MessageSummaryItems.Envelope | MessageSummaryItems.Flags
-        | MessageSummaryItems.InternalDate | MessageSummaryItems.Size | MessageSummaryItems.BodyStructure;
+        | MessageSummaryItems.InternalDate | MessageSummaryItems.Size | MessageSummaryItems.BodyStructure
+        | MessageSummaryItems.PreviewText;
 
     private const MessageFlags SystemFlags =
         MessageFlags.Seen | MessageFlags.Flagged | MessageFlags.Answered | MessageFlags.Deleted | MessageFlags.Draft;
@@ -62,10 +66,11 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
         public readonly List<IMessageSummary> Inserts = [];
         public readonly Dictionary<uint, MessageFlags> Flags = [];
         public readonly HashSet<uint> Removals = [];
+        public readonly Dictionary<uint, string> Previews = [];
         public uint? WindowStart;
         public uint? LastUid;
 
-        public bool ChangesRows => Wipe || Inserts.Count > 0 || Flags.Count > 0 || Removals.Count > 0;
+        public bool ChangesRows => Wipe || Inserts.Count > 0 || Flags.Count > 0 || Removals.Count > 0 || Previews.Count > 0;
     }
 
     /// <summary>The cache key of a folder: its full name, with any spelling of INBOX as "INBOX".</summary>
@@ -95,6 +100,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
         {
             await SyncWindowAsync(client, folder, state, modSeq, count, uidNext, plan, ct);
             await FetchNewAsync(folder, state, count, uidNext, initialWindow, plan, ct);
+            await FillPreviewsAsync(folder, state, plan, ct);
         }
 
         // UNSEEN covers the whole folder, not just the window. Without mod-sequences there is no
@@ -212,12 +218,12 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
 
     /// <summary>
     /// Cached messages of all of <paramref name="userId"/>'s accounts whose subject, names or
-    /// addresses contain every term, newest first. Only what the cache holds is found: messages
-    /// of folders the user has opened, as far back as they paged.
+    /// addresses contain every term and that match <paramref name="filter"/>, newest first. Only what
+    /// the cache holds is found: messages of folders the user has opened, as far back as they paged.
     /// </summary>
-    public async Task<CachedSearchResult> SearchAsync(string userId, IReadOnlyList<string> terms, int limit, CancellationToken ct)
+    public async Task<CachedSearchResult> SearchAsync(string userId, IReadOnlyList<string> terms, MessageFilter filter, int limit, CancellationToken ct)
     {
-        var messages = db.Messages.AsNoTracking().Where(m => m.OwnerUserId == userId);
+        var messages = MessageFilters.Apply(db.Messages.AsNoTracking().Where(m => m.OwnerUserId == userId), filter);
         foreach (var term in terms.Select(SearchTerms.Normalize))
         {
             messages = messages.Where(m => m.SearchText.Contains(term));
@@ -348,7 +354,8 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
         m.Flags.HasFlag(MessageFlags.Flagged),
         m.Flags.HasFlag(MessageFlags.Answered),
         m.HasAttachments,
-        m.Size);
+        m.Size,
+        m.Preview);
 
     private static async Task LoadNewestAsync(IMailFolder folder, int count, uint? uidNext, int window, SyncPlan plan, CancellationToken ct)
     {
@@ -468,6 +475,35 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
         plan.LastUid = Math.Max(state.LastUid, Math.Max(fresh.Count == 0 ? 0 : fresh.Max(u => u.Id), (uidNext ?? 1) - 1));
     }
 
+    /// <summary>Previews for rows cached without one, newest first, <see cref="PreviewBackfill"/> per sync.</summary>
+    private async Task FillPreviewsAsync(IMailFolder folder, CachedFolder state, SyncPlan plan, CancellationToken ct)
+    {
+        if (plan.Wipe)
+        {
+            return;
+        }
+
+        var missing = await db.Messages.AsNoTracking()
+            .Where(m => m.FolderId == state.Id && m.Preview == null)
+            .OrderByDescending(m => m.Uid)
+            .Select(m => m.Uid)
+            .Take(PreviewBackfill)
+            .ToListAsync(ct);
+        missing.RemoveAll(plan.Removals.Contains);
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        var summaries = await folder.FetchAsync(
+            missing.Select(u => new UniqueId(state.UidValidity, u)).ToList(),
+            MessageSummaryItems.UniqueId | MessageSummaryItems.BodyStructure | MessageSummaryItems.PreviewText, ct);
+        foreach (var summary in summaries)
+        {
+            plan.Previews[summary.UniqueId.Id] = MessagePreview.Normalize(summary.PreviewText);
+        }
+    }
+
     private static FetchRequest ChangedSince(ulong modSeq) =>
         new(MessageSummaryItems.UniqueId | MessageSummaryItems.Flags | MessageSummaryItems.ModSeq) { ChangedSince = modSeq };
 
@@ -511,6 +547,13 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
                     .Where(m => m.FolderId == state.Id && chunk.Contains(m.Uid))
                     .ExecuteUpdateAsync(s => s.SetProperty(m => m.Flags, group.Key).SetProperty(m => m.ChangeSeq, seq), ct);
             }
+        }
+
+        foreach (var (uid, preview) in plan.Previews)
+        {
+            await db.Messages
+                .Where(m => m.FolderId == state.Id && m.Uid == uid)
+                .ExecuteUpdateAsync(s => s.SetProperty(m => m.Preview, preview).SetProperty(m => m.ChangeSeq, seq), ct);
         }
 
         var inserts = plan.Inserts.DistinctBy(s => s.UniqueId.Id).ToList();
@@ -601,6 +644,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
             Date = s.Envelope?.Date ?? s.InternalDate ?? DateTimeOffset.UnixEpoch,
             HasAttachments = s.Attachments.Any(),
             Size = (long)(s.Size ?? 0),
+            Preview = MessagePreview.Normalize(s.PreviewText),
             Flags = (s.Flags ?? MessageFlags.None) & SystemFlags,
             ChangeSeq = seq,
         };

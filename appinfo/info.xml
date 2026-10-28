@@ -7,7 +7,7 @@
 	<description><![CDATA[Sockless Mail is a webmail client that runs as a Nextcloud External App (AppAPI).
 Each user can connect any number of IMAP/SMTP accounts. The backend is written in C# on ASP.NET Core.]]></description>
 	<!-- Keep <version> and <image-tag> equal: AppAPI deploys <image-tag>, app:update compares <version>. -->
-	<version>0.8.2</version>
+	<version>0.9.0</version>
 	<licence>MIT</licence>
 	<author>Jimmy Everling</author>
 	<namespace>SocklessMail</namespace>
@@ -22,7 +22,7 @@ Each user can connect any number of IMAP/SMTP accounts. The backend is written i
 			     Set the real registry and image before publishing a release. -->
 			<registry>sockless.local</registry>
 			<image>sockless_mail</image>
-			<image-tag>0.8.2</image-tag>
+			<image-tag>0.9.0</image-tag>
 		</docker-install>
 		<routes>
 			<!-- Bundles and icons; no secrets. The top-menu icon is fetched without user context. -->

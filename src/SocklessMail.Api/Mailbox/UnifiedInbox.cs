@@ -104,6 +104,106 @@ public sealed class UnifiedInbox(AccountService accounts, IServiceScopeFactory s
             Errors(results));
     }
 
+    /// <summary>
+    /// A filter over every inbox, asked of each mail server (the cache holds only part of each
+    /// inbox), merged by date. Each account's matches come newest first by UID; the merge takes them
+    /// in that order, so where an account stands is the UID of the last match it gave. The cursor
+    /// lists those positions as "{account id}.{uid}" joined by "_", with 0 for an account not read
+    /// yet; an account missing from it has no more matches.
+    /// </summary>
+    public async Task<UnifiedFilterPage> GetFilteredAsync(string userId, MessageFilter filter, string? cursor, int limit, CancellationToken ct)
+    {
+        var positions = ParseFilterCursor(cursor);
+        var results = await PerAccountAsync(userId, async (mailbox, _, account, token) =>
+        {
+            if (positions is not null && !positions.ContainsKey(account.Id))
+            {
+                return new FilterResult(account, null, null, null);
+            }
+
+            uint? before = positions is not null && positions[account.Id] > 0 ? positions[account.Id] : null;
+            try
+            {
+                return new FilterResult(account, before, await mailbox.SearchFolderAsync(account, InboxId, null, filter, before, limit, token), null);
+            }
+            catch (Exception e) when (Describe(account, e) is { } error)
+            {
+                return new FilterResult(account, before, null, error);
+            }
+        }, ct);
+
+        // Merge: repeatedly take the newest of the accounts' next matches.
+        var queues = results.Where(r => r.Page is not null)
+            .ToDictionary(r => r.Account.Id, r => new Queue<MessageSummaryDto>(r.Page!.Messages));
+        var consumed = new Dictionary<Guid, uint>();
+        var page = new List<SearchHit>();
+        while (page.Count < limit)
+        {
+            var next = queues.Where(q => q.Value.Count > 0)
+                .OrderByDescending(q => q.Value.Peek().Date).ThenByDescending(q => q.Key)
+                .Select(q => (Guid?)q.Key).FirstOrDefault();
+            if (next is not { } accountId)
+            {
+                break;
+            }
+
+            var message = queues[accountId].Dequeue();
+            page.Add(new SearchHit(accountId, InboxId, Inbox, message));
+            if (MailboxIds.TryParseMessageId(message.Id, out _, out var uid))
+            {
+                consumed[accountId] = uid;
+            }
+        }
+
+        // Where each account continues: after its last match taken, or where its page ended.
+        var left = new List<string>();
+        foreach (var result in results.Where(r => r.Page is not null))
+        {
+            var id = result.Account.Id;
+            uint? position = queues[id].Count > 0
+                ? consumed.TryGetValue(id, out var last) ? last : result.Before ?? 0
+                : result.Page!.NextBefore;
+            if (position is { } p)
+            {
+                left.Add($"{id:N}.{p}");
+            }
+        }
+
+        var errors = results.Where(r => r.Error is not null).Select(r => r.Error!).ToList();
+        var counted = positions is null && errors.Count == 0 && results.All(r => r.Page?.Total is not null);
+        return new UnifiedFilterPage(
+            page,
+            left.Count > 0 ? string.Join('_', left) : null,
+            counted ? results.Sum(r => r.Page!.Total!.Value) : null,
+            errors);
+    }
+
+    private sealed record FilterResult(MailAccount Account, uint? Before, SearchPage? Page, AccountError? Error);
+
+    /// <summary>null for the first page; otherwise each account still to read and its position.</summary>
+    private static Dictionary<Guid, uint>? ParseFilterCursor(string? cursor)
+    {
+        if (string.IsNullOrEmpty(cursor))
+        {
+            return null;
+        }
+
+        var result = new Dictionary<Guid, uint>();
+        foreach (var entry in cursor.Split('_'))
+        {
+            var parts = entry.Split('.');
+            if (parts.Length != 2
+                || !Guid.TryParseExact(parts[0], "N", out var accountId)
+                || !uint.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var uid)
+                || !result.TryAdd(accountId, uid))
+            {
+                throw new MailboxValidationException("before", "The cursor is not valid.");
+            }
+        }
+
+        return result;
+    }
+
     /// <summary>What changed in any inbox since <paramref name="since"/> (a token from a page or an earlier call).</summary>
     public async Task<UnifiedChanges> GetChangesAsync(string userId, string? since, CancellationToken ct)
     {
@@ -131,8 +231,8 @@ public sealed class UnifiedInbox(AccountService accounts, IServiceScopeFactory s
     }
 
     /// <summary>Runs <paramref name="work"/> for every account of the user at once, each in its own scope (DbContext, IMAP lease).</summary>
-    private async Task<InboxResult[]> PerAccountAsync(
-        string userId, Func<MailboxService, FolderCache, MailAccount, CancellationToken, Task<InboxResult>> work, CancellationToken ct)
+    private async Task<T[]> PerAccountAsync<T>(
+        string userId, Func<MailboxService, FolderCache, MailAccount, CancellationToken, Task<T>> work, CancellationToken ct)
     {
         var list = await accounts.ListAsync(userId, ct);
         return await Task.WhenAll(list.Select(async account =>

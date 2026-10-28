@@ -91,6 +91,7 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             message.Property(m => m.Date).HasConversion(UtcTicks);
             message.Property(m => m.Flags).HasConversion<int>();
             message.Property(m => m.SearchText).HasMaxLength(4000);
+            message.Property(m => m.Preview).HasMaxLength(MessagePreview.MaxLength);
             message.HasQueryFilter(m => m.OwnerUserId == _userId);
         });
 

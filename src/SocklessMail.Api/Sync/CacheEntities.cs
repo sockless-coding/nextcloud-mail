@@ -65,6 +65,12 @@ public sealed class CachedMessage
 
     public long ChangeSeq { get; set; }
 
+    /// <summary>
+    /// The start of the message text (<see cref="MessagePreview"/>); "" when it has none, null for
+    /// rows cached before previews were, which syncs fill in.
+    /// </summary>
+    public string? Preview { get; set; }
+
     /// <summary>Subject, names and addresses in <see cref="SearchTerms.Normalize"/>d form, for searching the cache.</summary>
     public required string SearchText { get; init; }
 }

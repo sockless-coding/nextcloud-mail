@@ -5,17 +5,25 @@ import { mailboxState } from './mailbox.js'
 const PAGE_SIZE = 50
 
 /**
- * A search shown in place of the message list. Two scopes:
- * - folder: the selected folder, searched on the mail server (message text included, all of it);
- * - all: every account and folder, from the app's header cache (subject, names, addresses of
- *   messages already synced), answered without asking the mail servers.
- * Results are hits: { accountId, folderId, folderFullName, message }.
+ * A search or a quick filter (unread, flagged, attachments), shown in place of the message list.
+ * Results are hits: { accountId, folderId, folderFullName, message }. Where they come from:
+ * - folder: the selected folder, searched on the mail server (words in the whole message and/or
+ *   the filter, over the whole folder);
+ * - cache: words across every account and folder, from the app's header cache (subject, names,
+ *   addresses of messages already synced), with the filter applied there too;
+ * - unified: the filter alone over every account's inbox, asked of each mail server.
+ * With only a filter, polling keeps the results current (mergeFolderChanges, mergeUnifiedChanges).
  */
 export const searchState = reactive({
 	query: '',
 	scope: 'folder',
+	/** '', 'unread', 'flagged' or 'attachments' */
+	filter: '',
 	active: false,
+	/** folder | cache | unified: where the shown results came from. */
+	source: null,
 	hits: [],
+	/** null when not every match was counted. */
 	total: 0,
 	nextBefore: null,
 	more: false,
@@ -33,9 +41,20 @@ function toError(e) {
 	return { message: data?.message ?? field ?? String(e?.message ?? e) }
 }
 
-function folderPath(query, before) {
+function params(entries) {
+	return Object.entries(entries)
+		.filter(([, value]) => value !== '' && value !== null && value !== undefined)
+		.map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+		.join('&')
+}
+
+function folderPath(before) {
 	const { accountId, folderId } = mailboxState.selected
-	return `/accounts/${accountId}/folders/${folderId}/search?q=${encodeURIComponent(query)}&limit=${PAGE_SIZE}${before ? `&before=${before}` : ''}`
+	return `/accounts/${accountId}/folders/${folderId}/search?${params({ q: searchState.query.trim(), filter: searchState.filter, limit: PAGE_SIZE, before })}`
+}
+
+function unifiedPath(before) {
+	return `/unified/filter?${params({ filter: searchState.filter, limit: PAGE_SIZE, before })}`
 }
 
 function folderHits(page) {
@@ -48,22 +67,37 @@ export function currentScope() {
 	return mailboxState.selected.unified ? 'all' : searchState.scope
 }
 
+/** Whether a message passes the filter, for merging polled changes. */
+function passes(message) {
+	return {
+		unread: !message.seen,
+		flagged: message.flagged,
+		attachments: message.hasAttachments,
+	}[searchState.filter] ?? true
+}
+
 export async function runSearch() {
 	const query = searchState.query.trim()
-	if (!query) {
+	if (!query && !searchState.filter) {
 		clearSearch()
 		return
 	}
 	const run = ++generation
-	Object.assign(searchState, { active: true, loading: true, error: null, hits: [], total: 0, nextBefore: null, more: false })
+	const source = query && currentScope() === 'all' ? 'cache' : mailboxState.selected.unified ? 'unified' : 'folder'
+	Object.assign(searchState, { active: true, source, loading: true, error: null, hits: [], total: 0, nextBefore: null, more: false })
 	try {
-		if (currentScope() === 'folder') {
-			const page = await apiGet(folderPath(query))
+		if (source === 'folder') {
+			const page = await apiGet(folderPath())
 			if (run === generation) {
 				Object.assign(searchState, { hits: folderHits(page), total: page.total, nextBefore: page.nextBefore })
 			}
+		} else if (source === 'unified') {
+			const page = await apiGet(unifiedPath())
+			if (run === generation) {
+				Object.assign(searchState, { hits: page.messages, total: page.total, nextBefore: page.nextBefore })
+			}
 		} else {
-			const result = await apiGet(`/search?q=${encodeURIComponent(query)}&limit=${PAGE_SIZE}`)
+			const result = await apiGet(`/search?${params({ q: query, filter: searchState.filter, limit: PAGE_SIZE })}`)
 			if (run === generation) {
 				Object.assign(searchState, { hits: result.hits, total: result.hits.length, more: result.more })
 			}
@@ -79,7 +113,7 @@ export async function runSearch() {
 	}
 }
 
-/** Next page of a folder search (the cached search returns one page). */
+/** Next page of a folder search or an inbox filter (the cached search returns one page). */
 export async function searchMore() {
 	if (!searchState.nextBefore || searchState.loadingMore) {
 		return
@@ -87,10 +121,18 @@ export async function searchMore() {
 	const run = generation
 	searchState.loadingMore = true
 	try {
-		const page = await apiGet(folderPath(searchState.query.trim(), searchState.nextBefore))
-		if (run === generation) {
-			searchState.hits.push(...folderHits(page))
-			searchState.nextBefore = page.nextBefore
+		if (searchState.source === 'unified') {
+			const page = await apiGet(unifiedPath(searchState.nextBefore))
+			if (run === generation) {
+				searchState.hits.push(...page.messages)
+				searchState.nextBefore = page.nextBefore
+			}
+		} else {
+			const page = await apiGet(folderPath(searchState.nextBefore))
+			if (run === generation) {
+				searchState.hits.push(...folderHits(page))
+				searchState.nextBefore = page.nextBefore
+			}
 		}
 	} catch (e) {
 		if (run === generation) {
@@ -101,14 +143,80 @@ export async function searchMore() {
 	}
 }
 
-/** Back to the folder's message list. */
+/** Back to the folder's message list: no words, no filter. */
 export function clearSearch() {
 	generation++
-	Object.assign(searchState, { query: '', active: false, hits: [], total: 0, nextBefore: null, more: false, loading: false, loadingMore: false, error: null })
+	Object.assign(searchState, { query: '', filter: '', active: false, source: null, hits: [], total: 0, nextBefore: null, more: false, loading: false, loadingMore: false, error: null })
+}
+
+/** Drops the words; a filter stays and is shown on its own. */
+export function clearQuery() {
+	searchState.query = ''
+	runSearch()
+}
+
+/** @param {string} filter '', 'unread', 'flagged' or 'attachments' */
+export function setFilter(filter) {
+	searchState.filter = filter
+	runSearch()
 }
 
 /** Messages moved or deleted leave the results too. */
 export function dropHits(messageIds, accountId, folderId) {
 	const ids = new Set(messageIds)
 	searchState.hits = searchState.hits.filter((h) => !(ids.has(h.message.id) && h.accountId === accountId && h.folderId === folderId))
+}
+
+/** Only a filter can be decided on a message alone; results of words are left as they are. */
+function merges() {
+	return searchState.active && !searchState.loading && searchState.filter && !searchState.query.trim()
+}
+
+function mergeHits(changed, removedKeys, sort) {
+	const key = (h) => `${h.accountId}/${h.folderId}/${h.message.id}`
+	let hits = removedKeys.size ? searchState.hits.filter((h) => !removedKeys.has(key(h))) : searchState.hits
+	const removedCount = searchState.hits.length - hits.length
+	const known = new Map(hits.map((h, i) => [key(h), i]))
+	const fresh = []
+	for (const hit of changed) {
+		if (known.has(key(hit))) {
+			// Kept even when it no longer passes (read in the Unread filter): it leaves when the filter is shown again.
+			hits[known.get(key(hit))] = { ...hits[known.get(key(hit))], message: hit.message }
+		} else if (passes(hit.message)) {
+			fresh.push(hit)
+		}
+	}
+	// New matches older than the last loaded one belong to pages not loaded yet.
+	const last = hits.at(-1)
+	const inRange = fresh.filter((h) => !searchState.nextBefore || !last || sort(h, last) < 0)
+	if (inRange.length) {
+		hits = [...inRange, ...hits].sort(sort)
+		if (searchState.total !== null) {
+			searchState.total += inRange.length
+		}
+	}
+	searchState.hits = hits
+	if (removedCount && searchState.total !== null) {
+		searchState.total = Math.max(0, searchState.total - removedCount)
+	}
+}
+
+const byUid = (a, b) => Number(b.message.id.split('-')[1]) - Number(a.message.id.split('-')[1])
+const byDate = (a, b) => Date.parse(b.message.date) - Date.parse(a.message.date) || byUid(a, b)
+
+/** Polled changes of the selected folder (see refreshMessages). */
+export function mergeFolderChanges({ accountId, folderId }, messages, removed) {
+	if (!merges() || searchState.source !== 'folder') {
+		return
+	}
+	const hits = messages.map((message) => ({ accountId, folderId, folderFullName: null, message }))
+	mergeHits(hits, new Set(removed.map((id) => `${accountId}/${folderId}/${id}`)), byUid)
+}
+
+/** Polled changes of all inboxes (see refreshUnified). */
+export function mergeUnifiedChanges(hits, removed) {
+	if (!merges() || searchState.source !== 'unified') {
+		return
+	}
+	mergeHits(hits, new Set(removed.map((r) => `${r.accountId}/${r.folderId}/${r.messageId}`)), byDate)
 }

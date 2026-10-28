@@ -68,12 +68,12 @@
 				type="search"
 				:aria-label="searchLabel"
 				:placeholder="searchLabel"
-				@keydown.esc="clearSearch">
-			<button v-if="search.query !== '' || search.active"
+				@keydown.esc="clearQuery">
+			<button v-if="search.query !== ''"
 				type="button"
 				class="command command--icon"
 				:aria-label="t('sockless_mail', 'Clear search')"
-				@click="clearSearch">
+				@click="clearQuery">
 				<NcIconSvgWrapper :path="mdiClose" :size="18" />
 			</button>
 		</form>
@@ -123,7 +123,7 @@ import { askMoveRows, canMoveRows, moveTo, removeRows, setFlaggedRows, setSeenRo
 import { composeNew, composeReply } from '../store/compose.js'
 import { folderPaneShown, layout, toggleFolderPane, viewport } from '../store/layout.js'
 import { mailboxState } from '../store/mailbox.js'
-import { clearSearch, currentScope, runSearch, searchState as search } from '../store/search.js'
+import { clearQuery, currentScope, runSearch, searchState as search } from '../store/search.js'
 import { selection } from '../store/selection.js'
 
 const REPLIES = [

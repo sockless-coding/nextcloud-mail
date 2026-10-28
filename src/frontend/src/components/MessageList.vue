@@ -1,10 +1,20 @@
 <template>
 	<div class="message-list" :class="{ 'message-list--compact': layout.density === 'compact' }">
 		<header class="message-list__header">
-			<h2>{{ search.active ? t('sockless_mail', 'Search') : listName }}</h2>
+			<h2>{{ searching ? t('sockless_mail', 'Search') : listName }}</h2>
 			<span v-if="!view.loading && !view.error">{{ countText }}</span>
 		</header>
-		<p v-if="search.active && scope === 'all'" class="message-list__hint">
+		<div class="message-list__filters" role="group" :aria-label="t('sockless_mail', 'Show')">
+			<button v-for="option in FILTERS"
+				:key="option.value"
+				class="message-list__filter"
+				:class="{ 'message-list__filter--active': search.filter === option.value }"
+				:aria-pressed="String(search.filter === option.value)"
+				@click="setFilter(option.value)">
+				{{ option.label }}
+			</button>
+		</div>
+		<p v-if="searching && search.source === 'cache'" class="message-list__hint">
 			{{ t('sockless_mail', 'Finds subjects, senders and recipients of messages this app has already loaded. To search message text and older mail, search a single folder.') }}
 		</p>
 		<NcNoteCard v-for="failure in accountErrors"
@@ -17,16 +27,16 @@
 			<NcLoadingIcon :size="44" />
 		</div>
 		<NcEmptyContent v-else-if="view.error"
-			:name="search.active ? t('sockless_mail', 'Search failed') : t('sockless_mail', 'Could not load the messages')"
+			:name="searching ? t('sockless_mail', 'Search failed') : t('sockless_mail', 'Could not load the messages')"
 			:description="view.error.message" />
 		<NcEmptyContent v-else-if="rows.length === 0"
 			:name="emptyText">
 			<template #icon>
-				<NcIconSvgWrapper :path="search.active ? mdiMagnify : mdiEmailOpenOutline" />
+				<NcIconSvgWrapper :path="searching ? mdiMagnify : mdiEmailOpenOutline" />
 			</template>
 		</NcEmptyContent>
 		<div v-else ref="scroller" class="message-list__rows">
-			<ul :aria-label="search.active ? t('sockless_mail', 'Search results') : t('sockless_mail', 'Messages')">
+			<ul :aria-label="searching ? t('sockless_mail', 'Search results') : t('sockless_mail', 'Messages')">
 				<template v-for="(row, index) in rows" :key="row.key">
 					<li v-if="groupOf(index)" class="message-list__group" aria-hidden="true">
 						{{ groupOf(index) }}
@@ -50,7 +60,7 @@
 								disable-menu
 								disable-tooltip
 								:size="layout.density === 'compact' ? 24 : 36" />
-							<span v-if="unifiedShown || scope === 'all' && search.active"
+							<span v-if="unifiedShown || search.source === 'cache'"
 								class="message-row__account"
 								:style="{ background: accountColor(row.accountId) }"
 								:title="accountName(row.accountId)" />
@@ -70,7 +80,10 @@
 							<NcIconSvgWrapper v-if="row.message.hasAttachments" :path="mdiPaperclip" :size="16" :name="t('sockless_mail', 'Has attachments')" />
 							<span class="message-row__subject-text">{{ subjectOf(row.message) }}</span>
 						</span>
-						<span v-if="row.location" class="message-row__location">{{ row.location }}</span>
+						<span v-if="row.location || row.message.preview" class="message-row__preview">
+							<span v-if="row.location" class="message-row__location">{{ row.location }}</span>
+							{{ row.message.preview }}
+						</span>
 						<!-- Every row knows its folder, so actions work on results from elsewhere too. -->
 						<span class="message-row__actions" @click.stop>
 							<button class="message-row__action"
@@ -106,7 +119,7 @@
 					<template #icon>
 						<NcLoadingIcon v-if="view.loadingMore" :size="20" />
 					</template>
-					{{ search.active ? t('sockless_mail', 'More results') : t('sockless_mail', 'Load older messages') }}
+					{{ searching ? t('sockless_mail', 'More results') : t('sockless_mail', 'Load older messages') }}
 				</NcButton>
 			</div>
 		</div>
@@ -127,13 +140,21 @@ import { accountColor, accountsState } from '../store/accounts.js'
 import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { layout, readingPane } from '../store/layout.js'
 import { loadMore, mailboxState, openMessage } from '../store/mailbox.js'
-import { currentScope, searchMore, searchState as search } from '../store/search.js'
+import { searchMore, searchState as search, setFilter } from '../store/search.js'
 import { clearSelection, isSelected, pruneSelection, selectRange, selection, toggleRow } from '../store/selection.js'
 import { loadMoreUnified, unifiedState as unified } from '../store/unified.js'
 
+const FILTERS = [
+	{ value: '', label: t('sockless_mail', 'All') },
+	{ value: 'unread', label: t('sockless_mail', 'Unread') },
+	{ value: 'flagged', label: t('sockless_mail', 'Flagged') },
+	{ value: 'attachments', label: t('sockless_mail', 'Attachments') },
+]
+
 const state = mailboxState.messages
+/** Words were searched for (not only a filter). */
+const searching = computed(() => search.active && search.query.trim() !== '')
 const unifiedShown = computed(() => !!mailboxState.selected.unified)
-const scope = computed(() => currentScope())
 const listName = computed(() => {
 	if (unifiedShown.value) {
 		return t('sockless_mail', 'All inboxes')
@@ -157,7 +178,11 @@ const view = computed(() => {
 const rows = computed(() => {
 	const hitKey = (h) => `${h.accountId}/${h.folderId}/${h.message.id}`
 	if (search.active) {
-		return search.hits.map((h) => ({ ...h, key: hitKey(h), location: scope.value === 'all' ? location(h) : null }))
+		return search.hits.map((h) => ({
+			...h,
+			key: hitKey(h),
+			location: search.source === 'cache' ? location(h) : search.source === 'unified' ? accountName(h.accountId) : null,
+		}))
 	}
 	if (unifiedShown.value) {
 		return unified.list.map((h) => ({ ...h, key: hitKey(h), location: accountName(h.accountId) }))
@@ -172,17 +197,31 @@ const accountErrors = computed(() => (unifiedShown.value && !search.active ? uni
 
 const countText = computed(() => {
 	if (search.active) {
-		return search.more
-			? t('sockless_mail', 'First {count} results', { count: search.hits.length })
-			: n('sockless_mail', '{count} result', '{count} results', search.total, { count: search.total })
+		if (search.more) {
+			return t('sockless_mail', 'First {count} results', { count: search.hits.length })
+		}
+		// Not every match is counted for attachments (see the API); say nothing rather than guess.
+		if (search.total === null) {
+			return ''
+		}
+		return searching.value
+			? n('sockless_mail', '{count} result', '{count} results', search.total, { count: search.total })
+			: n('sockless_mail', '{count} message', '{count} messages', search.total, { count: search.total })
 	}
 	const total = unifiedShown.value ? unified.total : state.total
 	return n('sockless_mail', '{count} message', '{count} messages', total, { count: total })
 })
 
 const emptyText = computed(() => {
-	if (search.active) {
+	if (searching.value) {
 		return t('sockless_mail', 'No messages found')
+	}
+	if (search.active) {
+		return {
+			unread: t('sockless_mail', 'No unread messages'),
+			flagged: t('sockless_mail', 'No flagged messages'),
+			attachments: t('sockless_mail', 'No messages with attachments'),
+		}[search.filter]
 	}
 	return unifiedShown.value ? t('sockless_mail', 'No messages in your inboxes') : t('sockless_mail', 'No messages in this folder')
 })
@@ -375,6 +414,48 @@ onBeforeUnmount(() => observer?.disconnect())
 	white-space: nowrap;
 }
 
+.message-list__filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 0 16px 8px;
+}
+
+.message-list__filter {
+	--sm-button-background: transparent;
+	min-height: 0;
+	height: 26px;
+	margin: 0;
+	padding: 0 12px;
+	border: 1px solid var(--color-border-dark, var(--color-border));
+	border-radius: 13px;
+	background: transparent;
+	color: var(--color-text-maxcontrast);
+	font: inherit;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.message-list__filter:hover {
+	--sm-button-background: var(--color-background-hover);
+	background: var(--color-background-hover);
+}
+
+.message-list__filter:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 1px;
+}
+
+.message-list__filter--active,
+.message-list__filter--active:hover {
+	--sm-button-background: var(--color-primary-element-light);
+	--sm-button-color: var(--color-primary-element-light-text);
+	border-color: transparent;
+	background: var(--color-primary-element-light);
+	color: var(--color-primary-element-light-text);
+	font-weight: 600;
+}
+
 .message-list__hint {
 	margin: 0 16px 6px;
 	color: var(--color-text-maxcontrast);
@@ -422,7 +503,7 @@ onBeforeUnmount(() => observer?.disconnect())
 	grid-template-areas:
 		'stripe avatar from date'
 		'stripe avatar subject subject'
-		'stripe avatar location location';
+		'stripe avatar preview preview';
 	column-gap: 12px;
 	align-items: center;
 	padding: 8px 14px 8px 0;
@@ -546,14 +627,24 @@ onBeforeUnmount(() => observer?.disconnect())
 	white-space: nowrap;
 }
 
-.message-row__location {
-	grid-area: location;
+.message-row__preview {
+	grid-area: preview;
 	min-width: 0;
-	font-size: 12.5px;
+	font-size: 13px;
 	color: var(--color-text-maxcontrast);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* Where a message from a mixed list lives, ahead of its text. */
+.message-row__location {
+	font-weight: 600;
+}
+
+.message-row__location:not(:last-child)::after {
+	content: ' \00B7 ';
+	font-weight: normal;
 }
 
 .message-row--unread .message-row__from,
@@ -612,7 +703,7 @@ onBeforeUnmount(() => observer?.disconnect())
 	color: var(--color-main-text);
 }
 
-/* Compact: two lines, small avatars, no location line. */
+/* Compact: two lines, small avatars, no preview line. */
 .message-list--compact .message-row {
 	grid-template-columns: 4px 24px minmax(0, 1fr) auto;
 	grid-template-areas:
@@ -632,7 +723,7 @@ onBeforeUnmount(() => observer?.disconnect())
 	height: 9px;
 }
 
-.message-list--compact .message-row__location {
+.message-list--compact .message-row__preview {
 	display: none;
 }
 

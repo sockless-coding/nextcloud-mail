@@ -1,6 +1,7 @@
 import { reactive } from 'vue'
 import { apiGet } from '../api.js'
 import { closeMessage, hasPendingWrites, mailboxState, writeCounters } from './mailbox.js'
+import { mergeUnifiedChanges } from './search.js'
 
 const PAGE_SIZE = 50
 
@@ -165,6 +166,7 @@ export async function refreshUnified() {
 			state.list = [...state.list, ...inRange].sort(compare)
 		}
 		Object.assign(state, { total: changes.total, unread: changes.unread, token: changes.token, errors: changes.errors })
+		mergeUnifiedChanges(changes.messages, changes.removed)
 	} catch {
 		// Polling failures stay silent; the next explicit action shows errors.
 	}

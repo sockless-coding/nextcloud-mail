@@ -87,17 +87,28 @@ public sealed partial class MailboxService(
             next, state.Total, state.UidValidity, state.Unread, state.ChangeSeq);
     }
 
+    /// <summary>Candidates checked per round when a filter needs each message's structure (attachments).</summary>
+    private const int MaxStructureRounds = 5;
+
     /// <summary>
-    /// Searches one folder on the server (IMAP <c>SEARCH TEXT</c>, headers and body) for messages
-    /// containing every term. Not cached: matches may lie anywhere in the folder.
+    /// Searches one folder on the server for messages containing every term (IMAP <c>SEARCH TEXT</c>,
+    /// headers and body) and matching <paramref name="filter"/>; either may be left out, not both.
+    /// Not cached: matches may lie anywhere in the folder.
     /// </summary>
-    public Task<SearchPage> SearchFolderAsync(MailAccount account, string folderId, string? query, uint? before, int limit, CancellationToken ct)
+    public Task<SearchPage> SearchFolderAsync(
+        MailAccount account, string folderId, string? query, MessageFilter filter, uint? before, int limit, CancellationToken ct)
     {
-        var terms = SearchTerms.Parse(query);
+        var terms = filter == MessageFilter.None || !string.IsNullOrWhiteSpace(query) ? SearchTerms.Parse(query) : [];
+        var criteria = terms.Select(SearchQuery.MessageContains).Cast<SearchQuery>().ToList();
+        if (MessageFilters.ImapQuery(filter) is { } filterQuery)
+        {
+            criteria.Add(filterQuery);
+        }
+
         return Run(account, async (client, token) =>
         {
             var folder = await OpenFolderAsync(client, folderId, token);
-            var search = terms.Select(SearchQuery.MessageContains).Aggregate<SearchQuery>((a, b) => a.And(b));
+            var search = criteria.Aggregate((a, b) => a.And(b));
             if (before is { } b)
             {
                 if (b <= 1)
@@ -109,12 +120,36 @@ public sealed partial class MailboxService(
             }
 
             var matches = (await folder.SearchAsync(search, token)).OrderByDescending(u => u.Id).ToList();
-            var page = matches.Take(limit).ToList();
-            var summaries = page.Count == 0 ? [] : await folder.FetchAsync(page, FolderCache.ListItems, token);
+            if (!MessageFilters.NeedsStructureCheck(filter))
+            {
+                var page = matches.Take(limit).ToList();
+                var summaries = page.Count == 0 ? [] : await folder.FetchAsync(page, FolderCache.ListItems, token);
+                return new SearchPage(
+                    summaries.OrderByDescending(s => s.UniqueId.Id).Select(s => ToSummaryDto(folder.UidValidity, s)).ToList(),
+                    matches.Count > limit ? page[^1].Id : null,
+                    matches.Count,
+                    folder.UidValidity);
+            }
+
+            // Candidates only: keep those with an attachment, reading further until the page is full
+            // (or a few rounds went by, so one request stays short).
+            var kept = new List<IMessageSummary>();
+            var read = 0;
+            for (var round = 0; round < MaxStructureRounds && kept.Count < limit && read < matches.Count; round++)
+            {
+                var batch = matches.Skip(read).Take(limit - kept.Count).ToList();
+                read += batch.Count;
+                var structures = await folder.FetchAsync(batch, MessageSummaryItems.UniqueId | MessageSummaryItems.BodyStructure, token);
+                kept.AddRange(structures.Where(s => s.Attachments.Any()));
+            }
+
+            var withAttachments = kept.Count == 0 ? [] : await folder.FetchAsync(kept.Select(s => s.UniqueId).ToList(), FolderCache.ListItems, token);
+            var more = read < matches.Count;
             return new SearchPage(
-                summaries.OrderByDescending(s => s.UniqueId.Id).Select(s => ToSummaryDto(folder.UidValidity, s)).ToList(),
-                matches.Count > limit ? page[^1].Id : null,
-                matches.Count,
+                withAttachments.OrderByDescending(s => s.UniqueId.Id).Select(s => ToSummaryDto(folder.UidValidity, s)).ToList(),
+                more ? matches[read - 1].Id : null,
+                // Counted only when the first page checked every candidate; later pages leave the count as it was.
+                more || before is not null ? null : kept.Count,
                 folder.UidValidity);
         }, ct);
     }
@@ -177,7 +212,8 @@ public sealed partial class MailboxService(
         Run(account, async (client, token) =>
         {
             var (folder, uid) = await OpenMessageAsync(client, folderId, messageId, token);
-            var summary = await FetchOneAsync(folder, uid, FolderCache.ListItems, token);
+            // The view shows the text itself, not a preview of it.
+            var summary = await FetchOneAsync(folder, uid, FolderCache.ListItems & ~MessageSummaryItems.PreviewText, token);
 
             var html = "";
             BodyPartText? bodyPart = summary.HtmlBody ?? summary.TextBody;
@@ -381,7 +417,8 @@ public sealed partial class MailboxService(
         s.Flags?.HasFlag(MessageFlags.Flagged) ?? false,
         s.Flags?.HasFlag(MessageFlags.Answered) ?? false,
         s.Attachments.Any(),
-        (long)(s.Size ?? 0));
+        (long)(s.Size ?? 0),
+        MessagePreview.Normalize(s.PreviewText));
 
     private static FolderDto ToDto(IMailFolder f)
     {
