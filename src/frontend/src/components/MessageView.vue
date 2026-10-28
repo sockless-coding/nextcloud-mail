@@ -43,6 +43,13 @@
 					</div>
 					<div class="message-view__actions">
 						<NcIconSvgWrapper v-if="message.flagged" :path="mdiFlag" class="message-view__flag" :name="t('sockless_mail', 'Flagged')" />
+						<button v-if="isDraft"
+							class="message-view__icon-button"
+							:aria-label="t('sockless_mail', 'Continue editing')"
+							:title="t('sockless_mail', 'Continue editing')"
+							@click="continueDraft">
+							<NcIconSvgWrapper :path="mdiPencilOutline" />
+						</button>
 						<button v-for="mode in REPLIES"
 							:key="mode.id"
 							class="message-view__icon-button"
@@ -124,7 +131,13 @@
 			</div>
 
 			<div class="message-view__quick">
-				<NcButton v-for="mode in REPLIES" :key="mode.id" @click="reply(mode.id)">
+				<NcButton v-if="isDraft" variant="primary" @click="continueDraft">
+					<template #icon>
+						<NcIconSvgWrapper :path="mdiPencilOutline" />
+					</template>
+					{{ t('sockless_mail', 'Continue editing') }}
+				</NcButton>
+				<NcButton v-for="mode in isDraft ? [] : REPLIES" :key="mode.id" @click="reply(mode.id)">
 					<template #icon>
 						<NcIconSvgWrapper :path="mode.icon" />
 					</template>
@@ -136,7 +149,7 @@
 </template>
 
 <script setup>
-import { mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiReply, mdiReplyAll, mdiShare } from '@mdi/js'
+import { mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { getCanonicalLocale, n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -150,7 +163,7 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { computed, ref, watch } from 'vue'
 import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
-import { composeReply } from '../store/compose.js'
+import { composeEdit, composeReply } from '../store/compose.js'
 import { readingPane } from '../store/layout.js'
 import { closeMessage, mailboxState, openMessage, partUrl } from '../store/mailbox.js'
 import MessageBody from './MessageBody.vue'
@@ -168,6 +181,8 @@ const message = computed(() => open.message)
 const sender = computed(() => message.value?.from[0] ?? null)
 const senderName = computed(() => sender.value?.name || sender.value?.address || t('sockless_mail', 'Unknown sender'))
 const details = ref(false)
+/** A saved draft: it is continued rather than replied to. */
+const isDraft = computed(() => mailboxState.folders[open.accountId]?.list.find((f) => f.id === open.folderId)?.specialUse === 'drafts')
 
 watch(() => open.id, () => {
 	details.value = false
@@ -190,6 +205,14 @@ async function reply(mode) {
 		await composeReply(mode)
 	} catch (e) {
 		showError(t('sockless_mail', 'Could not prepare the message: {error}', { error: e.message }))
+	}
+}
+
+async function continueDraft() {
+	try {
+		await composeEdit()
+	} catch (e) {
+		showError(t('sockless_mail', 'Could not open the draft: {error}', { error: e.message }))
 	}
 }
 

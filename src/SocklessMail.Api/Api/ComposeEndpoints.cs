@@ -7,7 +7,7 @@ using SocklessMail.Api.Mailbox;
 
 namespace SocklessMail.Api.Api;
 
-/// <summary>Attachment uploads, reply/forward drafts and sending.</summary>
+/// <summary>Attachment uploads, reply/forward drafts, saved drafts and sending.</summary>
 public static class ComposeEndpoints
 {
     public const string SendRateLimit = "send";
@@ -41,7 +41,7 @@ public static class ComposeEndpoints
             {
                 if (!Enum.TryParse<ReplyMode>(mode, ignoreCase: true, out var replyMode))
                 {
-                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["mode"] = ["Use reply, replyAll or forward."] });
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["mode"] = ["Use reply, replyAll, forward or edit."] });
                 }
 
                 return await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
@@ -56,5 +56,13 @@ public static class ComposeEndpoints
                     ? Results.Ok(await mailbox.SendAsync(a, input, ct))
                     : MailboxEndpoints.NotFound())
             .RequireRateLimiting(SendRateLimit);
+
+        // Saved while writing (the composer saves a few seconds after each change).
+        account.MapPut("/drafts", async (
+                Guid accountId, SaveDraftInput input,
+                ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
+                await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
+                    ? Results.Ok(await mailbox.SaveDraftAsync(a, input, ct))
+                    : MailboxEndpoints.NotFound());
     }
 }

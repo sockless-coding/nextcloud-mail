@@ -1,6 +1,7 @@
 using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Net.Smtp;
+using MailKit.Search;
 using MimeKit;
 using MimeKit.Utils;
 using SocklessMail.Api.Accounts;
@@ -10,7 +11,7 @@ using SocklessMail.Api.Sync;
 
 namespace SocklessMail.Api.Mailbox;
 
-/// <summary>Writing mail: reply/forward drafts and sending with a copy in Sent.</summary>
+/// <summary>Writing mail: reply/forward drafts, saved drafts, and sending with a copy in Sent.</summary>
 public sealed partial class MailboxService
 {
     public const int MaxRecipients = 100;
@@ -18,31 +19,180 @@ public sealed partial class MailboxService
     public const long MaxAttachmentBytes = 25 * 1024 * 1024;
     public const int MaxTextLength = 1024 * 1024;
 
+    /// <summary>The fields a message is built from, sent or saved as a draft.</summary>
+    private sealed record MessageFields(
+        string? To, string? Cc, string? Bcc, string? Subject, string? Text, string? Html, IReadOnlyList<string>? AttachmentIds, SendSource? Source);
+
+    private sealed record ComposedMessage(MimeMessage Message, IReadOnlyList<UploadedAttachment> Uploads, int Recipients);
+
     public Task<DraftDto> GetDraftAsync(MailAccount account, string folderId, string messageId, ReplyMode mode, CancellationToken ct) =>
         Run(account, async (client, token) =>
         {
             var (folder, uid) = await OpenMessageAsync(client, folderId, messageId, token);
-            var summary = await FetchOneAsync(folder, uid, FolderCache.ListItems, token);
+            var summary = await FetchOneAsync(folder, uid, FolderCache.ListItems & ~MessageSummaryItems.PreviewText, token);
             var envelope = summary.Envelope ?? new Envelope();
-            var body = await BodyTextAsync(folder, uid, summary, token);
+            var (text, html) = await BodiesAsync(folder, uid, summary, token);
+            var attachments = summary.Attachments.Select(ToAttachmentDto).ToArray();
+
+            if (mode == ReplyMode.Edit)
+            {
+                return new DraftDto(
+                    envelope.To?.ToString() ?? "",
+                    envelope.Cc?.ToString() ?? "",
+                    envelope.Bcc?.ToString() ?? "",
+                    envelope.Subject ?? "",
+                    text,
+                    OutgoingHtml.Sanitize(html),
+                    attachments,
+                    new DraftSource(folderId, messageId, mode));
+            }
 
             var (to, cc) = ReplyBuilder.Recipients(mode, envelope.From, envelope.ReplyTo, envelope.To, envelope.Cc, account.EmailAddress);
+            var date = MessageDate(summary);
             return new DraftDto(
                 to.ToString(),
                 cc.ToString(),
+                "",
                 ReplyBuilder.Subject(mode, envelope.Subject),
-                ReplyBuilder.QuotedText(mode, MessageDate(summary), envelope.From, envelope.To, envelope.Cc, envelope.Subject, body),
-                mode == ReplyMode.Forward ? summary.Attachments.Select(ToAttachmentDto).ToArray() : [],
+                ReplyBuilder.QuotedText(mode, date, envelope.From, envelope.To, envelope.Cc, envelope.Subject, text),
+                OutgoingHtml.Quote(mode, date, envelope.From, envelope.To, envelope.Cc, envelope.Subject, html),
+                mode == ReplyMode.Forward ? attachments : [],
                 new DraftSource(folderId, messageId, mode));
         }, ct);
 
     public async Task<SendResult> SendAsync(MailAccount account, SendInput input, CancellationToken ct)
     {
-        var to = ParseAddresses(input.To, "to");
-        var cc = ParseAddresses(input.Cc, "cc");
-        var bcc = ParseAddresses(input.Bcc, "bcc");
-        var recipients = to.Count + cc.Count + bcc.Count;
-        if (recipients == 0)
+        var composed = await ComposeAsync(account,
+            new MessageFields(input.To, input.Cc, input.Bcc, input.Subject, input.Text, input.Html, input.AttachmentIds, input.Source),
+            draft: false, ct);
+
+        var credential = await logins.ForConnectionAsync(account, ct);
+        await DeliverAsync(account, credential, composed.Message, ct);
+        logger.LogInformation("Sent message from account {AccountId} to {RecipientCount} recipients", account.Id, composed.Recipients);
+
+        foreach (var upload in composed.Uploads)
+        {
+            uploads.Delete(account.OwnerUserId, upload.Id);
+        }
+
+        var result = await AfterSendAsync(account, composed.Message, input.Source, ct);
+
+        // The draft has served its purpose; so has a continued draft the message was built from.
+        if (input.Draft is { } draft)
+        {
+            await RemoveDraftAsync(account, draft);
+        }
+
+        if (input.Source is { Mode: ReplyMode.Edit } source && (input.Draft is null || input.Draft.MessageId != source.MessageId))
+        {
+            await RemoveDraftAsync(account, new SavedDraftRef(source.FolderId, source.MessageId));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Stores the draft in the account's Drafts folder (created when there is none), flagged
+    /// \Draft and \Seen, then removes the version it replaces. A continued draft (source mode
+    /// Edit) takes its attachments from the version it replaces, so the new copy becomes its
+    /// source, and the uploads now inside it are dropped.
+    /// </summary>
+    public async Task<SaveDraftResult> SaveDraftAsync(MailAccount account, SaveDraftInput input, CancellationToken ct)
+    {
+        var composed = await ComposeAsync(account,
+            new MessageFields(input.To, input.Cc, input.Bcc, input.Subject, input.Text, input.Html, input.AttachmentIds, input.Source),
+            draft: true, ct);
+        var editing = input.Source is { Mode: ReplyMode.Edit };
+
+        var (fullName, saved, attachments) = await Run(account, async (client, token) =>
+        {
+            var drafts = await FindSpecialFolderAsync(client, "drafts", token) ?? await CreateDraftsFolderAsync(client, token);
+            var uid = await drafts.AppendAsync(composed.Message, MessageFlags.Seen | MessageFlags.Draft, token);
+            if (uid is null || editing)
+            {
+                await drafts.OpenAsync(FolderAccess.ReadOnly, token);
+            }
+
+            // Without UIDPLUS the server does not say where the message went.
+            uid ??= (await drafts.SearchAsync(SearchQuery.HeaderContains("Message-ID", composed.Message.MessageId!), token)).Cast<UniqueId?>().LastOrDefault();
+
+            AttachmentDto[]? parts = null;
+            if (editing && uid is { } id)
+            {
+                var summary = await FetchOneAsync(drafts, id, MessageSummaryItems.UniqueId | MessageSummaryItems.BodyStructure, token);
+                parts = summary.Attachments.Select(ToAttachmentDto).ToArray();
+            }
+
+            return (drafts.FullName, uid, parts);
+        }, ct, retry: false);
+
+        var folderId = MailboxIds.FolderId(fullName);
+        var messageId = saved is { } u ? MailboxIds.MessageId(u.Validity, u.Id) : null;
+
+        // A continued draft whose new copy cannot be found keeps its old one: it is still the source.
+        if (input.Replaces is { } old && old.MessageId != messageId && (!editing || messageId is not null))
+        {
+            await RemoveDraftAsync(account, old);
+        }
+
+        if (editing && messageId is not null)
+        {
+            foreach (var upload in composed.Uploads)
+            {
+                uploads.Delete(account.OwnerUserId, upload.Id);
+            }
+
+            return new SaveDraftResult(folderId, messageId, new DraftSource(folderId, messageId, ReplyMode.Edit), attachments);
+        }
+
+        return new SaveDraftResult(folderId, messageId, null, null);
+    }
+
+    /// <summary>Best effort: a draft left behind is a nuisance, not a failure of what the user did.</summary>
+    private async Task RemoveDraftAsync(MailAccount account, SavedDraftRef draft)
+    {
+        try
+        {
+            await DeleteAsync(account, draft.FolderId, new DeleteInput([draft.MessageId], Permanent: true), CancellationToken.None);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger.LogWarning("Removing a saved draft of account {AccountId} failed ({ExceptionType})", account.Id, e.GetType().Name);
+        }
+    }
+
+    private static async Task<IMailFolder> CreateDraftsFolderAsync(ImapClient client, CancellationToken ct)
+    {
+        var root = client.GetFolder(client.PersonalNamespaces.Count > 0 ? client.PersonalNamespaces[0] : new FolderNamespace('/', ""));
+        var drafts = await root.CreateAsync("Drafts", isMessageFolder: true, ct)
+                     ?? throw new MailboxConflictException("folder_exists", "A Drafts folder could not be created.");
+        await drafts.SubscribeAsync(ct);
+        return drafts;
+    }
+
+    /// <summary>
+    /// Builds the message. A draft may be incomplete: no recipients, or addresses still being
+    /// typed (kept as written). Everything else is checked the same way for both.
+    /// </summary>
+    private async Task<ComposedMessage> ComposeAsync(MailAccount account, MessageFields input, bool draft, CancellationToken ct)
+    {
+        InternetAddressList? Addresses(string? value, string field)
+        {
+            try
+            {
+                return ParseAddresses(value, field);
+            }
+            catch (MailboxValidationException) when (draft)
+            {
+                return null;
+            }
+        }
+
+        var to = Addresses(input.To, "to");
+        var cc = Addresses(input.Cc, "cc");
+        var bcc = Addresses(input.Bcc, "bcc");
+        var recipients = (to?.Count ?? 0) + (cc?.Count ?? 0) + (bcc?.Count ?? 0);
+        if (recipients == 0 && !draft)
         {
             throw new MailboxValidationException("to", "Add at least one recipient.");
         }
@@ -59,13 +209,14 @@ public sealed partial class MailboxService
         }
 
         var text = input.Text ?? "";
-        if (text.Length > MaxTextLength)
+        var html = string.IsNullOrWhiteSpace(input.Html) ? null : input.Html;
+        if (text.Length > MaxTextLength || html?.Length > MaxTextLength)
         {
             throw new MailboxValidationException("text", "The message is too long.");
         }
 
         var attachmentIds = input.AttachmentIds ?? [];
-        var forwardPartIds = input.Source is { Mode: ReplyMode.Forward } ? input.Source.ForwardPartIds ?? [] : [];
+        var forwardPartIds = input.Source is { Mode: ReplyMode.Forward or ReplyMode.Edit } ? input.Source.ForwardPartIds ?? [] : [];
         if (attachmentIds.Count + forwardPartIds.Count > MaxAttachments)
         {
             throw new MailboxValidationException("attachmentIds", $"At most {MaxAttachments} attachments per message.");
@@ -78,26 +229,46 @@ public sealed partial class MailboxService
                 ?? throw new MailboxValidationException("attachmentIds", "An attachment has expired or was removed. Attach it again."));
         }
 
-        var credential = await logins.ForConnectionAsync(account, ct);
         var original = input.Source is { } source ? await LoadSourceAsync(account, source, forwardPartIds, ct) : null;
 
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(account.SenderName, account.EmailAddress));
-        message.To.AddRange(to);
-        message.Cc.AddRange(cc);
-        message.Bcc.AddRange(bcc);
+        SetAddresses(message, HeaderId.To, message.To, to, input.To);
+        SetAddresses(message, HeaderId.Cc, message.Cc, cc, input.Cc);
+        SetAddresses(message, HeaderId.Bcc, message.Bcc, bcc, input.Bcc);
         message.Subject = subject;
         message.Date = clock.GetUtcNow();
         message.MessageId = MimeUtils.GenerateMessageId(account.EmailAddress.Split('@')[^1]);
-        if (original is { MessageId: { } inReplyTo } && input.Source!.Mode != ReplyMode.Forward)
+        if (original is not null)
         {
-            // Threading: the replied-to message and its own ancestors.
-            message.InReplyTo = inReplyTo;
-            message.References.AddRange(original.References);
-            message.References.Add(inReplyTo);
+            switch (input.Source!.Mode)
+            {
+                case ReplyMode.Reply or ReplyMode.ReplyAll when original.MessageId is { } inReplyTo:
+                    // Threading: the replied-to message and its own ancestors.
+                    message.InReplyTo = inReplyTo;
+                    message.References.AddRange(original.References);
+                    message.References.Add(inReplyTo);
+                    break;
+                case ReplyMode.Edit:
+                    // A continued draft keeps the threading it was saved with.
+                    message.InReplyTo = original.InReplyTo;
+                    message.References.AddRange(original.References);
+                    break;
+            }
         }
 
-        var builder = new BodyBuilder { TextBody = text };
+        var builder = new BodyBuilder();
+        if (html is not null)
+        {
+            var fragment = OutgoingHtml.Sanitize(html);
+            builder.HtmlBody = OutgoingHtml.Document(fragment);
+            builder.TextBody = ReplyBuilder.HtmlToText(fragment);
+        }
+        else
+        {
+            builder.TextBody = text;
+        }
+
         var streams = new List<Stream>();
         try
         {
@@ -131,15 +302,20 @@ public sealed partial class MailboxService
             }
         }
 
-        await DeliverAsync(account, credential, message, ct);
-        logger.LogInformation("Sent message from account {AccountId} to {RecipientCount} recipients", account.Id, recipients);
+        return new ComposedMessage(message, uploaded, recipients);
+    }
 
-        foreach (var upload in uploaded)
+    /// <summary>Parsed addresses, or for a draft whose field does not parse yet, the text as written.</summary>
+    private static void SetAddresses(MimeMessage message, HeaderId header, InternetAddressList target, InternetAddressList? parsed, string? raw)
+    {
+        if (parsed is not null)
         {
-            uploads.Delete(account.OwnerUserId, upload.Id);
+            target.AddRange(parsed);
         }
-
-        return await AfterSendAsync(account, message, input.Source, ct);
+        else if (!string.IsNullOrWhiteSpace(raw))
+        {
+            message.Headers.Replace(header, raw.ReplaceLineEndings(" ").Trim());
+        }
     }
 
     private async Task DeliverAsync(MailAccount account, MailCredential credential, MimeMessage message, CancellationToken ct)
@@ -199,7 +375,8 @@ public sealed partial class MailboxService
                     warning = "The message was sent, but this account has no Sent folder to keep a copy in.";
                 }
 
-                if (source is not null)
+                // A continued draft is no original: it is removed instead (see SendAsync).
+                if (source is { Mode: not ReplyMode.Edit })
                 {
                     await MarkOriginalAsync(client, source, token);
                 }
@@ -232,7 +409,8 @@ public sealed partial class MailboxService
 
     private sealed record ForwardedPart(MimeEntity Entity, long Size);
 
-    private sealed record SourceMessage(string? MessageId, IReadOnlyList<string> References, IReadOnlyList<ForwardedPart> ForwardedParts);
+    private sealed record SourceMessage(
+        string? MessageId, string? InReplyTo, IReadOnlyList<string> References, IReadOnlyList<ForwardedPart> ForwardedParts);
 
     private Task<SourceMessage> LoadSourceAsync(MailAccount account, SendSource source, IReadOnlyList<string> forwardPartIds, CancellationToken ct) =>
         Run(account, async (client, token) =>
@@ -260,23 +438,17 @@ public sealed partial class MailboxService
 
             return new SourceMessage(
                 summary.Envelope?.MessageId,
+                summary.Envelope?.InReplyTo,
                 summary.References?.ToList() ?? [],
                 parts);
         }, ct);
 
-    private static async Task<string> BodyTextAsync(IMailFolder folder, UniqueId uid, IMessageSummary summary, CancellationToken ct)
+    /// <summary>The message's text and HTML; each made from the other when the message has only one.</summary>
+    private static async Task<(string Text, string Html)> BodiesAsync(IMailFolder folder, UniqueId uid, IMessageSummary summary, CancellationToken ct)
     {
-        if (summary.TextBody is { } textPart && await FetchPartAsync(folder, uid, textPart, ct) is TextPart text)
-        {
-            return text.Text;
-        }
-
-        if (summary.HtmlBody is { } htmlPart && await FetchPartAsync(folder, uid, htmlPart, ct) is TextPart html)
-        {
-            return ReplyBuilder.HtmlToText(html.Text);
-        }
-
-        return "";
+        var text = summary.TextBody is { } textPart && await FetchPartAsync(folder, uid, textPart, ct) is TextPart plain ? plain.Text : null;
+        var html = summary.HtmlBody is { } htmlPart && await FetchPartAsync(folder, uid, htmlPart, ct) is TextPart rich ? rich.Text : null;
+        return (text ?? (html is null ? "" : ReplyBuilder.HtmlToText(html)), html ?? OutgoingHtml.FromText(text ?? ""));
     }
 
     private static InternetAddressList ParseAddresses(string? value, string field)

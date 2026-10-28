@@ -2,7 +2,7 @@
 	<div v-if="composer.expanded && !composer.minimized" class="composer-backdrop" />
 	<!-- A window docked at the bottom, not a modal: the mailbox stays usable while writing.
 	     Escape and clicks elsewhere do nothing, so a half-written message cannot vanish by
-	     accident; Send and Discard are the only ways out. -->
+	     accident. Close keeps it (saved in Drafts); Send and Discard end it. -->
 	<section class="composer"
 		:class="{ 'composer--minimized': composer.minimized, 'composer--expanded': composer.expanded && !composer.minimized }"
 		role="dialog"
@@ -29,9 +29,9 @@
 			</button>
 			<button type="button"
 				class="composer__window-button"
-				:aria-label="t('sockless_mail', 'Discard')"
-				:title="t('sockless_mail', 'Discard')"
-				@click="discard">
+				:aria-label="t('sockless_mail', 'Close')"
+				:title="t('sockless_mail', 'Close and keep the draft')"
+				@click="closeKeeping">
 				<NcIconSvgWrapper :path="mdiClose" :size="18" />
 			</button>
 		</header>
@@ -68,12 +68,21 @@
 			<p v-if="errors.subject" class="composer__error">
 				{{ errors.subject }}
 			</p>
-			<label class="hidden-visually" for="composer-text">{{ t('sockless_mail', 'Message') }}</label>
-			<textarea id="composer-text"
-				ref="body"
-				v-model="draft.text"
-				class="composer__text"
+			<RichEditor v-if="draft.format === 'html'"
+				ref="editor"
+				v-model="draft.html"
+				class="composer__editor"
+				@normalized="onNormalized"
+				:label="t('sockless_mail', 'Message')"
 				:placeholder="t('sockless_mail', 'Write your message')" />
+			<template v-else>
+				<label class="hidden-visually" for="composer-text">{{ t('sockless_mail', 'Message') }}</label>
+				<textarea id="composer-text"
+					ref="body"
+					v-model="draft.text"
+					class="composer__text"
+					:placeholder="t('sockless_mail', 'Write your message')" />
+			</template>
 			<p v-if="errors.text" class="composer__error">
 				{{ errors.text }}
 			</p>
@@ -108,7 +117,10 @@
 		</div>
 
 		<footer v-show="!composer.minimized" class="composer__footer">
-			<NcButton variant="primary" :disabled="uploading || sending" @click="submit">
+			<NcButton variant="primary"
+				:disabled="uploading || sending"
+				:title="t('sockless_mail', 'Send (Ctrl+Enter)')"
+				@click="submit">
 				<template #icon>
 					<NcLoadingIcon v-if="sending" :size="20" />
 					<NcIconSvgWrapper v-else :path="mdiSend" />
@@ -126,34 +138,56 @@
 				</template>
 				{{ t('sockless_mail', 'Attach files') }}
 			</NcButton>
-			<span class="composer__hint">{{ t('sockless_mail', 'Ctrl+Enter to send') }}</span>
+			<NcButton variant="tertiary"
+				:aria-pressed="String(draft.format === 'text')"
+				:title="draft.format === 'html' ? t('sockless_mail', 'Write in plain text, without formatting') : t('sockless_mail', 'Write with formatting')"
+				@click="switchFormat">
+				<template #icon>
+					<NcIconSvgWrapper :path="draft.format === 'html' ? mdiFormatLetterCase : mdiFormatText" />
+				</template>
+				{{ draft.format === 'html' ? t('sockless_mail', 'Plain text') : t('sockless_mail', 'Rich text') }}
+			</NcButton>
+			<span class="composer__status" :class="{ 'composer__status--error': composer.saveStatus === 'error' }" :title="composer.saveError">
+				{{ saveText }}
+			</span>
+			<button type="button"
+				class="composer__window-button"
+				:aria-label="t('sockless_mail', 'Discard')"
+				:title="t('sockless_mail', 'Discard')"
+				@click="discard">
+				<NcIconSvgWrapper :path="mdiDeleteOutline" :size="20" />
+			</button>
 		</footer>
 	</section>
 
 	<NcDialog v-if="confirmDiscard"
 		:name="t('sockless_mail', 'Discard this message?')"
-		:message="t('sockless_mail', 'What you wrote and attached will be lost.')"
+		:message="draft.saved ? t('sockless_mail', 'What you wrote and attached will be lost, and the saved draft is deleted.') : t('sockless_mail', 'What you wrote and attached will be lost.')"
 		:buttons="discardButtons"
 		:open="true"
 		@update:open="(open) => !open && discardClosed()" />
 </template>
 
 <script setup>
-import { mdiArrowCollapse, mdiArrowExpand, mdiClose, mdiPaperclip, mdiSend, mdiUndo, mdiWindowMinimize, mdiWindowRestore } from '@mdi/js'
-import { t } from '@nextcloud/l10n'
+import { mdiArrowCollapse, mdiArrowExpand, mdiClose, mdiDeleteOutline, mdiFormatLetterCase, mdiFormatText, mdiPaperclip, mdiSend, mdiUndo, mdiWindowMinimize, mdiWindowRestore } from '@mdi/js'
+import { showError } from '@nextcloud/dialogs/toast'
+import { getCanonicalLocale, t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { accountsState } from '../store/accounts.js'
-import { attach, closeComposer, composer, detach, hasContent, send } from '../store/compose.js'
+import { attach, closeComposer, composer, detach, hasContent, saveSoon, send, textToHtml } from '../store/compose.js'
+import { layout } from '../store/layout.js'
 import RecipientInput from './RecipientInput.vue'
+import RichEditor from './RichEditor.vue'
 
 const draft = composer.draft
 const fileInput = ref(null)
 const body = ref(null)
+const editor = ref(null)
 const showCopies = ref(!!(draft.cc || draft.bcc))
 const errors = ref({})
 const generalError = ref('')
@@ -164,7 +198,57 @@ const title = computed(() => ({
 	reply: t('sockless_mail', 'Reply'),
 	replyAll: t('sockless_mail', 'Reply to all'),
 	forward: t('sockless_mail', 'Forward'),
+	edit: t('sockless_mail', 'Draft'),
 })[draft.source?.mode] ?? t('sockless_mail', 'New message'))
+
+const timeFormat = new Intl.DateTimeFormat(getCanonicalLocale(), { hour: 'numeric', minute: '2-digit' })
+
+const saveText = computed(() => ({
+	saving: t('sockless_mail', 'Saving…'),
+	saved: composer.savedAt && t('sockless_mail', 'Draft saved {time}', { time: timeFormat.format(composer.savedAt) }),
+	error: t('sockless_mail', 'Could not save the draft'),
+})[composer.saveStatus] ?? '')
+
+// What the user changes, not what saving writes back (saved copy, source, attachments).
+watch(() => [draft.accountId, draft.to, draft.cc, draft.bcc, draft.subject, draft.format, draft.html, draft.text, draft.forwarded.map((a) => a.include).join()],
+	() => saveSoon())
+
+/**
+ * The editor rewrites loaded HTML in its own form (<b> becomes <strong>, a trailing paragraph is
+ * added). That is not a change by the user: it becomes what "unchanged" is compared with.
+ */
+function onNormalized(html) {
+	if (draft.html === draft.initialHtml || draft.html === html) {
+		draft.html = html
+		draft.initialHtml = html
+	}
+}
+
+/** Rich text and plain text, either way; the choice is remembered for new messages. */
+function switchFormat() {
+	if (draft.format === 'html') {
+		draft.text = editor.value?.getText() ?? draft.text
+		draft.format = 'text'
+	} else {
+		draft.html = draft.text ? textToHtml(draft.text) : ''
+		draft.format = 'html'
+	}
+	layout.composeFormat = draft.format
+}
+
+/** Close keeps the message: saved in Drafts, to be continued from there. */
+async function closeKeeping() {
+	if (!(await closeComposer('kept'))) {
+		showError(t('sockless_mail', 'The draft could not be saved: {error}', { error: composer.saveError }))
+	}
+}
+
+/** Leaving the page with unsaved changes asks first. */
+function beforeUnload(event) {
+	if (hasContent() && composer.saveStatus !== 'saved') {
+		event.preventDefault()
+	}
+}
 
 const uploading = computed(() => draft.uploads.some((u) => !u.id && !u.error))
 
@@ -177,7 +261,7 @@ async function submit() {
 	sending.value = true
 	try {
 		await send()
-		closeComposer(true)
+		closeComposer('sent')
 	} catch (e) {
 		errors.value = e.fieldErrors ?? {}
 		if (errors.value.cc || errors.value.bcc) {
@@ -197,7 +281,7 @@ let discardChosen = false
 
 async function discard() {
 	if (!hasContent()) {
-		closeComposer(false)
+		closeComposer('discarded')
 		return
 	}
 	// Still closing from the last time (NcDialog reports closed 300 ms late): show it afresh.
@@ -213,7 +297,7 @@ async function discard() {
 function discardClosed() {
 	confirmDiscard.value = false
 	if (discardChosen) {
-		closeComposer(false)
+		closeComposer('discarded')
 	}
 }
 
@@ -230,14 +314,21 @@ function onFiles(event) {
 }
 
 // A reply starts in the text, above the quote; a new message in the To field.
-onMounted(() => nextTick(() => {
-	if (draft.source) {
-		body.value?.focus()
-		body.value?.setSelectionRange(0, 0)
-	} else {
-		document.getElementById(document.querySelector('.composer .recipients__label')?.getAttribute('for'))?.focus()
-	}
-}))
+onMounted(() => {
+	window.addEventListener('beforeunload', beforeUnload)
+	nextTick(() => {
+		if (draft.source && draft.format === 'html') {
+			editor.value?.focus('start')
+		} else if (draft.source) {
+			body.value?.focus()
+			body.value?.setSelectionRange(0, 0)
+		} else {
+			document.getElementById(document.querySelector('.composer .recipients__label')?.getAttribute('for'))?.focus()
+		}
+	})
+})
+
+onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 </script>
 
 <style scoped>
@@ -478,10 +569,19 @@ onMounted(() => nextTick(() => {
 	border-top: 1px solid var(--color-border);
 }
 
-.composer__hint {
+.composer__editor {
+	min-height: 220px;
+}
+
+.composer__status {
 	margin-inline-start: auto;
 	font-size: 12px;
 	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+}
+
+.composer__status--error {
+	color: var(--color-error-text);
 }
 
 @media (max-width: 800px) {
@@ -497,8 +597,8 @@ onMounted(() => nextTick(() => {
 		inset: auto 0 0;
 	}
 
-	.composer__hint {
-		display: none;
+	.composer__footer {
+		flex-wrap: wrap;
 	}
 }
 </style>

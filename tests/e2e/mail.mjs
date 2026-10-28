@@ -50,6 +50,11 @@ if (await page.getByRole('button', { name: 'Load older messages' }).count()) {
 	step(`after "Load older messages": ${await items.count()} shown`)
 }
 
+// Other checks fill the inbox; search for the newsletter when it is not among the loaded pages.
+if (await items.filter({ hasText: 'Weekly newsletter' }).count() === 0) {
+	await page.getByRole('searchbox').fill('"Weekly newsletter"')
+	await page.getByRole('searchbox').press('Enter')
+}
 await items.filter({ hasText: 'Weekly newsletter' }).first().click()
 await page.frameLocator('iframe.message-body').locator('h1').waitFor({ timeout: 20000 })
 await page.waitForTimeout(1000)
@@ -78,6 +83,12 @@ step(`remote image after "Show images": ${await page.locator('iframe.message-bod
 	const img = f.contentDocument.querySelector('img[alt="remote image"]')
 	return `${img.getAttribute('src').replace(/token=.*/, 'token=…')} loaded=${img.naturalWidth > 0}`
 })}`)
+
+// Back to the inbox list itself if the newsletter had to be searched for.
+if (await page.getByRole('button', { name: 'Clear search' }).count()) {
+	await page.getByRole('button', { name: 'Clear search' }).click()
+	await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor()
+}
 
 const subject = `Polling check ${Date.now()}`
 execSync('curl -s --url smtp://127.0.0.1:3025 --mail-from poll@example.test --mail-rcpt alice@example.test --upload-file -',

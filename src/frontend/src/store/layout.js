@@ -1,8 +1,8 @@
 import { computed, reactive, watch } from 'vue'
 
 /**
- * View preferences (reading pane, density, folder pane, pane sizes) and the window width they
- * depend on. Kept in the browser's localStorage, per Nextcloud user: several users can share a
+ * View preferences (reading pane, density, folder pane, pane sizes, rich or plain text) and the
+ * window width they depend on. Kept in the browser's localStorage, per Nextcloud user: several users can share a
  * browser, and the head element names the logged-in one. Storage may be unavailable (private
  * windows, blocked site data); the defaults apply then.
  */
@@ -18,6 +18,8 @@ const DEFAULTS = {
 	listWidth: 400,
 	/** Message list height in % of the panes (reading pane bottom). */
 	listHeight: 45,
+	/** How new messages are written: html (rich text) or text. */
+	composeFormat: 'html',
 }
 
 function load() {

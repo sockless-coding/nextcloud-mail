@@ -5,7 +5,7 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 7c (reading, writing, shortcuts)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> Status: **phase 7d (rich text and drafts)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
 > (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
 > with remote images blocked by default, attachments), works with it (read/unread, flag, move,
 > delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
@@ -17,7 +17,8 @@ the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with
 > an account rail with a colour and unread count per account, a folder pane, a command bar, a
 > message list grouped by day with a line of each message's text, hover actions, multi-select
 > and quick filters (Unread, Flagged, Attachments), a reading pane on the right, at the bottom
-> or off, a composer window docked at the bottom, and Outlook's keyboard shortcuts.
+> or off, a composer window docked at the bottom with rich-text editing and drafts saved while
+> writing, and Outlook's keyboard shortcuts.
 
 ## Layout
 
@@ -68,6 +69,7 @@ node oauth.mjs       # admin sign-in settings, Google popup with PKCE, callback 
 node layout.mjs      # multi-select and actions on it, reading pane and density (kept on reload), folder pane
 node filters.mjs     # previews, Unread/Flagged/Attachments in a folder and in all inboxes, polling in a filter
 node workspace.mjs   # sender details, attachment cards, composer window, recipient chips, keyboard shortcuts
+node drafts.mjs      # rich text reaching the recipient, drafts saved while writing, Close, Continue editing, plain text
 ```
 
 They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console errors.
@@ -269,6 +271,22 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
   - Escape and clicking elsewhere do not close it, so a half-written message cannot vanish by
     accident. Send (also Ctrl+Enter) and Discard are the only ways out. Discard asks first when
     something was typed or attached.
+  - **Rich text** (TipTap) is the default: paragraph styles, font and size, bold, italic,
+    underline, strikethrough, text colour and highlight, lists, quotes, alignment, links. The
+    message goes out as HTML with a plain-text alternative the server makes from it. The server
+    cleans the HTML with an allowlist first (no scripts, event handlers, forms, frames or
+    images), gives paragraphs no margins (one Enter is one line, as in desktop mail programs) and
+    sets a default font. **Plain text** is one click away and is remembered for new messages.
+    Replies and forwards quote the original's HTML (cleaned the same way, images left out) in a
+    blockquote, or below a header block for a forward.
+  - **Drafts** are saved to the account's Drafts folder (created when there is none) 4 seconds
+    after the last change: `PUT /api/accounts/{id}/drafts` appends the message flagged `\Draft`
+    and `\Seen`, then removes the version it replaces. Addresses still being typed are kept as
+    written. Close (×) keeps the draft; Discard deletes it; sending removes it. A draft opened
+    in Drafts has **Continue editing**, which loads it back (`…/draft?mode=edit`): fields, text,
+    attachments and threading as saved. While a draft is continued, each saved copy becomes the
+    source of its attachments, so uploads move into it. Leaving the page with unsaved changes
+    asks first.
   - Recipients are chips. What is still being typed counts too, so sending without finishing an
     entry loses nothing; invalid addresses are marked. Suggestions come from the addresses of
     mail the app has loaded (lists, search results, all inboxes); there is no address book
