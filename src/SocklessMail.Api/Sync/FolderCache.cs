@@ -157,6 +157,25 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
         return query.OrderByDescending(m => m.Uid).Take(take).ToListAsync(ct);
     }
 
+    /// <summary>
+    /// Newest first by date: <paramref name="take"/> rows that come after <paramref name="cursor"/>
+    /// in the unified inbox order (date, account id, UID; all descending).
+    /// </summary>
+    public Task<List<CachedMessage>> PageByDateAsync(CachedFolder state, UnifiedCursor? cursor, int take, CancellationToken ct)
+    {
+        var query = db.Messages.AsNoTracking().Where(m => m.FolderId == state.Id);
+        if (cursor is { } c)
+        {
+            // Within one folder the account is fixed, so the account part of the order is a constant.
+            var account = state.AccountId.CompareTo(c.AccountId);
+            query = account < 0 ? query.Where(m => m.Date <= c.Date)
+                : account > 0 ? query.Where(m => m.Date < c.Date)
+                : query.Where(m => m.Date < c.Date || (m.Date == c.Date && m.Uid < c.Uid));
+        }
+
+        return query.OrderByDescending(m => m.Date).ThenByDescending(m => m.Uid).Take(take).ToListAsync(ct);
+    }
+
     public async Task<FolderChanges> ChangesAsync(CachedFolder state, long since, CancellationToken ct)
     {
         FolderChanges Result(bool reset, IReadOnlyList<MessageSummaryDto> messages, IReadOnlyList<string> removed) =>

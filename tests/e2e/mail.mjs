@@ -37,6 +37,8 @@ if (!accounts.some((a) => a.emailAddress === 'alice@example.test')) {
 const aliceName = (await (await page.request.get(`${base}${apiBase}/accounts`, { headers })).json())
 	.find((a) => a.emailAddress === 'alice@example.test').displayName
 await page.locator('li.account-entry .app-navigation-entry__name', { hasText: new RegExp(`^${aliceName}$`) }).first().click()
+// With several accounts the app opens on all inboxes; wait for the account's own inbox.
+await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor({ timeout: 30000 })
 
 const items = page.locator('.message-list li.list-item__wrapper')
 await items.first().waitFor({ timeout: 30000 })

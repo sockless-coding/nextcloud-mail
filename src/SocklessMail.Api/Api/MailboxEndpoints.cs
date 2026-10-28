@@ -136,6 +136,15 @@ public static class MailboxEndpoints
                 Math.Clamp(limit ?? MailboxService.DefaultPageSize, 1, MailboxService.MaxPageSize), ct));
         });
 
+        // All accounts' inboxes as one list, from the header cache (see UnifiedInbox).
+        var unified = api.MapGroup("/unified").AddEndpointFilter<MailErrorFilter>();
+        unified.MapGet("/messages", async (string? before, int? limit, ClaimsPrincipal user, UnifiedInbox inbox, CancellationToken ct) =>
+            Results.Ok(await inbox.GetPageAsync(user.GetNextcloudUserId(), UnifiedCursor.Parse(before),
+                Math.Clamp(limit ?? MailboxService.DefaultPageSize, 1, MailboxService.MaxPageSize), ct)));
+
+        unified.MapGet("/changes", async (string? since, ClaimsPrincipal user, UnifiedInbox inbox, CancellationToken ct) =>
+            Results.Ok(await inbox.GetChangesAsync(user.GetNextcloudUserId(), since, ct)));
+
         api.MapGet("/image-proxy", async (string token, ClaimsPrincipal user, ImageProxyTokens tokens, ImageProxy proxy, HttpContext http, CancellationToken ct) =>
         {
             if (tokens.Resolve(user.GetNextcloudUserId(), token) is not { } url)

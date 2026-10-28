@@ -29,7 +29,7 @@ async function until(condition) {
 
 const aliceRow = page.locator('li.account-entry > .app-navigation-entry').filter({ hasText: /^Alice/ }).first()
 await aliceRow.locator('a').first().click()
-await page.locator('.message-list__header h2', { hasText: 'Inbox' }).waitFor()
+await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor()
 await items.filter({ hasText: nameSubject }).first().waitFor({ timeout: 20000 })
 step('inbox shown')
 

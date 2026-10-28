@@ -111,6 +111,23 @@ public sealed class UserIsolationTests : IDisposable
     }
 
     [Fact]
+    public async Task Unified_inbox_holds_only_the_users_own_accounts()
+    {
+        var aliceId = await CreateAsync(_alice);
+
+        // Bob has no accounts: an empty list, without trying alice's (unroutable) server.
+        var page = await JsonAsync(await _bob.GetAsync("/api/unified/messages", Ct));
+        Assert.Empty(page.GetProperty("messages").EnumerateArray());
+        Assert.Empty(page.GetProperty("errors").EnumerateArray());
+        Assert.Equal("", page.GetProperty("token").GetString());
+
+        // Alice's token is not bob's to poll: his inboxes do not match it, so it only resets.
+        var changes = await JsonAsync(await _bob.GetAsync($"/api/unified/changes?since={aliceId:N}.1", Ct));
+        Assert.True(changes.GetProperty("reset").GetBoolean());
+        Assert.Empty(changes.GetProperty("messages").EnumerateArray());
+    }
+
+    [Fact]
     public async Task Reorder_cannot_include_another_users_account()
     {
         var aliceId = await CreateAsync(_alice);

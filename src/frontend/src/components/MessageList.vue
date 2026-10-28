@@ -2,26 +2,33 @@
 	<div class="message-list">
 		<!-- Leaves room for the navigation toggle Nextcloud places at the pane's top left. -->
 		<header class="message-list__header">
-			<h2>{{ search.active ? t('sockless_mail', 'Search') : folderName }}</h2>
+			<h2>{{ search.active ? t('sockless_mail', 'Search') : listName }}</h2>
 			<span v-if="!view.loading && !view.error">{{ countText }}</span>
 		</header>
 		<form class="message-list__search" role="search" @submit.prevent="runSearch">
 			<NcTextField v-model="search.query"
 				type="search"
-				:label="search.scope === 'folder' ? t('sockless_mail', 'Search in {folder}', { folder: folderName }) : t('sockless_mail', 'Search all accounts')"
+				:label="scope === 'folder' ? t('sockless_mail', 'Search in {folder}', { folder: listName }) : t('sockless_mail', 'Search all accounts')"
 				:show-trailing-button="search.query !== '' || search.active"
 				trailing-button-icon="close"
 				:trailing-button-label="t('sockless_mail', 'Clear search')"
 				@trailing-button-click="clearSearch" />
-			<NcCheckboxRadioSwitch :model-value="search.scope === 'all'"
+			<NcCheckboxRadioSwitch v-if="!unifiedShown"
+				:model-value="search.scope === 'all'"
 				type="switch"
 				@update:model-value="setScope">
 				{{ t('sockless_mail', 'All accounts and folders') }}
 			</NcCheckboxRadioSwitch>
-			<p v-if="search.scope === 'all'" class="message-list__hint">
+			<p v-if="scope === 'all' && (search.active || !unifiedShown)" class="message-list__hint">
 				{{ t('sockless_mail', 'Finds subjects, senders and recipients of messages this app has already loaded. To search message text and older mail, search a single folder.') }}
 			</p>
 		</form>
+		<NcNoteCard v-for="failure in accountErrors"
+			:key="failure.accountId"
+			type="warning"
+			class="message-list__account-error">
+			{{ t('sockless_mail', '{account}: {error} Showing the messages loaded before.', { account: accountName(failure.accountId), error: failure.message }) }}
+		</NcNoteCard>
 		<div v-if="view.loading" class="message-list__center">
 			<NcLoadingIcon :size="44" />
 		</div>
@@ -29,7 +36,7 @@
 			:name="search.active ? t('sockless_mail', 'Search failed') : t('sockless_mail', 'Could not load the messages')"
 			:description="view.error.message" />
 		<NcEmptyContent v-else-if="rows.length === 0"
-			:name="search.active ? t('sockless_mail', 'No messages found') : t('sockless_mail', 'No messages in this folder')">
+			:name="emptyText">
 			<template #icon>
 				<NcIconSvgWrapper :path="search.active ? mdiMagnify : mdiEmailOpenOutline" />
 			</template>
@@ -40,33 +47,33 @@
 					:key="row.key"
 					:name="sender(row.message)"
 					:bold="!row.message.seen"
-					:active="row.message.id === openId && isSelected(row)"
+					:active="isOpen(row)"
 					:details="formatDate(row.message.date)"
 					@click="open(row)">
 					<template #icon>
 						<NcAvatar :display-name="sender(row.message)" is-no-user disable-menu :size="40" />
 					</template>
-					<!-- Actions work on the selected folder; results from elsewhere get them once opened. -->
-					<template v-if="isSelected(row)" #actions>
-						<NcActionButton close-after-click @click="toggleSeen(row.message)">
+					<!-- Every row knows its folder, so actions work on results from elsewhere too. -->
+					<template #actions>
+						<NcActionButton close-after-click @click="toggleSeen(row, row.message)">
 							<template #icon>
 								<NcIconSvgWrapper :path="row.message.seen ? mdiEmailOutline : mdiEmailOpenOutline" />
 							</template>
 							{{ row.message.seen ? t('sockless_mail', 'Mark as unread') : t('sockless_mail', 'Mark as read') }}
 						</NcActionButton>
-						<NcActionButton close-after-click @click="toggleFlagged(row.message)">
+						<NcActionButton close-after-click @click="toggleFlagged(row, row.message)">
 							<template #icon>
 								<NcIconSvgWrapper :path="row.message.flagged ? mdiStarOff : mdiStarOutline" />
 							</template>
 							{{ row.message.flagged ? t('sockless_mail', 'Remove flag') : t('sockless_mail', 'Flag') }}
 						</NcActionButton>
-						<NcActionButton close-after-click @click="askMove([row.message.id])">
+						<NcActionButton close-after-click @click="askMove(row, [row.message.id])">
 							<template #icon>
 								<NcIconSvgWrapper :path="mdiFolderMoveOutline" />
 							</template>
 							{{ t('sockless_mail', 'Move…') }}
 						</NcActionButton>
-						<NcActionButton close-after-click @click="remove([row.message.id])">
+						<NcActionButton close-after-click @click="remove(row, [row.message.id])">
 							<template #icon>
 								<NcIconSvgWrapper :path="mdiDeleteOutline" />
 							</template>
@@ -106,56 +113,88 @@ import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcListItem from '@nextcloud/vue/components/NcListItem'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { computed } from 'vue'
 import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { accountsState } from '../store/accounts.js'
-import { loadMore, mailboxState, openMessage, selectFolder } from '../store/mailbox.js'
-import { clearSearch, runSearch, searchMore, searchState as search } from '../store/search.js'
+import { loadMore, mailboxState, openMessage } from '../store/mailbox.js'
+import { clearSearch, currentScope, runSearch, searchMore, searchState as search } from '../store/search.js'
+import { loadMoreUnified, unifiedState as unified } from '../store/unified.js'
 
 const state = mailboxState.messages
-const openId = computed(() => mailboxState.open.id)
-const folderName = computed(() => {
+const unifiedShown = computed(() => !!mailboxState.selected.unified)
+const scope = computed(() => currentScope())
+const listName = computed(() => {
+	if (unifiedShown.value) {
+		return t('sockless_mail', 'All inboxes')
+	}
 	const { accountId, folderId } = mailboxState.selected
 	return mailboxState.folders[accountId]?.list.find((f) => f.id === folderId)?.name ?? ''
 })
 
-/** What the list shows: the folder's messages, or search results. */
-const view = computed(() => search.active
-	? { loading: search.loading, error: search.error, loadingMore: search.loadingMore, canLoadMore: !!search.nextBefore, loadMore: searchMore }
-	: { loading: state.loading, error: state.error, loadingMore: state.loadingMore, canLoadMore: !!state.nextBefore, loadMore })
+/** What the list shows: search results, the unified inbox, or the folder's messages. */
+const view = computed(() => {
+	if (search.active) {
+		return { loading: search.loading, error: search.error, loadingMore: search.loadingMore, canLoadMore: !!search.nextBefore, loadMore: searchMore }
+	}
+	if (unifiedShown.value) {
+		return { loading: unified.loading, error: unified.error, loadingMore: unified.loadingMore, canLoadMore: !!unified.nextBefore, loadMore: loadMoreUnified }
+	}
+	return { loading: state.loading, error: state.error, loadingMore: state.loadingMore, canLoadMore: !!state.nextBefore, loadMore }
+})
 
-const rows = computed(() => search.active
-	? search.hits.map((h) => ({ ...h, key: `${h.accountId}/${h.folderId}/${h.message.id}`, location: search.scope === 'all' ? location(h) : null }))
-	: state.list.map((message) => ({ ...mailboxState.selected, message, key: message.id, location: null })))
+/** Every row carries its folder ({ accountId, folderId }), which is where its actions go. */
+const rows = computed(() => {
+	const hitKey = (h) => `${h.accountId}/${h.folderId}/${h.message.id}`
+	if (search.active) {
+		return search.hits.map((h) => ({ ...h, key: hitKey(h), location: scope.value === 'all' ? location(h) : null }))
+	}
+	if (unifiedShown.value) {
+		return unified.list.map((h) => ({ ...h, key: hitKey(h), location: accountName(h.accountId) }))
+	}
+	const { accountId, folderId } = mailboxState.selected
+	return state.list.map((message) => ({ accountId, folderId, message, key: message.id, location: null }))
+})
+
+const accountErrors = computed(() => (unifiedShown.value && !search.active ? unified.errors : []))
 
 const countText = computed(() => {
-	if (!search.active) {
-		return n('sockless_mail', '{count} message', '{count} messages', state.total, { count: state.total })
+	if (search.active) {
+		return search.more
+			? t('sockless_mail', 'First {count} results', { count: search.hits.length })
+			: n('sockless_mail', '{count} result', '{count} results', search.total, { count: search.total })
 	}
-	return search.more
-		? t('sockless_mail', 'First {count} results', { count: search.hits.length })
-		: n('sockless_mail', '{count} result', '{count} results', search.total, { count: search.total })
+	const total = unifiedShown.value ? unified.total : state.total
+	return n('sockless_mail', '{count} message', '{count} messages', total, { count: total })
 })
+
+const emptyText = computed(() => {
+	if (search.active) {
+		return t('sockless_mail', 'No messages found')
+	}
+	return unifiedShown.value ? t('sockless_mail', 'No messages in your inboxes') : t('sockless_mail', 'No messages in this folder')
+})
+
+function accountName(accountId) {
+	return accountsState.accounts.find((a) => a.id === accountId)?.displayName ?? ''
+}
 
 /** "Account › Folder" for results from everywhere. */
 function location(hit) {
-	const account = accountsState.accounts.find((a) => a.id === hit.accountId)?.displayName ?? ''
 	const folder = mailboxState.folders[hit.accountId]?.list.find((f) => f.id === hit.folderId)?.name
 		?? (hit.folderFullName.toUpperCase() === 'INBOX' ? t('sockless_mail', 'Inbox') : hit.folderFullName)
-	return `${account} › ${folder}`
+	return `${accountName(hit.accountId)} › ${folder}`
 }
 
-function isSelected(row) {
-	return row.accountId === mailboxState.selected.accountId && row.folderId === mailboxState.selected.folderId
+function isOpen(row) {
+	const open = mailboxState.open
+	return row.message.id === open.id && row.accountId === open.accountId && row.folderId === open.folderId
 }
 
-/** A result from another folder opens there, so the message view's actions apply to its folder. */
+/** Opens the message where it is listed; the selected folder stays as it is. */
 function open(row) {
-	if (!isSelected(row)) {
-		selectFolder(row.accountId, row.folderId)
-	}
-	openMessage(row.message.id)
+	openMessage(row, row.message.id)
 }
 
 /** Switching the scope searches again, or just remembers the choice when there is nothing to search. */
@@ -238,5 +277,9 @@ function sender(message) {
 	display: block;
 	color: var(--color-text-maxcontrast);
 	font-size: 0.9em;
+}
+
+.message-list__account-error {
+	margin: 4px 8px;
 }
 </style>

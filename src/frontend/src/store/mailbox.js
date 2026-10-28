@@ -1,18 +1,24 @@
 import { reactive } from 'vue'
 import { apiBase, apiGet, apiSend } from '../api.js'
 import { dropHits, searchState } from './search.js'
+import { INBOX_ID, refreshUnified, unifiedState } from './unified.js'
 
 /**
  * Folders, the message list of the selected folder and the open message. Everything is read
  * from the API on demand; polling (App.vue) asks what changed in the selected folder since the
  * list's token, and refreshes the folder counts.
+ *
+ * A message is addressed by where it lives ({ accountId, folderId }) and its id: lists can show
+ * messages of other folders (search results, the unified inbox), so actions take the location
+ * of the message rather than assume the selected folder. selected.unified marks the unified
+ * inbox (see unified.js); accountId and folderId are null then.
  */
 export const mailboxState = reactive({
 	/** accountId -> { list, loading, error } */
 	folders: {},
 	selected: { accountId: null, folderId: null },
 	messages: { list: [], nextBefore: null, total: 0, uidValidity: null, token: null, loading: false, loadingMore: false, error: null },
-	open: { id: null, message: null, loading: false, error: null },
+	open: { id: null, accountId: null, folderId: null, message: null, loading: false, error: null },
 })
 
 const PAGE_SIZE = 50
@@ -160,7 +166,7 @@ export async function refreshMessages() {
 		if (changes.removed.length) {
 			const removed = new Set(changes.removed)
 			state.list = state.list.filter((m) => !removed.has(m.id))
-			if (removed.has(mailboxState.open.id)) {
+			if (isOpen({ accountId, folderId }, removed)) {
 				closeMessage()
 			}
 		}
@@ -201,7 +207,7 @@ async function reloadList(accountId, folderId) {
 
 /** The selected folder's counts in the navigation, from a page or a changes answer. */
 function updateFolderCounts({ total, unread }) {
-	const folder = selectedFolderEntry()
+	const folder = folderEntry(mailboxState.selected)
 	if (folder && folder.total !== null && folder.total !== undefined) {
 		folder.total = total
 	}
@@ -211,43 +217,61 @@ function updateFolderCounts({ total, unread }) {
 }
 
 /**
+ * @param {{accountId: string, folderId: string}} where the message's folder
  * @param {string} messageId message to open
  * @param {boolean} allowRemote load remote images through the proxy
  */
-export async function openMessage(messageId, allowRemote = false) {
-	const { accountId, folderId } = mailboxState.selected
-	Object.assign(mailboxState.open, { id: messageId, loading: !allowRemote, error: null })
+export async function openMessage(where, messageId, allowRemote = false) {
+	const { accountId, folderId } = where
+	const ids = new Set([messageId])
+	Object.assign(mailboxState.open, { id: messageId, accountId, folderId, loading: !allowRemote, error: null })
 	if (!allowRemote) {
 		mailboxState.open.message = null
 	}
 	try {
 		const message = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages/${messageId}${allowRemote ? '?remote=allow' : ''}`)
-		if (mailboxState.open.id === messageId) {
+		if (isOpen(where, ids)) {
 			mailboxState.open.message = message
 			// Opening a message reads it; the server side only fetched with BODY.PEEK.
 			if (!message.seen) {
-				setFlags([messageId], { seen: true }).catch(() => {})
+				setFlags(where, [messageId], { seen: true }).catch(() => {})
 			}
 		}
 	} catch (e) {
-		if (mailboxState.open.id === messageId) {
+		if (isOpen(where, ids)) {
 			mailboxState.open.error = toError(e)
 		}
 	} finally {
-		if (mailboxState.open.id === messageId) {
+		if (isOpen(where, ids)) {
 			mailboxState.open.loading = false
 		}
 	}
 }
 
 export function closeMessage() {
-	Object.assign(mailboxState.open, { id: null, message: null, loading: false, error: null })
+	Object.assign(mailboxState.open, { id: null, accountId: null, folderId: null, message: null, loading: false, error: null })
+}
+
+/** The open message's folder, for actions on it. */
+export function openLocation() {
+	const { accountId, folderId } = mailboxState.open
+	return { accountId, folderId }
+}
+
+/** Whether the open message is one of messageIds (a Set) in the given folder. */
+function isOpen(where, messageIds) {
+	const open = mailboxState.open
+	return open.accountId === where.accountId && open.folderId === where.folderId && messageIds.has(open.id)
 }
 
 /** Removes everything cached for a deleted or changed account. */
 export function forgetAccount(accountId) {
 	delete mailboxState.folders[accountId]
 	searchState.hits = searchState.hits.filter((h) => h.accountId !== accountId)
+	unifiedState.list = unifiedState.list.filter((h) => h.accountId !== accountId)
+	if (mailboxState.open.accountId === accountId) {
+		closeMessage()
+	}
 	if (mailboxState.selected.accountId === accountId) {
 		mailboxState.selected = { accountId: null, folderId: null }
 		closeMessage()
@@ -291,6 +315,11 @@ export function hasPendingWrites() {
 	return pendingWrites > 0
 }
 
+/** The change counters, for other stores that merge server snapshots the way refreshMessages does. */
+export function writeCounters() {
+	return { generation: writeGeneration, completed: writesCompleted }
+}
+
 async function send(method, path, body) {
 	pendingWrites++
 	writeGeneration++
@@ -315,129 +344,164 @@ function afterTransfer(accountId, targetFolderId) {
 	if (targetFolderId && isSelected(accountId, targetFolderId)) {
 		refreshMessages()
 	}
+	if (targetFolderId === INBOX_ID && mailboxState.selected.unified) {
+		refreshUnified()
+	}
 }
 
-function folderBase() {
-	const { accountId, folderId } = mailboxState.selected
+function folderBase({ accountId, folderId }) {
 	return `/accounts/${accountId}/folders/${folderId}`
 }
 
-function selectedFolderEntry() {
-	const { accountId, folderId } = mailboxState.selected
+function folderEntry({ accountId, folderId }) {
 	return mailboxState.folders[accountId]?.list.find((f) => f.id === folderId)
 }
 
-/** Messages of the open list, of search results from the same folder, and the open message with the given ids. */
-function messagesById(ids) {
+/**
+ * Every copy of the given messages the UI holds: in the message list (when it shows their
+ * folder), in search results, in the unified inbox and as the open message.
+ *
+ * @param {{accountId: string, folderId: string}} where the messages' folder
+ * @param {string[]} ids message ids
+ */
+export function messagesById(where, ids) {
 	const wanted = new Set(ids)
+	const inFolder = (h) => h.accountId === where.accountId && h.folderId === where.folderId && wanted.has(h.message.id)
 	return [
-		...mailboxState.messages.list.filter((m) => wanted.has(m.id)),
-		...searchState.hits.filter((h) => isSelected(h.accountId, h.folderId) && wanted.has(h.message.id)).map((h) => h.message),
-		...(mailboxState.open.message && wanted.has(mailboxState.open.message.id) ? [mailboxState.open.message] : []),
+		...(isSelected(where.accountId, where.folderId) ? mailboxState.messages.list.filter((m) => wanted.has(m.id)) : []),
+		...searchState.hits.filter(inFolder).map((h) => h.message),
+		...unifiedState.list.filter(inFolder).map((h) => h.message),
+		...(mailboxState.open.message && isOpen(where, wanted) ? [mailboxState.open.message] : []),
 	]
 }
 
 /**
- * Sets \Seen and/or \Flagged in the selected folder. Optimistic: the list, the open message
- * and the folder's unread count change at once and are restored if the server refuses.
+ * Sets \Seen and/or \Flagged. Optimistic: the lists, the open message and the unread counts
+ * change at once and are restored if the server refuses.
  *
- * @param {string[]} messageIds messages of the selected folder
+ * @param {{accountId: string, folderId: string}} where the messages' folder
+ * @param {string[]} messageIds messages of that folder
  * @param {{seen?: boolean, flagged?: boolean}} flags flags to set (true) or clear (false)
  */
-export async function setFlags(messageIds, { seen, flagged }) {
-	const targets = messagesById(messageIds)
+export async function setFlags(where, messageIds, { seen, flagged }) {
+	const targets = messagesById(where, messageIds)
 	const before = targets.map((m) => ({ m, seen: m.seen, flagged: m.flagged }))
-	const folder = selectedFolderEntry()
-	const unreadBefore = folder?.unread
-	if (seen !== undefined && folder?.unread !== undefined && folder.unread !== null) {
-		const listed = mailboxState.messages.list.filter((m) => messageIds.includes(m.id))
-		const changed = listed.filter((m) => m.seen !== seen).length
-		folder.unread = Math.max(0, folder.unread + (seen ? -changed : changed))
+	const folder = folderEntry(where)
+	const unreadBefore = { folder: folder?.unread, unified: unifiedState.unread }
+	if (seen !== undefined) {
+		// The same message may be held several times (list entry, open message): count it once.
+		const changed = new Set(targets.filter((m) => m.seen !== seen).map((m) => m.id)).size
+		const adjust = (count) => Math.max(0, count + (seen ? -changed : changed))
+		if (folder && folder.unread !== undefined && folder.unread !== null) {
+			folder.unread = adjust(folder.unread)
+		}
+		if (where.folderId === INBOX_ID && unifiedState.unread !== null) {
+			unifiedState.unread = adjust(unifiedState.unread)
+		}
 	}
 	for (const m of targets) {
 		if (seen !== undefined) m.seen = seen
 		if (flagged !== undefined) m.flagged = flagged
 	}
 	try {
-		await send('PUT', `${folderBase()}/messages/flags`, { messageIds, seen, flagged })
+		await send('PUT', `${folderBase(where)}/messages/flags`, { messageIds, seen, flagged })
 	} catch (e) {
 		for (const { m, seen: s, flagged: f } of before) {
 			m.seen = s
 			m.flagged = f
 		}
-		if (folder) folder.unread = unreadBefore
+		if (folder) folder.unread = unreadBefore.folder
+		unifiedState.unread = unreadBefore.unified
 		throw e
 	}
 }
 
-/** Takes messages out of the list (and closes the view if one of them is open); returns an undo. */
-function removeFromList(messageIds) {
+/** Takes messages out of every list (and closes the view if one of them is open); returns an undo. */
+function removeFromList(where, messageIds) {
+	const { accountId, folderId } = where
+	const ids = new Set(messageIds)
 	const state = mailboxState.messages
-	const previous = [...state.list]
-	const previousTotal = state.total
-	const folder = selectedFolderEntry()
+	const shown = isSelected(accountId, folderId)
+	const previous = { list: state.list, total: state.total, unified: unifiedState.list, unifiedTotal: unifiedState.total, unifiedUnread: unifiedState.unread }
+	const folder = folderEntry(where)
 	const previousUnread = folder?.unread
-	const removed = state.list.filter((m) => messageIds.includes(m.id))
 	const previousHits = searchState.hits
-	state.list = state.list.filter((m) => !messageIds.includes(m.id))
-	state.total = Math.max(0, state.total - removed.length)
-	if (folder && folder.unread !== null && folder.unread !== undefined) {
-		folder.unread = Math.max(0, folder.unread - removed.filter((m) => !m.seen).length)
+	// Each message counted once, wherever it is listed.
+	const unseen = new Set(messagesById(where, messageIds).filter((m) => !m.seen).map((m) => m.id)).size
+	if (shown) {
+		const remaining = state.list.filter((m) => !ids.has(m.id))
+		state.total = Math.max(0, state.total - (state.list.length - remaining.length))
+		state.list = remaining
 	}
-	if (messageIds.includes(mailboxState.open.id)) {
+	const unifiedRemoved = unifiedState.list.filter((h) => h.accountId === accountId && h.folderId === folderId && ids.has(h.message.id))
+	if (unifiedRemoved.length) {
+		unifiedState.list = unifiedState.list.filter((h) => !unifiedRemoved.includes(h))
+		unifiedState.total = Math.max(0, unifiedState.total - unifiedRemoved.length)
+		if (unifiedState.unread !== null) {
+			unifiedState.unread = Math.max(0, unifiedState.unread - unifiedRemoved.filter((h) => !h.message.seen).length)
+		}
+	}
+	if (folder && folder.unread !== null && folder.unread !== undefined) {
+		folder.unread = Math.max(0, folder.unread - unseen)
+	}
+	if (isOpen(where, ids)) {
 		closeMessage()
 	}
-	const { accountId, folderId } = mailboxState.selected
 	dropHits(messageIds, accountId, folderId)
 	const hitsAfterDrop = searchState.hits
+	const unifiedAfterDrop = unifiedState.list
 	return () => {
 		if (folder) folder.unread = previousUnread
 		// Unless a new search replaced the results meanwhile.
 		if (searchState.hits === hitsAfterDrop) {
 			searchState.hits = previousHits
 		}
+		// Unless the unified inbox was reloaded or merged changes meanwhile.
+		if (unifiedState.list === unifiedAfterDrop) {
+			Object.assign(unifiedState, { list: previous.unified, total: previous.unifiedTotal, unread: previous.unifiedUnread })
+		}
 		// The user may have switched folders while the request ran; that list must stay as it is.
-		if (isSelected(accountId, folderId)) {
-			state.list = previous
-			state.total = previousTotal
+		if (shown && isSelected(accountId, folderId)) {
+			state.list = previous.list
+			state.total = previous.total
 		}
 	}
 }
 
 /**
- * @param {string[]} messageIds messages of the selected folder
- * @param {string} targetFolderId destination
+ * @param {{accountId: string, folderId: string}} where the messages' folder
+ * @param {string[]} messageIds messages of that folder
+ * @param {string} targetFolderId destination, in the same account
  */
-export async function moveMessages(messageIds, targetFolderId) {
-	const accountId = mailboxState.selected.accountId
-	const undo = removeFromList(messageIds)
+export async function moveMessages(where, messageIds, targetFolderId) {
+	const undo = removeFromList(where, messageIds)
 	try {
-		await send('POST', `${folderBase()}/messages/move`, { messageIds, targetFolderId })
+		await send('POST', `${folderBase(where)}/messages/move`, { messageIds, targetFolderId })
 	} catch (e) {
 		undo()
 		throw e
 	}
-	afterTransfer(accountId, targetFolderId)
+	afterTransfer(where.accountId, targetFolderId)
 }
 
 /**
  * Moves to Trash, or deletes permanently in Trash. Throws an ActionError with code "no_trash"
  * when the account has no Trash folder; call again with permanent = true after asking.
  *
- * @param {string[]} messageIds messages of the selected folder
+ * @param {{accountId: string, folderId: string}} where the messages' folder
+ * @param {string[]} messageIds messages of that folder
  * @param {boolean} permanent skip the Trash
  */
-export async function deleteMessages(messageIds, permanent = false) {
-	const accountId = mailboxState.selected.accountId
-	const undo = removeFromList(messageIds)
+export async function deleteMessages(where, messageIds, permanent = false) {
+	const undo = removeFromList(where, messageIds)
 	let result
 	try {
-		result = await send('POST', `${folderBase()}/messages/delete`, { messageIds, permanent })
+		result = await send('POST', `${folderBase(where)}/messages/delete`, { messageIds, permanent })
 	} catch (e) {
 		undo()
 		throw e
 	}
-	afterTransfer(accountId, result.trashFolderId)
+	afterTransfer(where.accountId, result.trashFolderId)
 	return result
 }
 

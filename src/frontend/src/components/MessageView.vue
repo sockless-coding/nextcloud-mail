@@ -44,25 +44,25 @@
 						</template>
 						{{ t('sockless_mail', 'Forward') }}
 					</NcButton>
-					<NcButton variant="tertiary" @click="toggleSeen(message)">
+					<NcButton variant="tertiary" @click="toggleSeen(where, message)">
 						<template #icon>
 							<NcIconSvgWrapper :path="message.seen ? mdiEmailOutline : mdiEmailOpenOutline" />
 						</template>
 						{{ message.seen ? t('sockless_mail', 'Mark as unread') : t('sockless_mail', 'Mark as read') }}
 					</NcButton>
-					<NcButton variant="tertiary" :pressed="message.flagged" @click="toggleFlagged(message)">
+					<NcButton variant="tertiary" :pressed="message.flagged" @click="toggleFlagged(where, message)">
 						<template #icon>
 							<NcIconSvgWrapper :path="message.flagged ? mdiStar : mdiStarOutline" />
 						</template>
 						{{ message.flagged ? t('sockless_mail', 'Flagged') : t('sockless_mail', 'Flag') }}
 					</NcButton>
-					<NcButton variant="tertiary" @click="askMove([message.id])">
+					<NcButton variant="tertiary" @click="askMove(where, [message.id])">
 						<template #icon>
 							<NcIconSvgWrapper :path="mdiFolderMoveOutline" />
 						</template>
 						{{ t('sockless_mail', 'Move…') }}
 					</NcButton>
-					<NcButton variant="tertiary" @click="remove([message.id])">
+					<NcButton variant="tertiary" @click="remove(where, [message.id])">
 						<template #icon>
 							<NcIconSvgWrapper :path="mdiDeleteOutline" />
 						</template>
@@ -74,7 +74,7 @@
 			<NcNoteCard v-if="message.hasRemoteContent && !message.remoteContentAllowed" type="info">
 				<div class="message-view__remote">
 					<span>{{ t('sockless_mail', 'Remote images are blocked to protect your privacy.') }}</span>
-					<NcButton variant="secondary" @click="openMessage(message.id, true)">
+					<NcButton variant="secondary" @click="openMessage(where, message.id, true)">
 						{{ t('sockless_mail', 'Show images') }}
 					</NcButton>
 				</div>
@@ -86,7 +86,7 @@
 				<h3>{{ n('sockless_mail', '{count} attachment', '{count} attachments', message.attachments.length, { count: message.attachments.length }) }}</h3>
 				<ul>
 					<li v-for="attachment in message.attachments" :key="attachment.partId">
-						<a :href="partUrl(selected.accountId, selected.folderId, message.id, attachment.partId, true)"
+						<a :href="partUrl(where.accountId, where.folderId, message.id, attachment.partId, true)"
 							class="message-view__attachment"
 							download>
 							<NcIconSvgWrapper :path="mdiPaperclip" :size="20" />
@@ -118,7 +118,8 @@ import { mailboxState, openMessage, partUrl } from '../store/mailbox.js'
 import MessageBody from './MessageBody.vue'
 
 const open = mailboxState.open
-const selected = computed(() => mailboxState.selected)
+// Where the open message lives; it can be another folder than the selected one (search, unified inbox).
+const where = computed(() => ({ accountId: open.accountId, folderId: open.folderId }))
 const message = computed(() => open.message)
 const sender = computed(() => message.value?.from[0] ?? null)
 const senderName = computed(() => sender.value?.name || sender.value?.address || t('sockless_mail', 'Unknown sender'))

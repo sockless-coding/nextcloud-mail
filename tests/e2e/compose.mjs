@@ -38,7 +38,7 @@ async function pollFor(text) {
 
 async function openFolder(name) {
 	await navRow(name).locator('a').first().click()
-	await page.locator('.message-list__header h2', { hasText: name }).waitFor()
+	await page.locator('.message-list__header h2', { hasText: new RegExp(`^${name}$`) }).waitFor()
 }
 
 async function openMessage(text) {

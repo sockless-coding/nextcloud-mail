@@ -101,3 +101,22 @@ public sealed record SearchHit(Guid AccountId, string FolderId, string FolderFul
 
 /// <summary>Newest first; <see cref="More"/> means there were more matches than returned.</summary>
 public sealed record CachedSearchResult(IReadOnlyList<SearchHit> Hits, bool More);
+
+/// <summary>
+/// The inboxes of all of a user's accounts as one list, newest first, served from the header
+/// cache. <see cref="NextBefore"/> is the cursor for the next (older) page; <see cref="Token"/> is
+/// what to pass to the unified changes endpoint. Accounts whose inbox could not be synced are in
+/// <see cref="Errors"/>; their messages are shown as last cached.
+/// </summary>
+public sealed record UnifiedPage(
+    IReadOnlyList<SearchHit> Messages, string? NextBefore, int Total, int? Unread, string Token, IReadOnlyList<AccountError> Errors);
+
+/// <summary>Like <see cref="Sync.FolderChanges"/>, across the inboxes of all accounts.</summary>
+public sealed record UnifiedChanges(
+    string Token, bool Reset, int Total, int? Unread,
+    IReadOnlyList<SearchHit> Messages, IReadOnlyList<RemovedHit> Removed, IReadOnlyList<AccountError> Errors);
+
+public sealed record RemovedHit(Guid AccountId, string FolderId, string MessageId);
+
+/// <summary>Why one account's part of a combined view is missing or stale; codes as the per-account endpoints use them.</summary>
+public sealed record AccountError(Guid AccountId, string Error, string Message);

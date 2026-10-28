@@ -3,7 +3,7 @@ import { t } from '@nextcloud/l10n'
 import { reactive } from 'vue'
 import { apiGet, apiSend, apiUpload } from '../api.js'
 import { accountsState } from './accounts.js'
-import { ActionError, loadFolders, mailboxState, refreshMessages } from './mailbox.js'
+import { ActionError, loadFolders, mailboxState, messagesById, openLocation, refreshMessages } from './mailbox.js'
 
 /**
  * The message being written. One composer at a time; it is rendered by App.vue whenever
@@ -18,9 +18,9 @@ function emptyDraft(accountId) {
 	return { accountId, to: '', cc: '', bcc: '', subject: '', text: '', source: null, forwarded: [], uploads: [] }
 }
 
-/** New message from the selected account (or the first one). */
+/** New message from the selected account (in the unified inbox: the open message's, or the first one). */
 export function composeNew() {
-	const accountId = mailboxState.selected.accountId ?? accountsState.accounts[0]?.id
+	const accountId = mailboxState.selected.accountId ?? mailboxState.open.accountId ?? accountsState.accounts[0]?.id
 	if (accountId) {
 		composer.draft = emptyDraft(accountId)
 	}
@@ -32,7 +32,7 @@ export function composeNew() {
  * @param {'reply'|'replyAll'|'forward'} mode what to do
  */
 export async function composeReply(mode) {
-	const { accountId, folderId } = mailboxState.selected
+	const { accountId, folderId } = openLocation()
 	const messageId = mailboxState.open.id
 	let draft
 	try {
@@ -145,8 +145,7 @@ function markOriginal(draft) {
 	if (!draft.source || draft.source.mode === 'forward') {
 		return
 	}
-	const original = mailboxState.messages.list.find((m) => m.id === draft.source.messageId)
-	if (original) {
+	for (const original of messagesById({ accountId: draft.accountId, folderId: draft.source.folderId }, [draft.source.messageId])) {
 		original.answered = true
 	}
 }

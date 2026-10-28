@@ -1,6 +1,6 @@
 <template>
 	<!-- Closing goes through NcDialog's buttons (see AccountDialog.vue for why). -->
-	<NcDialog :name="n('sockless_mail', 'Move message', 'Move {count} messages', messageIds.length, { count: messageIds.length })"
+	<NcDialog :name="n('sockless_mail', 'Move message', 'Move {count} messages', request.messageIds.length, { count: request.messageIds.length })"
 		:open="true"
 		size="small"
 		:buttons="buttons"
@@ -33,13 +33,14 @@ import { computed, ref } from 'vue'
 import { moveTargets, moveTo } from '../store/actions.js'
 
 const props = defineProps({
-	messageIds: { type: Array, required: true },
+	/** { where, messageIds } from dialogs.move */
+	request: { type: Object, required: true },
 })
 const emit = defineEmits(['close'])
 
 const filter = ref('')
 const target = ref('')
-const targets = moveTargets()
+const targets = moveTargets(props.request.where)
 const shown = computed(() => {
 	const term = filter.value.trim().toLowerCase()
 	return term ? targets.filter((f) => f.path.toLowerCase().includes(term)) : targets
@@ -53,7 +54,7 @@ const buttons = computed(() => [
 		disabled: !target.value,
 		// The list updates at once; failures arrive as a toast after the dialog closed.
 		callback: () => {
-			moveTo(props.messageIds, target.value)
+			moveTo(props.request, target.value)
 		},
 	},
 ])

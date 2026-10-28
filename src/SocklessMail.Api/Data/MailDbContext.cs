@@ -78,6 +78,7 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             message.ToTable("messages");
             message.HasKey(m => new { m.FolderId, m.Uid });
             message.HasIndex(m => new { m.FolderId, m.ChangeSeq });
+            message.HasIndex(m => new { m.FolderId, m.Date });
             message.HasOne<CachedFolder>().WithMany().HasForeignKey(m => m.FolderId).OnDelete(DeleteBehavior.Cascade);
             message.Property(m => m.OwnerUserId).HasMaxLength(64);
             message.Property(m => m.Subject).HasMaxLength(2000);

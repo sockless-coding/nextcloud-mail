@@ -1,16 +1,17 @@
 import { showError, showSuccess } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import { reactive } from 'vue'
-import { createFolder, deleteMessages, mailboxState, moveMessages, renameFolder, setFlags } from './mailbox.js'
+import { createFolder, deleteMessages, loadFolders, mailboxState, moveMessages, renameFolder, setFlags } from './mailbox.js'
 
 /**
  * User-facing message and folder actions: run the store change, report failures as toasts and
- * drive the shared dialogs (rendered once in App.vue).
+ * drive the shared dialogs (rendered once in App.vue). Message actions take the messages'
+ * folder, { accountId, folderId } (see mailbox.js).
  */
 export const dialogs = reactive({
-	/** Message ids waiting for a target folder. */
+	/** Messages waiting for a target folder: { where, messageIds }. */
 	move: null,
-	/** Message ids waiting for confirmation to delete permanently (account without Trash). */
+	/** Messages waiting for confirmation to delete permanently (account without Trash): { where, messageIds }. */
 	confirmPermanent: null,
 	/** Folder name prompt: { title, label, value, submit(name) -> Promise } */
 	folderName: null,
@@ -20,49 +21,53 @@ function fail(what, e) {
 	showError(t('sockless_mail', '{action} failed: {error}', { action: what, error: e.message }))
 }
 
-export async function toggleSeen(message) {
+export async function toggleSeen(where, message) {
 	try {
-		await setFlags([message.id], { seen: !message.seen })
+		await setFlags(where, [message.id], { seen: !message.seen })
 	} catch (e) {
 		fail(message.seen ? t('sockless_mail', 'Marking as unread') : t('sockless_mail', 'Marking as read'), e)
 	}
 }
 
-export async function toggleFlagged(message) {
+export async function toggleFlagged(where, message) {
 	try {
-		await setFlags([message.id], { flagged: !message.flagged })
+		await setFlags(where, [message.id], { flagged: !message.flagged })
 	} catch (e) {
 		fail(t('sockless_mail', 'Flagging'), e)
 	}
 }
 
-export function askMove(messageIds) {
-	dialogs.move = messageIds
+export async function askMove(where, messageIds) {
+	// In the unified inbox the account's folders may not have been loaded yet.
+	if (!mailboxState.folders[where.accountId]?.list.length) {
+		await loadFolders(where.accountId)
+	}
+	dialogs.move = { where: { accountId: where.accountId, folderId: where.folderId }, messageIds }
 }
 
-export async function moveTo(messageIds, targetFolderId) {
+export async function moveTo({ where, messageIds }, targetFolderId) {
 	try {
-		await moveMessages(messageIds, targetFolderId)
+		await moveMessages(where, messageIds, targetFolderId)
 	} catch (e) {
 		fail(t('sockless_mail', 'Moving'), e)
 	}
 }
 
-export async function remove(messageIds) {
+export async function remove(where, messageIds) {
 	try {
-		await deleteMessages(messageIds)
+		await deleteMessages(where, messageIds)
 	} catch (e) {
 		if (e.code === 'no_trash') {
-			dialogs.confirmPermanent = messageIds
+			dialogs.confirmPermanent = { where, messageIds }
 		} else {
 			fail(t('sockless_mail', 'Deleting'), e)
 		}
 	}
 }
 
-export async function removePermanently(messageIds) {
+export async function removePermanently({ where, messageIds }) {
 	try {
-		await deleteMessages(messageIds, true)
+		await deleteMessages(where, messageIds, true)
 	} catch (e) {
 		fail(t('sockless_mail', 'Deleting'), e)
 	}
@@ -90,9 +95,8 @@ export function askRenameFolder(accountId, folder) {
 	}
 }
 
-/** Folders the selected messages can be moved to: selectable, not the current one, with their path. */
-export function moveTargets() {
-	const { accountId, folderId } = mailboxState.selected
+/** Folders of the messages' account they can be moved to: selectable, not their own, with their path. */
+export function moveTargets({ accountId, folderId }) {
 	const folders = mailboxState.folders[accountId]?.list ?? []
 	const byId = new Map(folders.map((f) => [f.id, f]))
 	const path = (f) => (f.parentId && byId.has(f.parentId) ? `${path(byId.get(f.parentId))} / ${f.name}` : f.name)

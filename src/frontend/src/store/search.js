@@ -43,6 +43,11 @@ function folderHits(page) {
 	return page.messages.map((message) => ({ accountId, folderId, folderFullName: null, message }))
 }
 
+/** The scope a search runs in: the unified inbox has no single folder, so it searches everywhere. */
+export function currentScope() {
+	return mailboxState.selected.unified ? 'all' : searchState.scope
+}
+
 export async function runSearch() {
 	const query = searchState.query.trim()
 	if (!query) {
@@ -52,7 +57,7 @@ export async function runSearch() {
 	const run = ++generation
 	Object.assign(searchState, { active: true, loading: true, error: null, hits: [], total: 0, nextBefore: null, more: false })
 	try {
-		if (searchState.scope === 'folder') {
+		if (currentScope() === 'folder') {
 			const page = await apiGet(folderPath(query))
 			if (run === generation) {
 				Object.assign(searchState, { hits: folderHits(page), total: page.total, nextBefore: page.nextBefore })

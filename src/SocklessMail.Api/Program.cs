@@ -53,6 +53,7 @@ builder.Services.AddHostedService<ImapConnectionJanitor>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<MailboxService>();
 builder.Services.AddScoped<FolderCache>();
+builder.Services.AddScoped<UnifiedInbox>();
 builder.Services.AddSingleton<SyncLocks>();
 builder.Services.AddSingleton(new WatcherOptions());
 builder.Services.AddSingleton<UserActivity>();

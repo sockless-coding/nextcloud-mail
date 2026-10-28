@@ -125,6 +125,14 @@ public sealed partial class MailboxService(
         return await cache.ChangesAsync(await CurrentStateAsync(account, folderId, fullName, ct), since, ct);
     }
 
+    /// <summary>The INBOX cache state for the unified inbox, synced now unless an IDLE watcher already keeps it current.</summary>
+    public Task<CachedFolder> InboxStateAsync(MailAccount account, CancellationToken ct) =>
+        CurrentStateAsync(account, MailboxIds.FolderId("INBOX"), "INBOX", ct);
+
+    /// <summary>Syncs the INBOX and caches at least <paramref name="need"/> more messages below its window.</summary>
+    public Task<CachedFolder> ExtendInboxAsync(MailAccount account, int need, CancellationToken ct) =>
+        SyncAsync(account, MailboxIds.FolderId("INBOX"), "INBOX", (null, need), ct);
+
     /// <summary>The folder's cache state, synced now unless an IDLE watcher already keeps it current.</summary>
     private async Task<CachedFolder> CurrentStateAsync(MailAccount account, string folderId, string fullName, CancellationToken ct) =>
         (watchers.IsCurrent(account.Id, fullName) ? await cache.FindAsync(account.Id, fullName, ct) : null)

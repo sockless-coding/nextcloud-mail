@@ -205,6 +205,8 @@ namespace SocklessMail.Api.Data.Migrations
 
                     b.HasIndex("FolderId", "ChangeSeq");
 
+                    b.HasIndex("FolderId", "Date");
+
                     b.ToTable("messages", (string)null);
                 });
 

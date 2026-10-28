@@ -9,6 +9,18 @@
 						<NcIconSvgWrapper :path="mdiPencilOutline" />
 					</template>
 				</NcAppNavigationNew>
+				<NcAppNavigationItem v-if="accountsState.accounts.length > 1"
+					class="unified-entry"
+					:name="t('sockless_mail', 'All inboxes')"
+					:active="!!mailboxState.selected.unified"
+					@click="openUnified">
+					<template #icon>
+						<NcIconSvgWrapper :path="mdiInboxMultipleOutline" />
+					</template>
+					<template v-if="unifiedState.unread" #counter>
+						<NcCounterBubble :count="unifiedState.unread" />
+					</template>
+				</NcAppNavigationItem>
 				<NcAppNavigationItem v-for="(account, index) in accountsState.accounts"
 					:key="account.id"
 					class="account-entry"
@@ -115,7 +127,7 @@
 			:show-details="!!mailboxState.open.id"
 			@update:show-details="(show) => !show && closeMessage()">
 			<template #list>
-				<MessageList v-if="mailboxState.selected.folderId" />
+				<MessageList v-if="mailboxState.selected.folderId || mailboxState.selected.unified" />
 				<NcEmptyContent v-else :name="t('sockless_mail', 'Choose a folder')" />
 			</template>
 			<MessageView v-if="mailboxState.open.id" />
@@ -134,7 +146,7 @@
 			@close="dialog.open = false" />
 
 		<MoveDialog v-if="dialogs.move"
-			:message-ids="dialogs.move"
+			:request="dialogs.move"
 			@close="dialogs.move = null" />
 
 		<FolderNameDialog v-if="dialogs.folderName"
@@ -158,7 +170,7 @@
 </template>
 
 <script setup>
-import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiDelete, mdiEmailOpenOutline, mdiEmailOutline, mdiFolderPlusOutline, mdiPencil, mdiPencilOutline, mdiPlus, mdiRefresh } from '@mdi/js'
+import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiDelete, mdiEmailOpenOutline, mdiEmailOutline, mdiFolderPlusOutline, mdiInboxMultipleOutline, mdiPencil, mdiPencilOutline, mdiPlus, mdiRefresh } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -168,6 +180,7 @@ import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcAppNavigationNew from '@nextcloud/vue/components/NcAppNavigationNew'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcContent from '@nextcloud/vue/components/NcContent'
+import NcCounterBubble from '@nextcloud/vue/components/NcCounterBubble'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -185,6 +198,7 @@ import { askNewFolder, dialogs, removePermanently } from './store/actions.js'
 import { composeNew, composer } from './store/compose.js'
 import { closeMessage, forgetAccount, hasPendingWrites, loadFolders, mailboxState, refreshMessages, selectFolder } from './store/mailbox.js'
 import { clearSearch } from './store/search.js'
+import { refreshUnified, showUnified, unifiedState } from './store/unified.js'
 
 /**
  * No push channel to the browser (see README); new mail is found by polling. The open folder is
@@ -306,17 +320,27 @@ async function poll(event) {
 	if (document.hidden || hasPendingWrites()) {
 		return
 	}
-	const accountId = mailboxState.selected.accountId
+	const { accountId, unified } = mailboxState.selected
 	const withFolders = event?.type === 'visibilitychange' || ++pollCount % FOLDER_POLL_EVERY === 0
+	// The unified inbox belongs to no account: refresh the counts of every account shown in the navigation.
+	const folderAccounts = !withFolders ? [] : unified ? Object.keys(mailboxState.folders) : [accountId].filter(Boolean)
 	await Promise.all([
-		refreshMessages(),
-		accountId && withFolders ? loadFolders(accountId, true) : Promise.resolve(),
+		unified ? refreshUnified() : refreshMessages(),
+		...folderAccounts.map((id) => loadFolders(id, true)),
 	])
+}
+
+function openUnified() {
+	clearSearch()
+	showUnified()
 }
 
 onMounted(async () => {
 	await loadAccounts()
-	if (accountsState.accounts.length) {
+	// With several accounts, start with all their inboxes together.
+	if (accountsState.accounts.length > 1) {
+		showUnified()
+	} else if (accountsState.accounts.length) {
 		await selectAccount(accountsState.accounts[0])
 	}
 	pollTimer = window.setInterval(poll, POLL_INTERVAL_MS)

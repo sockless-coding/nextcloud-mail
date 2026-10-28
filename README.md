@@ -5,14 +5,14 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 6b (search)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> Status: **phase 6c (unified inbox)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
 > (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
 > with remote images blocked by default, attachments), works with it (read/unread, flag, move,
 > delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
 > with a copy saved to Sent. Message lists come from a local header cache kept in sync with
 > QRESYNC/CONDSTORE and IMAP IDLE. Search covers the open folder on the server (message text
-> included) or all accounts from the cache. Still to come in phase 6: a unified inbox (6c) and
-> OAuth2 (6d).
+> included) or all accounts from the cache. With several accounts, "All inboxes" shows every
+> account's inbox in one list. Still to come in phase 6: OAuth2 (6d).
 
 ## Layout
 
@@ -58,6 +58,7 @@ node mail.mjs        # paging, sanitized view, remote images, attachments, polli
 node actions.mjs     # read/unread, flag, delete (with and without Trash), move, create/rename folders
 node compose.mjs     # new message with attachment, validation, reply, forward, copies in Sent
 node search.mjs      # folder search (body text), search across accounts, opening a result
+node unified.mjs     # all inboxes: merged order, reading, deleting and new mail across accounts
 ```
 
 They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console errors.
@@ -286,9 +287,28 @@ Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_
     - It covers only what the cache holds: folders shown before, as far back as they were paged.
     - It returns the 50 newest matches, saying when there are more.
   - Every word or "quoted phrase" must match. A search has at most 10 terms and 200 characters.
-  - Results from other folders show "Account › Folder". Opening one selects its folder, so the
-    message actions work on the right folder. Clicking a folder or account in the navigation
-    leaves the search.
+  - Results from other folders show "Account › Folder". They open in place, and their actions
+    (also in the list's menu) go to the folder they are in. Clicking a folder or account in the
+    navigation leaves the search.
+- **All inboxes** (shown with two or more accounts, and opened first then) lists the INBOX of
+  every account, newest first, from the header cache:
+  - `GET /api/unified/messages?before=<cursor>` syncs every account's INBOX at once, each in its
+    own service scope (or takes it as is while an IDLE watcher keeps it current), then merges
+    the cached rows by date, account id and UID. The cursor is that triple, so pages neither
+    skip nor repeat messages when dates are equal. Older pages read the cache without syncing.
+  - The cache holds a UID window per folder, the list is ordered by date. A page is only
+    served when every account has more than a page of cached messages below the cursor or its
+    whole INBOX cached; a shorter window is extended on the server first. This assumes UIDs
+    follow dates, as they do for delivered mail: messages appended with an old date (imports)
+    may appear later than their date suggests.
+  - An account whose server fails (unreachable, wrong password) does not fail the list: its
+    messages are shown as last cached, and `errors` names it, which the UI shows above the list.
+  - `GET /api/unified/changes?since=<token>` answers like the folder changes endpoint. The token
+    holds each INBOX's change token; when an inbox appeared or went away since (account added,
+    deleted or first reached), the answer is `reset: true` and the UI reloads the list.
+  - Every list entry carries its account and folder, so reading, flags, move and delete go to
+    the message's own account; reply and forward send from it. Search in this view covers all
+    accounts and folders.
 - **IDLE watchers** keep the INBOX cache current without any request:
   - Only accounts of users who used the app in the last 10 minutes are watched, at most 50
     accounts in total. A user's first request starts their watchers at once.
@@ -430,6 +450,8 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
 - Search across accounts only knows the subjects and addresses of cached messages, and shows at
   most 50 results. To find message text or older mail, search one folder; there is no search of
   all folders on the servers at once.
+- All inboxes is limited to INBOX folders: there is no unified view of Sent, Drafts or flagged
+  messages yet, and searching it searches the cache of all folders.
 - Only the INBOX is watched with IDLE. Other folders are synced when they are shown or polled.
 - The UI still polls: IDLE makes those polls cheap and current, but the browser learns about new
   mail up to 15 seconds late.
