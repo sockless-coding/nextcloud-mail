@@ -119,7 +119,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .message-body {
 	width: 100%;
-	min-height: 120px;
+	min-height: 64px;
 	border: none;
 	border-radius: var(--border-radius-large);
 }

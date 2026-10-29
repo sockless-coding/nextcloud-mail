@@ -14,14 +14,18 @@
 						:aria-label="t('sockless_mail', 'Back to the list')"
 						:title="t('sockless_mail', 'Back to the list')"
 						@click="closeMessage">
-						<NcIconSvgWrapper :path="mdiArrowLeft" />
+						<NcIconSvgWrapper :path="mdiArrowLeft" :size="20" />
 					</button>
 					<h2>{{ message.subject || t('sockless_mail', '(no subject)') }}</h2>
+					<span v-if="location" class="message-view__location">
+						<span class="message-view__location-dot" :style="{ background: location.color }" aria-hidden="true" />
+						{{ location.label }}
+					</span>
 				</div>
 
-				<!-- Sender card: who, to whom, when, and the actions on this message. -->
-				<div class="message-view__card">
-					<NcAvatar :display-name="senderName" is-no-user disable-menu :size="44" />
+				<!-- Who, to whom, when, and the actions on this message. -->
+				<div class="message-view__meta">
+					<NcAvatar :display-name="senderName" is-no-user disable-menu :size="40" />
 					<div class="message-view__people">
 						<div class="message-view__sender">
 							<strong>{{ senderName }}</strong>
@@ -39,51 +43,69 @@
 							</span>
 							<NcIconSvgWrapper :path="details ? mdiChevronUp : mdiChevronDown" :size="16" />
 						</button>
-						<NcDateTime class="message-view__date" :timestamp="Date.parse(message.date)" :format="{ dateStyle: 'full', timeStyle: 'short' }" :relative-time="false" />
 					</div>
-					<div class="message-view__actions">
-						<NcIconSvgWrapper v-if="message.flagged" :path="mdiFlag" class="message-view__flag" :name="t('sockless_mail', 'Flagged')" />
-						<button v-if="isDraft"
-							class="message-view__icon-button"
-							:aria-label="t('sockless_mail', 'Continue editing')"
-							:title="t('sockless_mail', 'Continue editing')"
-							@click="continueDraft">
-							<NcIconSvgWrapper :path="mdiPencilOutline" />
-						</button>
-						<button v-for="mode in REPLIES"
-							:key="mode.id"
-							class="message-view__icon-button"
-							:aria-label="mode.label"
-							:title="mode.label"
-							@click="reply(mode.id)">
-							<NcIconSvgWrapper :path="mode.icon" />
-						</button>
-						<NcActions :aria-label="t('sockless_mail', 'More actions')">
-							<NcActionButton close-after-click @click="toggleSeen(where, message)">
-								<template #icon>
-									<NcIconSvgWrapper :path="message.seen ? mdiEmailOutline : mdiEmailOpenOutline" />
-								</template>
-								{{ message.seen ? t('sockless_mail', 'Mark as unread') : t('sockless_mail', 'Mark as read') }}
-							</NcActionButton>
-							<NcActionButton close-after-click @click="toggleFlagged(where, message)">
-								<template #icon>
-									<NcIconSvgWrapper :path="message.flagged ? mdiFlagRemoveOutline : mdiFlagOutline" />
-								</template>
-								{{ message.flagged ? t('sockless_mail', 'Remove flag') : t('sockless_mail', 'Flag') }}
-							</NcActionButton>
-							<NcActionButton close-after-click @click="askMove(where, [message.id])">
-								<template #icon>
-									<NcIconSvgWrapper :path="mdiFolderMoveOutline" />
-								</template>
-								{{ t('sockless_mail', 'Move…') }}
-							</NcActionButton>
-							<NcActionButton close-after-click @click="remove(where, [message.id])">
-								<template #icon>
-									<NcIconSvgWrapper :path="mdiDeleteOutline" />
-								</template>
-								{{ t('sockless_mail', 'Delete') }}
-							</NcActionButton>
-						</NcActions>
+					<div class="message-view__aside">
+						<div class="message-view__actions" role="toolbar" :aria-label="t('sockless_mail', 'Message actions')">
+							<button v-if="isDraft"
+								class="message-view__icon-button"
+								:aria-label="t('sockless_mail', 'Continue editing')"
+								:title="t('sockless_mail', 'Continue editing')"
+								@click="continueDraft">
+								<NcIconSvgWrapper :path="mdiPencilOutline" :size="20" />
+							</button>
+							<button v-for="mode in REPLIES"
+								:key="mode.id"
+								class="message-view__icon-button"
+								:aria-label="mode.label"
+								:title="mode.label"
+								@click="reply(mode.id)">
+								<NcIconSvgWrapper :path="mode.icon" :size="20" />
+							</button>
+							<!-- In a dark theme the mail is recoloured; its original white page is one click away. -->
+							<button v-if="darkTheme"
+								class="message-view__icon-button"
+								:aria-pressed="String(original)"
+								:aria-label="original ? t('sockless_mail', 'Show in dark colours') : t('sockless_mail', 'Show in original colours')"
+								:title="original ? t('sockless_mail', 'Show in dark colours') : t('sockless_mail', 'Show in original colours')"
+								@click="original = !original">
+								<NcIconSvgWrapper :path="original ? mdiWeatherNight : mdiWhiteBalanceSunny" :size="20" />
+							</button>
+							<NcActions :aria-label="t('sockless_mail', 'More actions')">
+								<NcActionButton close-after-click @click="toggleSeen(where, message)">
+									<template #icon>
+										<NcIconSvgWrapper :path="message.seen ? mdiEmailOutline : mdiEmailOpenOutline" />
+									</template>
+									{{ message.seen ? t('sockless_mail', 'Mark as unread') : t('sockless_mail', 'Mark as read') }}
+								</NcActionButton>
+								<NcActionButton close-after-click @click="toggleFlagged(where, message)">
+									<template #icon>
+										<NcIconSvgWrapper :path="message.flagged ? mdiFlagRemoveOutline : mdiFlagOutline" />
+									</template>
+									{{ message.flagged ? t('sockless_mail', 'Remove flag') : t('sockless_mail', 'Flag') }}
+								</NcActionButton>
+								<NcActionButton close-after-click @click="askMove(where, [message.id])">
+									<template #icon>
+										<NcIconSvgWrapper :path="mdiFolderMoveOutline" />
+									</template>
+									{{ t('sockless_mail', 'Move…') }}
+								</NcActionButton>
+								<NcActionButton close-after-click @click="remove(where, [message.id])">
+									<template #icon>
+										<NcIconSvgWrapper :path="mdiDeleteOutline" />
+									</template>
+									{{ t('sockless_mail', 'Delete') }}
+								</NcActionButton>
+							</NcActions>
+						</div>
+						<div class="message-view__when">
+							<NcIconSvgWrapper v-if="message.flagged"
+								:path="mdiFlag"
+								:size="16"
+								inline
+								class="message-view__flag"
+								:name="t('sockless_mail', 'Flagged')" />
+							<NcDateTime :timestamp="Date.parse(message.date)" :format="{ dateStyle: 'medium', timeStyle: 'short' }" :relative-time="false" />
+						</div>
 					</div>
 				</div>
 
@@ -95,17 +117,21 @@
 				</dl>
 			</header>
 
-			<NcNoteCard v-if="message.hasRemoteContent && !message.remoteContentAllowed" type="info">
-				<div class="message-view__remote">
-					<span>{{ t('sockless_mail', 'Remote images are blocked to protect your privacy.') }}</span>
-					<NcButton variant="secondary" @click="openMessage(where, message.id, true)">
-						{{ t('sockless_mail', 'Show images') }}
-					</NcButton>
-				</div>
-			</NcNoteCard>
+			<div v-if="message.hasRemoteContent && !message.remoteContentAllowed" class="message-view__notice" role="status">
+				<NcIconSvgWrapper :path="mdiImageOffOutline" :size="18" inline />
+				<span>{{ t('sockless_mail', 'Remote images are blocked to protect your privacy.') }}</span>
+				<button class="message-view__text-button" @click="openMessage(where, message.id, true)">
+					{{ t('sockless_mail', 'Show images') }}
+				</button>
+			</div>
 
 			<section v-if="message.attachments.length" class="message-view__attachments">
-				<h3>{{ n('sockless_mail', '{count} attachment', '{count} attachments', message.attachments.length, { count: message.attachments.length }) }}</h3>
+				<h3>
+					{{ n('sockless_mail', '{count} attachment', '{count} attachments', message.attachments.length, { count: message.attachments.length }) }}
+					<template v-if="message.attachments.length > 1 && attachmentsSize">
+						· {{ formatFileSize(attachmentsSize) }}
+					</template>
+				</h3>
 				<ul>
 					<li v-for="attachment in message.attachments" :key="attachment.partId">
 						<a :href="partUrl(where.accountId, where.folderId, message.id, attachment.partId, true)"
@@ -125,51 +151,26 @@
 				</ul>
 			</section>
 
-			<!-- In a dark theme the mail is recoloured; its original white page is one click away. -->
-			<div class="message-view__paper" :class="{ 'message-view__paper--original': original || !darkTheme }">
-				<button v-if="darkTheme"
-					class="message-view__icon-button message-view__colors"
-					:aria-pressed="String(original)"
-					:aria-label="original ? t('sockless_mail', 'Show in dark colours') : t('sockless_mail', 'Show in original colours')"
-					:title="original ? t('sockless_mail', 'Show in dark colours') : t('sockless_mail', 'Show in original colours')"
-					@click="original = !original">
-					<NcIconSvgWrapper :path="original ? mdiWeatherNight : mdiWhiteBalanceSunny" :size="18" />
-				</button>
+			<div class="message-view__body" :class="{ 'message-view__body--paper': darkTheme && original }">
 				<MessageBody :key="`${message.id}/${message.remoteContentAllowed}/${original}`" :html="message.html" :original="original" />
-			</div>
-
-			<div class="message-view__quick">
-				<NcButton v-if="isDraft" variant="primary" @click="continueDraft">
-					<template #icon>
-						<NcIconSvgWrapper :path="mdiPencilOutline" />
-					</template>
-					{{ t('sockless_mail', 'Continue editing') }}
-				</NcButton>
-				<NcButton v-for="mode in isDraft ? [] : REPLIES" :key="mode.id" @click="reply(mode.id)">
-					<template #icon>
-						<NcIconSvgWrapper :path="mode.icon" />
-					</template>
-					{{ mode.label }}
-				</NcButton>
 			</div>
 		</article>
 	</div>
 </template>
 
 <script setup>
-import { mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
+import { mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { getCanonicalLocale, n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
-import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
-import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { computed, ref, watch } from 'vue'
+import { accountColor, accountsState } from '../store/accounts.js'
 import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { composeEdit, composeReply } from '../store/compose.js'
 import { readingPane } from '../store/layout.js'
@@ -193,6 +194,17 @@ const details = ref(false)
 /** A saved draft: it is continued rather than replied to. */
 const isDraft = computed(() => mailboxState.folders[open.accountId]?.list.find((f) => f.id === open.folderId)?.specialUse === 'drafts')
 
+/** "Account › Folder" beside the subject, in the account's colour. */
+const location = computed(() => {
+	const account = accountsState.accounts.find((a) => a.id === open.accountId)
+	const folder = mailboxState.folders[open.accountId]?.list.find((f) => f.id === open.folderId)
+	if (!account || !folder) {
+		return null
+	}
+	const folderName = folder.specialUse === 'inbox' ? t('sockless_mail', 'Inbox') : folder.name
+	return { label: `${account.displayName} › ${folderName}`, color: accountColor(account.id) }
+})
+
 const darkTheme = pageColors().dark
 /** This message in the colours it was sent in, rather than recoloured for the dark theme. */
 const original = ref(false)
@@ -202,7 +214,7 @@ watch(() => open.id, () => {
 	original.value = false
 })
 
-/** Every address in full, for the details under the sender card. */
+/** Every address in full, for the details under the sender. */
 const detailRows = computed(() => {
 	const full = (list) => list.map((a) => (a.name ? `${a.name} <${a.address}>` : a.address)).join(', ')
 	const m = message.value
@@ -213,6 +225,8 @@ const detailRows = computed(() => {
 		m.replyTo.length && { label: t('sockless_mail', 'Reply to'), value: full(m.replyTo) },
 	].filter(Boolean)
 })
+
+const attachmentsSize = computed(() => message.value.attachments.reduce((sum, a) => sum + (a.size ?? 0), 0))
 
 async function reply(mode) {
 	try {
@@ -264,8 +278,9 @@ function formatFileSize(bytes) {
 
 <style scoped>
 .message-view {
-	padding: 16px 28px 28px;
-	max-width: 1000px;
+	container-type: inline-size;
+	max-width: 1040px;
+	padding: 20px 32px 32px;
 }
 
 .message-view__center {
@@ -274,18 +289,46 @@ function formatFileSize(bytes) {
 	padding: 48px;
 }
 
+.message-view__header {
+	padding-bottom: 16px;
+	border-bottom: 1px solid var(--color-border);
+}
+
 .message-view__title {
 	display: flex;
-	align-items: flex-start;
-	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px 10px;
+	margin-bottom: 18px;
 }
 
 .message-view__title h2 {
-	margin: 4px 0 14px;
-	font-size: 21px;
+	flex: 0 1 auto;
+	min-width: 0;
+	margin: 0;
+	font-size: 20px;
 	font-weight: 600;
-	line-height: 1.3;
+	line-height: 1.35;
 	overflow-wrap: anywhere;
+}
+
+.message-view__location {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 24px;
+	padding: 0 10px;
+	border-radius: 12px;
+	background: var(--color-background-hover);
+	color: var(--color-text-maxcontrast);
+	font-size: 12px;
+	white-space: nowrap;
+}
+
+.message-view__location-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
 }
 
 .message-view__icon-button {
@@ -310,31 +353,37 @@ function formatFileSize(bytes) {
 	background: var(--color-background-hover);
 }
 
-.message-view__icon-button:focus-visible,
-.message-view__recipients:focus-visible {
-	outline: 2px solid var(--color-primary-element);
+.message-view__icon-button[aria-pressed="true"] {
+	--sm-button-background: var(--color-primary-element-light);
+	background: var(--color-primary-element-light);
 }
 
-.message-view__card {
-	display: flex;
-	align-items: flex-start;
+.message-view__icon-button:focus-visible,
+.message-view__recipients:focus-visible,
+.message-view__text-button:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: 1px;
+}
+
+.message-view__meta {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: start;
 	gap: 12px;
-	padding: 14px 12px 14px 16px;
-	border: 1px solid var(--color-border);
-	border-radius: var(--border-radius-container, 12px);
 }
 
 .message-view__people {
-	flex: 1;
 	min-width: 0;
+	padding-top: 1px;
 }
 
 .message-view__sender {
+	font-size: 15px;
+	line-height: 1.4;
 	overflow-wrap: anywhere;
 }
 
-.message-view__address,
-.message-view__date {
+.message-view__address {
 	color: var(--color-text-maxcontrast);
 	font-size: 13px;
 }
@@ -346,7 +395,7 @@ function formatFileSize(bytes) {
 	gap: 2px;
 	max-width: 100%;
 	min-height: 0;
-	margin: 0;
+	margin: 2px 0 0;
 	padding: 0;
 	border: 0;
 	border-radius: 4px;
@@ -369,15 +418,31 @@ function formatFileSize(bytes) {
 	white-space: nowrap;
 }
 
+.message-view__aside {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 2px;
+	margin-top: -4px;
+}
+
 .message-view__actions {
 	display: flex;
 	align-items: center;
 	gap: 2px;
-	flex: none;
+}
+
+.message-view__when {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding-inline-end: 8px;
+	color: var(--color-text-maxcontrast);
+	font-size: 12px;
+	white-space: nowrap;
 }
 
 .message-view__flag {
-	margin-inline-end: 4px;
 	color: var(--color-error-text);
 }
 
@@ -385,8 +450,8 @@ function formatFileSize(bytes) {
 	display: grid;
 	grid-template-columns: auto minmax(0, 1fr);
 	gap: 4px 12px;
-	margin: 8px 0 0;
-	padding: 10px 16px;
+	margin: 12px 0 0 52px;
+	padding: 10px 14px;
 	border-radius: var(--border-radius-element, 8px);
 	background: var(--color-background-hover);
 	font-size: 13px;
@@ -401,11 +466,43 @@ function formatFileSize(bytes) {
 	overflow-wrap: anywhere;
 }
 
-.message-view__remote {
+.message-view__notice {
 	display: flex;
 	align-items: center;
-	gap: 12px;
 	flex-wrap: wrap;
+	gap: 4px 10px;
+	margin-top: 16px;
+	padding: 6px 8px 6px 12px;
+	border-radius: var(--border-radius-element, 8px);
+	background: var(--color-background-hover);
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
+}
+
+.message-view__notice > span {
+	flex: 1;
+	min-width: 0;
+}
+
+.message-view__text-button {
+	--sm-button-background: transparent;
+	--sm-button-color: var(--color-primary-element-text-dark, var(--color-primary-element));
+	height: 28px;
+	min-height: 0;
+	margin: 0;
+	padding: 0 10px;
+	border: 0;
+	border-radius: var(--border-radius-element, 8px);
+	background: none;
+	color: var(--color-primary-element-text-dark, var(--color-primary-element));
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.message-view__text-button:hover {
+	--sm-button-background: var(--color-primary-element-light);
+	background: var(--color-primary-element-light);
 }
 
 .message-view__attachments {
@@ -414,7 +511,7 @@ function formatFileSize(bytes) {
 
 .message-view__attachments h3 {
 	margin: 0 0 8px;
-	font-size: 13px;
+	font-size: 12px;
 	font-weight: 600;
 	color: var(--color-text-maxcontrast);
 }
@@ -432,7 +529,7 @@ function formatFileSize(bytes) {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	padding: 8px 10px 8px 8px;
+	padding: 6px 10px 6px 6px;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-element, 8px);
 	color: var(--color-main-text);
@@ -440,14 +537,15 @@ function formatFileSize(bytes) {
 
 .message-view__attachment:hover,
 .message-view__attachment:focus-visible {
+	border-color: var(--color-border-dark);
 	background: var(--color-background-hover);
 }
 
 .message-view__file-type {
 	display: grid;
 	place-items: center;
-	width: 34px;
-	height: 40px;
+	width: 32px;
+	height: 36px;
 	flex: none;
 	border-radius: 4px;
 	font-size: 10px;
@@ -461,6 +559,7 @@ function formatFileSize(bytes) {
 	flex-direction: column;
 	flex: 1;
 	min-width: 0;
+	font-size: 13px;
 }
 
 .message-view__attachment-name {
@@ -484,62 +583,44 @@ function formatFileSize(bytes) {
 	opacity: 1;
 }
 
-.message-view__paper {
-	position: relative;
-	margin-top: 16px;
+/* The mail reads straight on the page; the frame's own 8px padding lines its text up with the header. */
+.message-view__body {
+	margin: 12px -8px 0;
+}
+
+/* Original colours in a dark theme: the mail's white page, framed. */
+.message-view__body--paper {
+	margin-inline: 0;
 	padding: 8px 12px;
-	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-container, 12px);
-	background: var(--color-main-background);
-}
-
-.message-view__paper--original {
 	background: #fff;
 }
 
-/* Over the mail's top corner, out of the way until hovered. */
-.message-view__colors {
-	position: absolute;
-	top: 6px;
-	inset-inline-end: 6px;
-	z-index: 1;
-	opacity: 0.6;
-	--sm-button-background: var(--color-main-background);
-	background: var(--color-main-background);
-	box-shadow: 0 0 0 1px var(--color-border);
-}
+@container (max-width: 560px) {
+	.message-view__meta {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
 
-.message-view__colors:hover,
-.message-view__colors:focus-visible {
-	opacity: 1;
-}
+	.message-view__aside {
+		grid-column: 1 / -1;
+		flex-direction: row-reverse;
+		justify-content: space-between;
+		align-items: center;
+		margin-top: 0;
+	}
 
-.message-view__paper--original .message-view__colors {
-	--sm-button-background: #fff;
-	--sm-button-color: #222;
-	background: #fff;
-	color: #222;
-}
+	.message-view__when {
+		padding-inline: 0;
+	}
 
-.message-view__quick {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-	margin-top: 20px;
+	.message-view__details {
+		margin-inline-start: 0;
+	}
 }
 
 @media (max-width: 800px) {
 	.message-view {
 		padding: 12px 16px 24px;
-	}
-
-	.message-view__card {
-		flex-wrap: wrap;
-	}
-
-	.message-view__actions {
-		width: 100%;
-		justify-content: flex-end;
 	}
 }
 </style>

@@ -441,4 +441,16 @@ onBeforeUnmount(() => {
 	background-color: var(--sm-button-background, transparent);
 	color: var(--sm-button-color, inherit);
 }
+
+/*
+ * The server styles also take NcIconSvgWrapper's "icon-vue" span in a plain button for a legacy
+ * icon-* class: inline-block on the text bottom at half opacity, so the icon sits high and faded.
+ * Give it back its centred box, sized to the icon; the button's own padding and gap place it.
+ */
+#content-vue .sm-shell button:not(.button-vue) > .icon-vue {
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	opacity: 1;
+}
 </style>

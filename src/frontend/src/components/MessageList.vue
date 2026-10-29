@@ -768,6 +768,8 @@ onBeforeUnmount(() => observer?.disconnect())
 
 .message-row__subject :deep(.icon-vue) {
 	flex: none;
+	min-width: 0;
+	min-height: 0;
 	color: var(--color-text-maxcontrast);
 }
 
