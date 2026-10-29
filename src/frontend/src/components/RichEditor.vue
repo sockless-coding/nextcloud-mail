@@ -314,7 +314,20 @@ function focus(position = 'start') {
 	editor.value?.commands.focus(position)
 }
 
-defineExpose({ getText, focus })
+/**
+ * Inserts links where the cursor was, one per line, each showing its name (share links).
+ *
+ * @param {{name: string, url: string}[]} links what to insert
+ */
+function insertLinks(links) {
+	const content = links.flatMap((link, i) => [
+		...(i > 0 ? [{ type: 'hardBreak' }] : []),
+		{ type: 'text', text: link.name, marks: [{ type: 'link', attrs: { href: link.url } }] },
+	])
+	editor.value?.chain().focus().insertContent(content).unsetMark('link').insertContent(' ').run()
+}
+
+defineExpose({ getText, focus, insertLinks })
 </script>
 
 <style scoped>

@@ -5,7 +5,7 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 7d (rich text and drafts)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> Status: **phase 12a (Nextcloud Files)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
 > (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
 > with remote images blocked by default, attachments), works with it (read/unread, flag, move,
 > delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
@@ -19,7 +19,8 @@ the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with
 > message list grouped by day with a line of each message's text, hover actions, multi-select
 > and quick filters (Unread, Flagged, Attachments), a reading pane on the right, at the bottom
 > or off, a composer window docked at the bottom with rich-text editing and drafts saved while
-> writing, and Outlook's keyboard shortcuts.
+> writing, and Outlook's keyboard shortcuts. Files can be attached from Nextcloud Files or shared
+> as links, attachments saved into Files, and files sent from the Files app ("Send by email").
 
 ## Layout
 
@@ -38,6 +39,7 @@ src/SocklessMail.Api/       ASP.NET Core minimal APIs
   Mail/                     MailKit connections: address policy, connector, connection pool, HTML sanitizer
   Mailbox/                  folders, message list, message view, parts, remote image proxy
   Bimi/                     sender logos: DMARC verdicts, DNS lookups, SVG checks, logo cache
+  Files/                    Nextcloud Files over WebDAV as the user: attach, share links, save attachments
   Sync/                     header cache, folder sync (QRESYNC/CONDSTORE/plain), IDLE watchers
   Security/                 Data Protection key ring wrapping
 src/frontend/               Vue 3 + @nextcloud/vue 9, built into wwwroot/js and wwwroot/css
@@ -481,6 +483,25 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
   - Failures reconnect after 30 seconds, doubling up to 10 minutes. Changing an account restarts
     its watcher, and deleting the account stops it. An account whose password can no longer be
     decrypted is not watched until the password is entered again.
+- **Nextcloud Files** (`Files/`): the app reads and writes the user's files over WebDAV
+  (`remote.php/dav/files/<user>`) as that user. AppAPI's Sabre plugin accepts the same
+  `AUTHORIZATION-APP-API` header there as on OCS, so no password is involved, and Nextcloud
+  applies the user's own permissions, quota and sharing policy.
+  - *Attach from Files*: the browser shows Nextcloud's file picker, and the server copies the
+    chosen files into the same upload store as files from the device (25 MB each). A folder or
+    an oversized file is reported on its chip, with "Share link instead" for the latter.
+  - *Share link from Files*: a public read-only link through the OCS sharing API, inserted where
+    the cursor is. Nextcloud's defaults apply (expiry). It refuses when it enforces passwords on
+    links. The browser builds the link from the share token and its own address, because the
+    URL Nextcloud returns uses the host the app reaches it by (often an internal one).
+  - *Save to Files* (one attachment or all): never replaces a file. A taken name becomes
+    "name (2).ext", and the upload uses `If-None-Match: *`, so a file created in the meantime
+    moves it on to the next number.
+  - *Send by email* in the Files app: registered on enable as a version 2 file action
+    (`/api/v2/ui/files-actions-menu`, files only). Its handler `POST /files-action/send`
+    does nothing but answer `redirect_handler`, so AppAPI opens our page with `?fileIds=…`. The
+    page opens a new message and attaches the files, looked up by id with a WebDAV `SEARCH`. If
+    AppAPI cannot register the action, enabling still succeeds.
 
 ## Security model
 
@@ -678,6 +699,11 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
 - Only the INBOX is watched with IDLE. Other folders are synced when they are shown or polled.
 - The UI still polls: IDLE makes those polls cheap and current, but the browser learns about new
   mail up to 15 seconds late.
+- Share links from the composer are public and read-only, with Nextcloud's default expiry. A
+  password or a custom expiry has to be set in the Files app. Where Nextcloud enforces link
+  passwords, only "Attach from Files" works.
+- "Send by email" in the Files app always opens AppAPI's page (`/apps/app_api/embedded/...`),
+  even when the companion app is installed: AppAPI builds that address itself.
 - Message parts are held in memory while they are served, so very large attachments cost
   memory in proportion to their size.
 - The frontend bundle is about 1.2 MB (355 kB gzipped), mostly the Nextcloud component library.

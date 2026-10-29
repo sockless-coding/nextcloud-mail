@@ -154,9 +154,15 @@
 					<template v-if="message.attachments.length > 1 && attachmentsSize">
 						· {{ formatFileSize(attachmentsSize) }}
 					</template>
+					<button v-if="message.attachments.length > 1"
+						type="button"
+						class="message-view__save-all"
+						@click="saveToFiles(message.attachments)">
+						{{ t('sockless_mail', 'Save all to Files') }}
+					</button>
 				</h3>
 				<ul>
-					<li v-for="attachment in message.attachments" :key="attachment.partId">
+					<li v-for="attachment in message.attachments" :key="attachment.partId" class="message-view__attachment-card">
 						<a :href="partUrl(where.accountId, where.folderId, message.id, attachment.partId, true)"
 							class="message-view__attachment"
 							:title="t('sockless_mail', 'Download {name}', { name: attachment.fileName })"
@@ -170,6 +176,13 @@
 							</span>
 							<NcIconSvgWrapper :path="mdiDownload" :size="18" class="message-view__download" />
 						</a>
+						<button type="button"
+							class="message-view__save"
+							:aria-label="t('sockless_mail', 'Save {name} to Files', { name: attachment.fileName })"
+							:title="t('sockless_mail', 'Save to Files')"
+							@click="saveToFiles([attachment])">
+							<NcIconSvgWrapper :path="mdiFolderDownloadOutline" :size="18" />
+						</button>
 					</li>
 				</ul>
 			</section>
@@ -189,7 +202,7 @@
 </template>
 
 <script setup>
-import { mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
+import { mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -206,6 +219,7 @@ import { bimiUrl } from '../bimi.js'
 import { accountColor, accountsState } from '../store/accounts.js'
 import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { composeEdit, composeReply } from '../store/compose.js'
+import { saveAttachmentsToFiles } from '../store/files.js'
 import { readingPane } from '../store/layout.js'
 import { formatFileSize } from '../fileSize.js'
 import { pageColors } from '../mailColors.js'
@@ -271,6 +285,14 @@ async function reply(mode) {
 		await composeReply(mode)
 	} catch (e) {
 		showError(t('sockless_mail', 'Could not prepare the message: {error}', { error: e.message }))
+	}
+}
+
+async function saveToFiles(attachments) {
+	try {
+		await saveAttachmentsToFiles(where.value, message.value.id, attachments)
+	} catch (e) {
+		showError(t('sockless_mail', 'Could not open Files: {error}', { error: e.message }))
 	}
 }
 
@@ -555,20 +577,75 @@ function fileType(attachment) {
 	list-style: none;
 }
 
-.message-view__attachment {
+.message-view__attachment-card {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	padding: 6px 10px 6px 6px;
 	border: 1px solid var(--color-border);
 	border-radius: var(--border-radius-element, 8px);
+}
+
+.message-view__attachment-card:hover,
+.message-view__attachment-card:focus-within {
+	border-color: var(--color-border-dark);
+	background: var(--color-background-hover);
+}
+
+.message-view__attachment {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 4px 6px 6px;
 	color: var(--color-main-text);
 }
 
-.message-view__attachment:hover,
-.message-view__attachment:focus-visible {
-	border-color: var(--color-border-dark);
-	background: var(--color-background-hover);
+.message-view__save {
+	display: grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	min-height: 0;
+	margin: 0 4px 0 0;
+	padding: 0;
+	border: none;
+	border-radius: 50%;
+	background: none;
+	color: var(--color-text-maxcontrast);
+	opacity: 0;
+	cursor: pointer;
+}
+
+.message-view__save:hover {
+	background: var(--color-background-dark);
+	color: var(--color-main-text);
+}
+
+.message-view__attachment-card:hover .message-view__save,
+.message-view__attachment-card:focus-within .message-view__save {
+	opacity: 1;
+}
+
+.message-view__save-all {
+	margin: 0 0 0 8px;
+	padding: 0;
+	min-height: 0;
+	border: none;
+	background: none;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--color-primary-element);
+	cursor: pointer;
+}
+
+.message-view__save-all:hover {
+	text-decoration: underline;
+}
+
+@media (hover: none) {
+	.message-view__save {
+		opacity: 1;
+	}
 }
 
 .message-view__file-type {
@@ -608,7 +685,7 @@ function fileType(attachment) {
 	opacity: 0;
 }
 
-.message-view__attachment:hover .message-view__download,
+.message-view__attachment-card:hover .message-view__download,
 .message-view__attachment:focus-visible .message-view__download {
 	opacity: 1;
 }

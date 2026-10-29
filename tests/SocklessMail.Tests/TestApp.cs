@@ -164,11 +164,19 @@ public sealed class FakeNextcloud : HttpMessageHandler
     /// <summary>Response for any path containing the key; default is an empty OCS success.</summary>
     public ConcurrentDictionary<string, (HttpStatusCode Status, string Json)> Responses { get; } = new();
 
+    /// <summary>Asked first, e.g. by <see cref="FakeDav"/>; null falls back to <see cref="Responses"/>.</summary>
+    public Func<RecordedRequest, HttpResponseMessage?>? Respond { get; set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         var headers = request.Headers.ToDictionary(h => h.Key, h => string.Join(",", h.Value), StringComparer.OrdinalIgnoreCase);
         var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct);
-        Requests.Enqueue(new RecordedRequest(request.Method, request.RequestUri!.PathAndQuery, headers, body));
+        var recorded = new RecordedRequest(request.Method, request.RequestUri!.PathAndQuery, headers, body);
+        Requests.Enqueue(recorded);
+        if (Respond?.Invoke(recorded) is { } custom)
+        {
+            return custom;
+        }
 
         var (status, json) = Responses.FirstOrDefault(r => request.RequestUri.AbsolutePath.Contains(r.Key)).Value;
         return new HttpResponseMessage(status == 0 ? HttpStatusCode.OK : status)

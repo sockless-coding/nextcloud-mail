@@ -151,9 +151,15 @@ public sealed class EndpointTests : IDisposable
         var calls = _app.Nextcloud.Requests.ToArray();
         Assert.All(calls, c => Assert.Equal(HttpMethod.Post, c.Method));
         Assert.Equal(
-            ["top-menu", "initial-state", "script", "style"],
+            ["top-menu", "initial-state", "script", "style", "files-actions-menu"],
             calls.Select(c => c.PathAndQuery.Split('?')[0].Split('/')[^1]));
-        Assert.All(calls, c => Assert.StartsWith("/ocs/v2.php/apps/app_api/api/v1/ui/", c.PathAndQuery));
+        Assert.All(calls[..4], c => Assert.StartsWith("/ocs/v2.php/apps/app_api/api/v1/ui/", c.PathAndQuery));
+
+        // Version 2, so the handler's answer can open our page; never offered on folders.
+        Assert.StartsWith("/ocs/v2.php/apps/app_api/api/v2/ui/files-actions-menu", calls[4].PathAndQuery);
+        var action = JsonDocument.Parse(calls[4].Body).RootElement;
+        Assert.Equal("files-action/send", action.GetProperty("actionHandler").GetString());
+        Assert.DoesNotContain("httpd", action.GetProperty("mime").GetString());
 
         var menu = JsonDocument.Parse(calls[0].Body).RootElement;
         Assert.Equal("sockless_mail", menu.GetProperty("name").GetString());
@@ -173,11 +179,20 @@ public sealed class EndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task Enabling_succeeds_without_the_files_action()
+    {
+        // Older AppAPI versions, or a Nextcloud without the Files app.
+        _app.Nextcloud.Responses["files-actions-menu"] = (HttpStatusCode.NotFound, "{}");
+        var body = await Json(await _app.ClientAs("").PutAsync("/enabled?enabled=1", null, Ct));
+        Assert.Equal("", body.GetProperty("error").GetString());
+    }
+
+    [Fact]
     public async Task Disabling_succeeds_even_when_unregistering_fails()
     {
         _app.Nextcloud.Responses["ui/"] = (HttpStatusCode.InternalServerError, "{}");
         var response = await _app.ClientAs("").PutAsync("/enabled?enabled=0", null, Ct);
         Assert.Equal("", (await Json(response)).GetProperty("error").GetString());
-        Assert.Equal(4, _app.Nextcloud.Requests.Count(r => r.Method == HttpMethod.Delete));
+        Assert.Equal(5, _app.Nextcloud.Requests.Count(r => r.Method == HttpMethod.Delete));
     }
 }

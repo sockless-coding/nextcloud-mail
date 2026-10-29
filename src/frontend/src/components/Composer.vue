@@ -102,7 +102,14 @@
 					<NcIconSvgWrapper :path="mdiPaperclip" :size="16" />
 					<span class="composer__chip-name">{{ upload.fileName }}</span>
 					<span v-if="upload.error" class="composer__chip-meta">{{ upload.error }}</span>
+					<NcLoadingIcon v-else-if="upload.fromFiles" :size="16" />
 					<span v-else-if="!upload.id" class="composer__chip-meta">{{ Math.round(upload.progress * 100) }} %</span>
+					<button v-if="upload.tooLarge && upload.path"
+						type="button"
+						class="composer__chip-link"
+						@click="linkInstead(upload)">
+						{{ t('sockless_mail', 'Share link instead') }}
+					</button>
 					<button type="button"
 						class="composer__chip-button"
 						:aria-label="t('sockless_mail', 'Remove {name}', { name: upload.fileName })"
@@ -132,12 +139,31 @@
 				multiple
 				hidden
 				@change="onFiles">
-			<NcButton variant="tertiary" @click="fileInput.click()">
+			<NcActions variant="tertiary"
+				:menu-name="t('sockless_mail', 'Attach')"
+				:aria-label="t('sockless_mail', 'Attach files')">
 				<template #icon>
 					<NcIconSvgWrapper :path="mdiPaperclip" />
 				</template>
-				{{ t('sockless_mail', 'Attach files') }}
-			</NcButton>
+				<NcActionButton close-after-click @click="fileInput.click()">
+					<template #icon>
+						<NcIconSvgWrapper :path="mdiUpload" />
+					</template>
+					{{ t('sockless_mail', 'Upload from this device') }}
+				</NcActionButton>
+				<NcActionButton close-after-click @click="attachFromFiles">
+					<template #icon>
+						<NcIconSvgWrapper :path="mdiFolderOutline" />
+					</template>
+					{{ t('sockless_mail', 'Attach from Files') }}
+				</NcActionButton>
+				<NcActionButton close-after-click @click="shareFromFiles">
+					<template #icon>
+						<NcIconSvgWrapper :path="mdiLinkVariant" />
+					</template>
+					{{ t('sockless_mail', 'Share link from Files') }}
+				</NcActionButton>
+			</NcActions>
 			<NcButton variant="tertiary"
 				:aria-pressed="String(draft.format === 'text')"
 				:title="draft.format === 'html' ? t('sockless_mail', 'Write in plain text, without formatting') : t('sockless_mail', 'Write with formatting')"
@@ -169,9 +195,11 @@
 </template>
 
 <script setup>
-import { mdiArrowCollapse, mdiArrowExpand, mdiClose, mdiDeleteOutline, mdiFormatLetterCase, mdiFormatText, mdiPaperclip, mdiSend, mdiUndo, mdiWindowMinimize, mdiWindowRestore } from '@mdi/js'
+import { mdiArrowCollapse, mdiArrowExpand, mdiClose, mdiDeleteOutline, mdiFolderOutline, mdiFormatLetterCase, mdiFormatText, mdiLinkVariant, mdiPaperclip, mdiSend, mdiUndo, mdiUpload, mdiWindowMinimize, mdiWindowRestore } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { getCanonicalLocale, t } from '@nextcloud/l10n'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -180,6 +208,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { accountsState } from '../store/accounts.js'
 import { attach, closeComposer, composer, detach, hasContent, saveSoon, send, textToHtml } from '../store/compose.js'
+import { attachFromFiles as pickAndAttach, createShareLinks } from '../store/files.js'
 import { layout } from '../store/layout.js'
 import RecipientInput from './RecipientInput.vue'
 import RichEditor from './RichEditor.vue'
@@ -305,6 +334,52 @@ const discardButtons = computed(() => [
 	{ label: t('sockless_mail', 'Keep writing') },
 	{ label: t('sockless_mail', 'Discard'), variant: 'error', callback: () => { discardChosen = true } },
 ])
+
+async function attachFromFiles() {
+	try {
+		await pickAndAttach()
+	} catch (e) {
+		showError(t('sockless_mail', 'Could not open Files: {error}', { error: e.message }))
+	}
+}
+
+/**
+ * Puts public links to the files in the message where the cursor is: linked names in rich
+ * text, "name: link" lines in plain text.
+ *
+ * @param {string[]} [paths] these files instead of asking
+ */
+async function shareFromFiles(paths) {
+	let links
+	try {
+		links = await createShareLinks(Array.isArray(paths) ? paths : undefined)
+	} catch (e) {
+		showError(t('sockless_mail', 'Could not open Files: {error}', { error: e.message }))
+		return false
+	}
+	if (!links.length) {
+		return false
+	}
+	if (draft.format === 'html') {
+		editor.value?.insertLinks(links)
+	} else {
+		const textarea = body.value
+		const at = textarea?.selectionStart ?? draft.text.length
+		const lines = links.map((l) => `${l.name}: ${l.url}`).join('\n')
+		const before = draft.text.slice(0, at)
+		const insert = (before && !before.endsWith('\n') ? '\n' : '') + lines + '\n'
+		draft.text = before + insert + draft.text.slice(at)
+		nextTick(() => textarea?.setSelectionRange(at + insert.length, at + insert.length))
+	}
+	return true
+}
+
+/** A file too large to attach: a link to it in the message instead. */
+async function linkInstead(upload) {
+	if (await shareFromFiles([upload.path])) {
+		detach(upload)
+	}
+}
 
 function onFiles(event) {
 	for (const file of event.target.files) {
@@ -513,6 +588,16 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 
 .composer__row--error {
 	border-bottom-color: var(--color-error);
+}
+
+.composer__chip-link {
+	border: none;
+	background: none;
+	padding: 0;
+	color: var(--color-primary-element);
+	text-decoration: underline;
+	cursor: pointer;
+	white-space: nowrap;
 }
 
 .composer__attachments {

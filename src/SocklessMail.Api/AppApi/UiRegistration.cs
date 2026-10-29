@@ -18,6 +18,12 @@ public sealed class UiRegistration(NextcloudClient nextcloud, AppApiOptions opti
     private const string StylePath = "css/sockless_mail-main";
     private const string Ui = "apps/app_api/api/v1/ui";
 
+    /// <summary>"Send by email" in the Files app (version 2: the handler's answer can open our page).</summary>
+    public const string FileActionName = "sockless_mail_send";
+
+    // The Files app matches an action's mime by substring; folders ("httpd/unix-directory") must not match.
+    private const string FileActionMimes = "application/,image/,text/,audio/,video/,message/,font/,model/,multipart/";
+
     public async Task RegisterAsync(CancellationToken ct)
     {
         await nextcloud.OcsAsync(HttpMethod.Post, $"{Ui}/top-menu",
@@ -29,6 +35,26 @@ public sealed class UiRegistration(NextcloudClient nextcloud, AppApiOptions opti
         await nextcloud.OcsAsync(HttpMethod.Post, $"{Ui}/style",
             new { type = "top_menu", name = MenuName, path = StylePath }, ct: ct);
         logger.LogInformation("Registered top menu entry (API mode {ApiMode})", ApiMode);
+
+        // Optional: without it the app works, only the Files app lacks "Send by email".
+        try
+        {
+            await nextcloud.OcsAsync(HttpMethod.Post, "apps/app_api/api/v2/ui/files-actions-menu",
+                new
+                {
+                    name = FileActionName,
+                    displayName = "Send by email",
+                    actionHandler = Api.FilesEndpoints.SendActionPath,
+                    icon = "img/send-by-email.svg",
+                    mime = FileActionMimes,
+                    permissions = 1,
+                    order = 0,
+                }, ct: ct);
+        }
+        catch (Exception e) when (e is NextcloudApiException or HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            logger.LogWarning(e, "Could not register the Files action \"Send by email\"");
+        }
     }
 
     /// <summary>
@@ -43,6 +69,7 @@ public sealed class UiRegistration(NextcloudClient nextcloud, AppApiOptions opti
             (HttpMethod.Delete, $"{Ui}/script", new { type = "top_menu", name = MenuName, path = ScriptPath }),
             (HttpMethod.Delete, $"{Ui}/initial-state", new { type = "top_menu", name = MenuName, key = InitialStateKey }),
             (HttpMethod.Delete, $"{Ui}/top-menu", new { name = MenuName }),
+            (HttpMethod.Delete, $"{Ui}/files-actions-menu", new { name = FileActionName }),
         ];
         foreach (var (method, path, body) in calls)
         {

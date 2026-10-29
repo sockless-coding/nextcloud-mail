@@ -9,6 +9,7 @@ using SocklessMail.Api.AppApi;
 using SocklessMail.Api.Bimi;
 using SocklessMail.Api.Compose;
 using SocklessMail.Api.Data;
+using SocklessMail.Api.Files;
 using SocklessMail.Api.Hosting;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Mailbox;
@@ -76,6 +77,8 @@ builder.Services.AddHostedService<MailCacheJanitor>();
 builder.Services.AddSingleton<ImageProxyTokens>();
 builder.Services.AddSingleton<AttachmentUploads>();
 builder.Services.AddHostedService<AttachmentUploadJanitor>();
+builder.Services.AddScoped<NextcloudFiles>();
+builder.Services.AddScoped<FilesService>();
 builder.Services.AddSingleton<ImageProxy>();
 ImageProxy.ConfigureServices(builder.Services);
 BimiResolver.ConfigureServices(builder.Services);
@@ -134,8 +137,10 @@ api.MapMailboxEndpoints();
 api.MapComposeEndpoints();
 api.MapOAuthEndpoints();
 api.MapBimiEndpoints();
+api.MapFilesEndpoints();
 api.MapHub<MailHub>("/hub");
 app.MapOAuthCallback();
+app.MapFilesAction();
 
 // Unmatched paths must answer 404, not the fallback policy's 401/403: AppAPI calls POST /init
 // with system credentials and treats only 404/501 as "no init needed".

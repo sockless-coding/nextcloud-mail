@@ -4,15 +4,38 @@ using System.Text.Json;
 namespace SocklessMail.Api.AppApi;
 
 /// <summary>
-/// Calls Nextcloud's OCS API as this ExApp. With a user id the call acts as that user (Nextcloud
-/// records it in exapp_impersonation.log); without one it runs in system context.
+/// Calls Nextcloud's OCS and WebDAV APIs as this ExApp. With a user id the call acts as that user
+/// (Nextcloud records it in exapp_impersonation.log); without one it runs in system context.
+/// AppAPI's DavPlugin accepts the same AUTHORIZATION-APP-API header on remote.php/dav.
 /// </summary>
 public sealed class NextcloudClient(HttpClient http, AppApiOptions options)
 {
+    private static readonly TimeSpan OcsTimeout = TimeSpan.FromSeconds(30);
+
     public static void Configure(IServiceProvider services, HttpClient http)
     {
         http.BaseAddress = services.GetRequiredService<AppApiOptions>().NextcloudUrl;
-        http.Timeout = TimeSpan.FromSeconds(30);
+        // WebDAV transfers carry attachments; OCS calls apply their own, shorter limit.
+        http.Timeout = TimeSpan.FromMinutes(5);
+    }
+
+    /// <summary>
+    /// Sends a WebDAV request as <paramref name="userId"/> and returns the response unread (the
+    /// caller disposes it). Status codes are the caller's business: WebDAV uses them for results.
+    /// </summary>
+    /// <param name="request">Its URI is relative to the Nextcloud root, e.g. <c>remote.php/dav/files/alice/a.txt</c>.</param>
+    public Task<HttpResponseMessage> DavAsync(HttpRequestMessage request, string userId, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(userId);
+        AddAuthentication(request, userId);
+        return http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+    }
+
+    private void AddAuthentication(HttpRequestMessage request, string userId)
+    {
+        request.Headers.Add(AppApiHeaders.ExAppId, options.AppId);
+        request.Headers.Add(AppApiHeaders.ExAppVersion, options.AppVersion);
+        request.Headers.Add(AppApiHeaders.Authorization, AppApiHeaders.BuildAuthorization(userId, options.AppSecret));
     }
 
     /// <summary>Sends an OCS v2 request and returns <c>ocs.data</c>.</summary>
@@ -22,9 +45,7 @@ public sealed class NextcloudClient(HttpClient http, AppApiOptions options)
     {
         var separator = path.Contains('?') ? '&' : '?';
         using var request = new HttpRequestMessage(method, $"ocs/v2.php/{path}{separator}format=json");
-        request.Headers.Add(AppApiHeaders.ExAppId, options.AppId);
-        request.Headers.Add(AppApiHeaders.ExAppVersion, options.AppVersion);
-        request.Headers.Add(AppApiHeaders.Authorization, AppApiHeaders.BuildAuthorization(userId, options.AppSecret));
+        AddAuthentication(request, userId);
         request.Headers.Add("OCS-APIRequest", "true");
         request.Headers.Accept.ParseAdd("application/json");
         if (body is not null)
@@ -32,13 +53,15 @@ public sealed class NextcloudClient(HttpClient http, AppApiOptions options)
             request.Content = JsonContent.Create(body);
         }
 
-        using var response = await http.SendAsync(request, ct);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(OcsTimeout);
+        using var response = await http.SendAsync(request, timeout.Token);
         if (!response.IsSuccessStatusCode)
         {
             throw new NextcloudApiException(method, path, (int)response.StatusCode);
         }
 
-        using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+        using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(timeout.Token), cancellationToken: timeout.Token);
         return document.RootElement.TryGetProperty("ocs", out var ocs) && ocs.TryGetProperty("data", out var data)
             ? data.Clone()
             : default;

@@ -103,6 +103,7 @@
 
 <script setup>
 import { mdiCheckboxMultipleMarkedCircleOutline, mdiEmailOpenOutline, mdiEmailOutline } from '@mdi/js'
+import { showError } from '@nextcloud/dialogs/toast'
 import { n, t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcContent from '@nextcloud/vue/components/NcContent'
@@ -124,7 +125,8 @@ import OAuthSettingsDialog from './components/OAuthSettingsDialog.vue'
 import ShortcutsDialog from './components/ShortcutsDialog.vue'
 import { accountsState, loadAccounts } from './store/accounts.js'
 import { dialogs, removePermanently } from './store/actions.js'
-import { composer } from './store/compose.js'
+import { composeNew, composer } from './store/compose.js'
+import { attachFileIds, takeFileIdsFromUrl } from './store/files.js'
 import { closeDrawer, folderPaneShown, layout, readingPane, viewport } from './store/layout.js'
 import { hasPendingWrites, loadFolders, mailboxState, refreshMessages } from './store/mailbox.js'
 import { accountSaved, loadAllFolders, openUnified, removeAccount, selectAccount } from './store/navigation.js'
@@ -274,6 +276,20 @@ function folderChanged({ accountId, folderId }) {
 	}
 }
 
+/** Opened from the Files app's "Send by email": a new message with those files attached. */
+function sendFilesFromUrl() {
+	const fileIds = takeFileIdsFromUrl()
+	if (!fileIds.length) {
+		return
+	}
+	if (!accountsState.accounts.length) {
+		showError(t('sockless_mail', 'Add a mail account first, then send the files from the Files app again.'))
+		return
+	}
+	composeNew()
+	attachFileIds(fileIds)
+}
+
 onMounted(async () => {
 	// Not awaited: the mail view does not depend on it.
 	loadOAuthState()
@@ -286,6 +302,7 @@ onMounted(async () => {
 	} else if (accountsState.accounts.length) {
 		await selectAccount(accountsState.accounts[0])
 	}
+	sendFilesFromUrl()
 	pollTimer = window.setInterval(poll, POLL_INTERVAL_MS)
 	document.addEventListener('visibilitychange', poll)
 	stopPush = startPush({ folderChanged, reconnected: () => poll({ type: 'visibilitychange' }) })
