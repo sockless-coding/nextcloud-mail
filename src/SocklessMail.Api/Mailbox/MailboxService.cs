@@ -35,15 +35,15 @@ public sealed partial class MailboxService(
         var list = await Run(account, async (client, token) =>
         {
             var personal = client.PersonalNamespaces.Count > 0 ? client.PersonalNamespaces[0] : new FolderNamespace('/', "");
-            IList<IMailFolder> folders;
+            List<IMailFolder> folders;
             try
             {
-                folders = await client.GetFoldersAsync(personal, StatusItems.Count | StatusItems.Unread, subscribedOnly: false, token);
+                folders = [.. await client.GetFoldersAsync(personal, StatusItems.Count | StatusItems.Unread, subscribedOnly: false, token)];
             }
             catch (ImapCommandException)
             {
                 // Some servers fail STATUS on individual folders; the list is still useful without counts.
-                folders = await client.GetFoldersAsync(personal, subscribedOnly: false, cancellationToken: token);
+                folders = [.. await client.GetFoldersAsync(personal, subscribedOnly: false, cancellationToken: token)];
             }
 
             if (!folders.Any(f => IsInbox(f.FullName)))
