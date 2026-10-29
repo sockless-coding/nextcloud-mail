@@ -98,6 +98,55 @@ namespace SocklessMail.Api.Data.Migrations
                     b.ToTable("accounts", (string)null);
                 });
 
+            modelBuilder.Entity("SocklessMail.Api.Bimi.BimiLogo", b =>
+                {
+                    b.Property<string>("Hash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Svg")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.HasKey("Hash");
+
+                    b.ToTable("bimi_logos", (string)null);
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Bimi.BimiLookup", b =>
+                {
+                    b.Property<string>("Domain")
+                        .HasMaxLength(253)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Selector")
+                        .HasMaxLength(63)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CheckedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LogoHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Domain", "Selector");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("LogoHash");
+
+                    b.ToTable("bimi_lookups", (string)null);
+                });
+
             modelBuilder.Entity("SocklessMail.Api.OAuth.OAuthClient", b =>
                 {
                     b.Property<string>("ProviderId")
@@ -194,6 +243,14 @@ namespace SocklessMail.Api.Data.Migrations
 
                     b.Property<uint>("Uid")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("BimiDomain")
+                        .HasMaxLength(253)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BimiSelector")
+                        .HasMaxLength(63)
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("ChangeSeq")
                         .HasColumnType("INTEGER");

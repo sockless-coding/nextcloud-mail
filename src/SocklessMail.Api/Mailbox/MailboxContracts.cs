@@ -1,6 +1,7 @@
 using System.Buffers.Text;
 using System.Text;
 using MimeKit;
+using SocklessMail.Api.Bimi;
 
 namespace SocklessMail.Api.Mailbox;
 
@@ -32,7 +33,8 @@ public sealed record MessageSummaryDto(
     bool Answered,
     bool HasAttachments,
     long Size,
-    string? Preview);
+    string? Preview,
+    BimiDto? Bimi);
 
 /// <summary>
 /// Newest first. <see cref="NextBefore"/> is the cursor for the next (older) page; null at the end.
@@ -57,7 +59,8 @@ public sealed record MessageDto(
     string Html,
     bool HasRemoteContent,
     bool RemoteContentAllowed,
-    AttachmentDto[] Attachments);
+    AttachmentDto[] Attachments,
+    BimiDto? Bimi);
 
 /// <summary>Opaque ids for the URL: folder full names and "{uidvalidity}-{uid}" message ids.</summary>
 public static class MailboxIds

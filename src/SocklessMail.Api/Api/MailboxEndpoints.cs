@@ -17,7 +17,7 @@ namespace SocklessMail.Api.Api;
 public static class MailboxEndpoints
 {
     /// <summary>Message parts and proxied images may be anything; never let a browser run them on our origin.</summary>
-    private const string ContentSandbox = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+    internal const string ContentSandbox = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 
     private static readonly HashSet<string> InlineImageTypes =
         new(StringComparer.OrdinalIgnoreCase) { "image/png", "image/jpeg", "image/gif", "image/webp" };

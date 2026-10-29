@@ -1,3 +1,5 @@
 # Shell scripts run inside Linux containers; a CRLF shebang line breaks them.
 *.sh text eol=lf
 Dockerfile text eol=lf
+# cmd.exe misparses batch files with LF line endings.
+*.bat text eol=crlf

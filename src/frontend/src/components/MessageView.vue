@@ -25,7 +25,11 @@
 
 				<!-- Who, to whom, when, and the actions on this message. -->
 				<div class="message-view__meta">
-					<NcAvatar :display-name="senderName" is-no-user disable-menu :size="40" />
+					<NcAvatar :display-name="senderName"
+						:url="bimiUrl(message)"
+						is-no-user
+						disable-menu
+						:size="40" />
 					<div class="message-view__people">
 						<div class="message-view__sender">
 							<strong>{{ senderName }}</strong>
@@ -170,6 +174,7 @@ import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { computed, ref, watch } from 'vue'
+import { bimiUrl } from '../bimi.js'
 import { accountColor, accountsState } from '../store/accounts.js'
 import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { composeEdit, composeReply } from '../store/compose.js'

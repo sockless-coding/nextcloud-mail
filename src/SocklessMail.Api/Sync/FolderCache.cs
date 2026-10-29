@@ -3,6 +3,7 @@ using MailKit.Net.Imap;
 using MailKit.Search;
 using Microsoft.EntityFrameworkCore;
 using SocklessMail.Api.Accounts;
+using SocklessMail.Api.Bimi;
 using SocklessMail.Api.Data;
 using SocklessMail.Api.Mailbox;
 
@@ -31,7 +32,7 @@ public sealed record FolderChanges(
 /// Callers hold the folder's <see cref="SyncLocks"/> lock around every method that writes. Every
 /// write that a client's list or counts would show is pushed to the owner's open tabs.
 /// </summary>
-public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush push, ILogger<FolderCache> logger)
+public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush push, BimiSenders bimi, ILogger<FolderCache> logger)
 {
     /// <summary>More new messages than this since the last sync: rebuild the window from the newest page instead.</summary>
     public const int MaxNewMessages = 500;
@@ -44,10 +45,16 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
     /// <summary>Cached rows without a preview (from before previews were cached) filled in per sync.</summary>
     public const int PreviewBackfill = 100;
 
+    /// <summary>Cached rows without a BIMI verdict (from before BIMI was cached) filled in per sync.</summary>
+    public const int BimiBackfill = 200;
+
     internal const MessageSummaryItems ListItems =
         MessageSummaryItems.UniqueId | MessageSummaryItems.Envelope | MessageSummaryItems.Flags
         | MessageSummaryItems.InternalDate | MessageSummaryItems.Size | MessageSummaryItems.BodyStructure
         | MessageSummaryItems.PreviewText;
+
+    /// <summary><paramref name="items"/> plus the headers <see cref="BimiSenders"/> reads.</summary>
+    internal static FetchRequest ListRequest(MessageSummaryItems items = ListItems) => new(items, BimiSenders.Headers);
 
     private const MessageFlags SystemFlags =
         MessageFlags.Seen | MessageFlags.Flagged | MessageFlags.Answered | MessageFlags.Deleted | MessageFlags.Draft;
@@ -68,10 +75,15 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         public readonly Dictionary<uint, MessageFlags> Flags = [];
         public readonly HashSet<uint> Removals = [];
         public readonly Dictionary<uint, string> Previews = [];
+
+        /// <summary>BIMI verdicts for rows cached without one; null means none, which no client needs to hear about.</summary>
+        public readonly Dictionary<uint, BimiDto?> Bimi = [];
+
         public uint? WindowStart;
         public uint? LastUid;
 
-        public bool ChangesRows => Wipe || Inserts.Count > 0 || Flags.Count > 0 || Removals.Count > 0 || Previews.Count > 0;
+        public bool ChangesRows =>
+            Wipe || Inserts.Count > 0 || Flags.Count > 0 || Removals.Count > 0 || Previews.Count > 0 || Bimi.Values.Any(b => b is not null);
     }
 
     /// <summary>The cache key of a folder: its full name, with any spelling of INBOX as "INBOX".</summary>
@@ -102,6 +114,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             await SyncWindowAsync(client, folder, state, modSeq, count, uidNext, plan, ct);
             await FetchNewAsync(folder, state, count, uidNext, initialWindow, plan, ct);
             await FillPreviewsAsync(folder, state, plan, ct);
+            await FillBimiAsync(folder, state, plan, ct);
         }
 
         // UNSEEN covers the whole folder, not just the window. Without mod-sequences there is no
@@ -146,7 +159,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         var plan = new SyncPlan { Quiet = true, WindowStart = from == 0 ? 1 : fetch[0] };
         if (fetch.Count > 0)
         {
-            plan.Inserts.AddRange(await folder.FetchAsync(fetch.Select(u => new UniqueId(state.UidValidity, u)).ToList(), ListItems, ct));
+            plan.Inserts.AddRange(await folder.FetchAsync(fetch.Select(u => new UniqueId(state.UidValidity, u)).ToList(), ListRequest(), ct));
         }
 
         return await ApplyAsync(account, Key(folder.FullName), plan, null, ct);
@@ -361,12 +374,13 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         m.Flags.HasFlag(MessageFlags.Answered),
         m.HasAttachments,
         m.Size,
-        m.Preview);
+        m.Preview,
+        string.IsNullOrEmpty(m.BimiDomain) ? null : new BimiDto(m.BimiDomain, m.BimiSelector));
 
     private static async Task LoadNewestAsync(IMailFolder folder, int count, uint? uidNext, int window, SyncPlan plan, CancellationToken ct)
     {
         var first = Math.Max(0, count - window);
-        var summaries = count == 0 ? [] : await folder.FetchAsync(first, count - 1, ListItems, ct);
+        var summaries = count == 0 ? [] : await folder.FetchAsync(first, count - 1, ListRequest(), ct);
         plan.Inserts.AddRange(summaries);
         plan.WindowStart = first == 0 || summaries.Count == 0 ? 1 : summaries.Min(s => s.UniqueId.Id);
         plan.LastUid = Math.Max(summaries.Count == 0 ? 0 : summaries.Max(s => s.UniqueId.Id), (uidNext ?? 1) - 1);
@@ -475,7 +489,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
 
         if (fresh.Count > 0)
         {
-            plan.Inserts.AddRange(await folder.FetchAsync(fresh, ListItems, ct));
+            plan.Inserts.AddRange(await folder.FetchAsync(fresh, ListRequest(), ct));
         }
 
         plan.LastUid = Math.Max(state.LastUid, Math.Max(fresh.Count == 0 ? 0 : fresh.Max(u => u.Id), (uidNext ?? 1) - 1));
@@ -507,6 +521,35 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         foreach (var summary in summaries)
         {
             plan.Previews[summary.UniqueId.Id] = MessagePreview.Normalize(summary.PreviewText);
+        }
+    }
+
+    /// <summary>BIMI verdicts for rows cached without one, newest first, <see cref="BimiBackfill"/> per sync.</summary>
+    private async Task FillBimiAsync(IMailFolder folder, CachedFolder state, SyncPlan plan, CancellationToken ct)
+    {
+        if (plan.Wipe)
+        {
+            return;
+        }
+
+        var missing = await db.Messages.AsNoTracking()
+            .Where(m => m.FolderId == state.Id && m.BimiDomain == null)
+            .OrderByDescending(m => m.Uid)
+            .Select(m => m.Uid)
+            .Take(BimiBackfill)
+            .ToListAsync(ct);
+        missing.RemoveAll(plan.Removals.Contains);
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        var summaries = await folder.FetchAsync(
+            missing.Select(u => new UniqueId(state.UidValidity, u)).ToList(),
+            ListRequest(MessageSummaryItems.UniqueId | MessageSummaryItems.Envelope), ct);
+        foreach (var summary in summaries)
+        {
+            plan.Bimi[summary.UniqueId.Id] = bimi.Find(summary);
         }
     }
 
@@ -563,13 +606,24 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
                 .ExecuteUpdateAsync(s => s.SetProperty(m => m.Preview, preview).SetProperty(m => m.ChangeSeq, seq), ct);
         }
 
+        foreach (var (uid, sender) in plan.Bimi)
+        {
+            var rows = db.Messages.Where(m => m.FolderId == state.Id && m.Uid == uid);
+            await (sender is null
+                ? rows.ExecuteUpdateAsync(s => s.SetProperty(m => m.BimiDomain, ""), ct)
+                : rows.ExecuteUpdateAsync(s => s
+                    .SetProperty(m => m.BimiDomain, sender.Domain)
+                    .SetProperty(m => m.BimiSelector, sender.Selector)
+                    .SetProperty(m => m.ChangeSeq, seq), ct));
+        }
+
         var inserts = plan.Inserts.DistinctBy(s => s.UniqueId.Id).ToList();
         foreach (var chunk in inserts.Select(s => s.UniqueId.Id).Chunk(Chunk))
         {
             await db.Messages.Where(m => m.FolderId == state.Id && chunk.Contains(m.Uid)).ExecuteDeleteAsync(ct);
         }
 
-        db.Messages.AddRange(inserts.Select(s => ToCachedMessage(state, s, seq)));
+        db.Messages.AddRange(inserts.Select(s => ToCachedMessage(state, s, bimi.Find(s), seq)));
 
         if (plan.WindowStart is { } windowStart)
         {
@@ -640,7 +694,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         return removed;
     }
 
-    private static CachedMessage ToCachedMessage(CachedFolder state, IMessageSummary s, long seq)
+    private static CachedMessage ToCachedMessage(CachedFolder state, IMessageSummary s, BimiDto? sender, long seq)
     {
         var subject = s.Envelope?.Subject ?? "";
         var from = AddressDto.From(s.Envelope?.From);
@@ -658,6 +712,8 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             HasAttachments = s.Attachments.Any(),
             Size = (long)(s.Size ?? 0),
             Preview = MessagePreview.Normalize(s.PreviewText),
+            BimiDomain = sender?.Domain ?? "",
+            BimiSelector = sender?.Selector,
             Flags = (s.Flags ?? MessageFlags.None) & SystemFlags,
             ChangeSeq = seq,
         };

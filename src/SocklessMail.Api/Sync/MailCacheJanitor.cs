@@ -1,7 +1,9 @@
+using SocklessMail.Api.Bimi;
+
 namespace SocklessMail.Api.Sync;
 
-/// <summary>Prunes old removal records from the header cache every hour.</summary>
-public sealed class MailCacheJanitor(IServiceScopeFactory scopes, ILogger<MailCacheJanitor> logger) : BackgroundService
+/// <summary>Prunes old removal records from the header cache, and expired BIMI lookups, every hour.</summary>
+public sealed class MailCacheJanitor(IServiceScopeFactory scopes, BimiResolver bimi, ILogger<MailCacheJanitor> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -12,6 +14,7 @@ public sealed class MailCacheJanitor(IServiceScopeFactory scopes, ILogger<MailCa
             {
                 await using var scope = scopes.CreateAsyncScope();
                 await scope.ServiceProvider.GetRequiredService<FolderCache>().PruneRemovedAsync(stoppingToken);
+                await bimi.PruneAsync(stoppingToken);
             }
             catch (Exception e) when (!stoppingToken.IsCancellationRequested)
             {

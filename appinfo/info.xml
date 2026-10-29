@@ -7,7 +7,7 @@
 	<description><![CDATA[Sockless Mail is a webmail client that runs as a Nextcloud External App (AppAPI).
 Each user can connect any number of IMAP/SMTP accounts. The backend is written in C# on ASP.NET Core.]]></description>
 	<!-- Keep <version> and <image-tag> equal: AppAPI deploys <image-tag>, app:update compares <version>. -->
-	<version>0.11.2</version>
+	<version>0.12.1</version>
 	<licence>MIT</licence>
 	<author>Jimmy Everling</author>
 	<namespace>SocklessMail</namespace>
@@ -22,7 +22,7 @@ Each user can connect any number of IMAP/SMTP accounts. The backend is written i
 			     Set the real registry and image before publishing a release. -->
 			<registry>sockless.local</registry>
 			<image>sockless_mail</image>
-			<image-tag>0.11.2</image-tag>
+			<image-tag>0.12.1</image-tag>
 		</docker-install>
 		<routes>
 			<!-- Bundles and icons; no secrets. The top-menu icon is fetched without user context. -->
@@ -63,6 +63,11 @@ Each user can connect any number of IMAP/SMTP accounts. The backend is written i
 				<display-name>Allow mail servers on local networks</display-name>
 				<description>"true" lets users connect to mail servers on private, loopback or carrier-grade NAT addresses (for an internal mail server). Off by default, so users cannot probe the network the app runs in.</description>
 				<default>false</default>
+			</variable>
+			<variable>
+				<name>SOCKLESS_MAIL_BIMI_AUTHSERV_IDS</name>
+				<display-name>Trusted Authentication-Results servers (BIMI)</display-name>
+				<description>Comma-separated host names (authserv-ids) whose Authentication-Results headers decide whether a message may show its sender's logo, e.g. "mx.example.com". Unset: the topmost header counts. Set it if your mail server does not add Authentication-Results itself. See the README, "Sender logos (BIMI)".</description>
 			</variable>
 		</environment-variables>
 	</external-app>

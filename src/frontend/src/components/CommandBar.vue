@@ -104,6 +104,10 @@
 				@update:model-value="layout.density = option.value">
 				{{ option.label }}
 			</NcActionRadio>
+			<NcActionCheckbox :model-value="layout.senderLogos"
+				@update:model-value="layout.senderLogos = $event">
+				{{ t('sockless_mail', 'Sender logos') }}
+			</NcActionCheckbox>
 			<NcActionSeparator />
 			<NcActionButton close-after-click @click="dialogs.shortcuts = true">
 				<template #icon>
@@ -121,6 +125,7 @@ import { showError } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
+import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
 import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'

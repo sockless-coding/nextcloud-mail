@@ -1,4 +1,3 @@
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.DataProtection;
 using SocklessMail.Api.Mail;
@@ -58,21 +57,7 @@ public sealed class ImageProxy(IHttpClientFactory httpClients, ILogger<ImageProx
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (compatible; SocklessMail-ImageProxy)");
                 client.DefaultRequestHeaders.Accept.ParseAdd("image/avif,image/webp,image/png,image/jpeg,image/gif;q=0.9,*/*;q=0.1");
             })
-            .ConfigurePrimaryHttpMessageHandler(sp => new SocketsHttpHandler
-            {
-                AllowAutoRedirect = true,
-                MaxAutomaticRedirections = 3,
-                UseCookies = false,
-                // An HTTP proxy would resolve the host itself and bypass the address policy.
-                UseProxy = false,
-                AutomaticDecompression = System.Net.DecompressionMethods.All,
-                ConnectCallback = async (context, ct) =>
-                {
-                    var socket = await sp.GetRequiredService<PolicySocketConnector>()
-                        .ConnectAsync(context.DnsEndPoint.Host, context.DnsEndPoint.Port, ct);
-                    return new NetworkStream(socket, ownsSocket: true);
-                },
-            });
+            .ConfigurePrimaryHttpMessageHandler(PolicyHttp.CreateHandler);
     }
 
     /// <returns>The image, or null when it cannot or must not be delivered.</returns>

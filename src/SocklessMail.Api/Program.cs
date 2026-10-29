@@ -6,6 +6,7 @@ using SocklessMail.Api;
 using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Api;
 using SocklessMail.Api.AppApi;
+using SocklessMail.Api.Bimi;
 using SocklessMail.Api.Compose;
 using SocklessMail.Api.Data;
 using SocklessMail.Api.Hosting;
@@ -76,6 +77,7 @@ builder.Services.AddSingleton<AttachmentUploads>();
 builder.Services.AddHostedService<AttachmentUploadJanitor>();
 builder.Services.AddSingleton<ImageProxy>();
 ImageProxy.ConfigureServices(builder.Services);
+BimiResolver.ConfigureServices(builder.Services);
 
 // Connection tests open sockets to user-chosen hosts; keep them from being used as a scanner.
 builder.Services.AddRateLimiter(limiter =>
@@ -90,6 +92,11 @@ builder.Services.AddRateLimiter(limiter =>
         RateLimitPartition.GetFixedWindowLimiter(
             context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(10) }));
+    // Sender logos: browsers cache them, so this only limits looking up arbitrary domains.
+    limiter.AddPolicy(BimiEndpoints.RateLimit, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 300, Window = TimeSpan.FromMinutes(1) }));
 });
 
 var app = builder.Build();
@@ -125,6 +132,7 @@ api.MapAccountEndpoints();
 api.MapMailboxEndpoints();
 api.MapComposeEndpoints();
 api.MapOAuthEndpoints();
+api.MapBimiEndpoints();
 api.MapHub<MailHub>("/hub");
 app.MapOAuthCallback();
 

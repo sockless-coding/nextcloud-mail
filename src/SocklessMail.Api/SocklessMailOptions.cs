@@ -14,7 +14,14 @@ public sealed class SocklessMailOptions
     /// <summary>SOCKLESS_MAIL_ALLOW_LOCAL_SERVERS: allow mail servers on private and loopback addresses.</summary>
     public bool AllowLocalServers { get; init; }
 
-    public string DatabasePath => Path.Combine(StorageDirectory, "sockless_mail.db");
+    /// <summary>
+    /// SOCKLESS_MAIL_BIMI_AUTHSERV_IDS: comma-separated authserv-ids (the host name at the start of
+    /// an Authentication-Results header) whose DMARC verdicts count for BIMI logos. Empty means the
+    /// topmost header counts, whoever added it (see <see cref="Bimi.BimiSenders"/>).
+    /// </summary>
+    public IReadOnlySet<string> BimiAuthServIds { get; init; } = new HashSet<string>();
+
+    public string DatabasePath =>Path.Combine(StorageDirectory, "sockless_mail.db");
     public string KeyRingDirectory => Path.Combine(StorageDirectory, "keys");
 
     public static SocklessMailOptions FromConfiguration(IConfiguration config, string contentRoot)
@@ -38,6 +45,9 @@ public sealed class SocklessMailOptions
             StorageDirectory = Path.GetFullPath(storage, contentRoot),
             EncryptionKey = string.IsNullOrEmpty(key) ? null : key,
             AllowLocalServers = bool.TryParse(config["SOCKLESS_MAIL_ALLOW_LOCAL_SERVERS"], out var allow) && allow,
+            BimiAuthServIds = (config["SOCKLESS_MAIL_BIMI_AUTHSERV_IDS"] ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase),
         };
     }
 }

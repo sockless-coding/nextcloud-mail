@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SocklessMail.Api.Accounts;
+using SocklessMail.Api.Bimi;
 using SocklessMail.Api.Mailbox;
 using SocklessMail.Api.OAuth;
 using SocklessMail.Api.Sync;
@@ -29,6 +30,11 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
 
     /// <summary>Instance-wide OAuth app registrations (admin settings); not user-owned, so not filtered.</summary>
     public DbSet<OAuthClient> OAuthClients => Set<OAuthClient>();
+
+    /// <summary>The BIMI cache: public DNS and web content shared by all users, so not filtered.</summary>
+    public DbSet<BimiLookup> BimiLookups => Set<BimiLookup>();
+
+    public DbSet<BimiLogo> BimiLogos => Set<BimiLogo>();
 
     // SQLite cannot order or compare DateTimeOffset natively; store UTC ticks.
     private static readonly ValueConverter<DateTimeOffset, long> UtcTicks =
@@ -92,6 +98,8 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             message.Property(m => m.Flags).HasConversion<int>();
             message.Property(m => m.SearchText).HasMaxLength(4000);
             message.Property(m => m.Preview).HasMaxLength(MessagePreview.MaxLength);
+            message.Property(m => m.BimiDomain).HasMaxLength(253);
+            message.Property(m => m.BimiSelector).HasMaxLength(63);
             message.HasQueryFilter(m => m.OwnerUserId == _userId);
         });
 
@@ -116,6 +124,27 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             client.Property(c => c.Tenant).HasMaxLength(100);
             client.Property(c => c.RedirectUri).HasMaxLength(2000);
             client.Property(c => c.UpdatedAt).HasConversion(UtcTicks);
+        });
+
+        model.Entity<BimiLookup>(lookup =>
+        {
+            lookup.ToTable("bimi_lookups");
+            lookup.HasKey(l => new { l.Domain, l.Selector });
+            lookup.HasIndex(l => l.ExpiresAt);
+            lookup.HasIndex(l => l.LogoHash);
+            lookup.Property(l => l.Domain).HasMaxLength(253);
+            lookup.Property(l => l.Selector).HasMaxLength(63);
+            lookup.Property(l => l.LogoHash).HasMaxLength(64);
+            lookup.Property(l => l.Outcome).HasConversion<string>().HasMaxLength(16);
+            lookup.Property(l => l.CheckedAt).HasConversion(UtcTicks);
+            lookup.Property(l => l.ExpiresAt).HasConversion(UtcTicks);
+        });
+
+        model.Entity<BimiLogo>(logo =>
+        {
+            logo.ToTable("bimi_logos");
+            logo.HasKey(l => l.Hash);
+            logo.Property(l => l.Hash).HasMaxLength(64);
         });
     }
 }

@@ -36,6 +36,7 @@ src/SocklessMail.Api/       ASP.NET Core minimal APIs
   Data/                     EF Core DbContext (SQLite), per-user query filter, migrations
   Mail/                     MailKit connections: address policy, connector, connection pool, HTML sanitizer
   Mailbox/                  folders, message list, message view, parts, remote image proxy
+  Bimi/                     sender logos: DMARC verdicts, DNS lookups, SVG checks, logo cache
   Sync/                     header cache, folder sync (QRESYNC/CONDSTORE/plain), IDLE watchers
   Security/                 Data Protection key ring wrapping
 src/frontend/               Vue 3 + @nextcloud/vue 9, built into wwwroot/js and wwwroot/css
@@ -124,10 +125,13 @@ dev/dev.sh logs              # follow the container's logs
 ```
 
 After code changes, bump **both** `<version>` and `<image-tag>` in `appinfo/info.xml` (keep them
-equal), then `dev/dev.sh build update-docker`. An update with an unchanged version does nothing.
+equal), then run `dev/dev.sh build` and `dev/dev.sh update-docker`. An update with an unchanged version does nothing.
 `update-docker` disables and enables the app after updating; see "Known limitations" for why.
 `register-docker` replaces any installed copy and also works without a bump. The `sockless.local`
 registry in info.xml is fictional, and `dev.sh up` maps it to "local" so AppAPI uses the local image.
+
+On Windows, `dev\update-docker.bat` does the build and the update from cmd or Explorer, through
+Git Bash. `dev\update-docker.bat register` re-registers instead, for a rebuild without a bump.
 
 ## Deploying on a real Nextcloud with HaRP
 
@@ -197,6 +201,7 @@ registration, so changing one means registering again.
 |---|---|---|
 | `SOCKLESS_MAIL_ENCRYPTION_KEY` | unset | Wraps the key ring that encrypts stored mail credentials. At least 32 characters. Strongly recommended; see "Stored credentials". |
 | `SOCKLESS_MAIL_ALLOW_LOCAL_SERVERS` | `false` | `true` allows mail servers on private, loopback and carrier-grade NAT addresses, e.g. an internal mail server. |
+| `SOCKLESS_MAIL_BIMI_AUTHSERV_IDS` | unset | Comma-separated authserv-ids (the host name that starts an `Authentication-Results` header) whose DMARC verdicts count for sender logos. Unset means the topmost header counts. See "Sender logos (BIMI)". |
 
 Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_data`):
 `sockless_mail.db` (SQLite, WAL mode) and `keys/` (the Data Protection key ring).
@@ -567,6 +572,48 @@ three layers of defence:
 
 An HTML or SVG attachment therefore cannot run in the Nextcloud origin, even if opened directly.
 
+### Sender logos (BIMI)
+
+Messages from brands that publish a [BIMI](https://bimigroup.org/) record show the brand's logo
+in place of the sender's initials. A logo is a claim that the mail really comes from that brand,
+so it is shown only when every check passes:
+
+- **The message passed DMARC.** The sync fetches `Authentication-Results` and `BIMI-Selector`
+  with the list fields. Only the topmost `Authentication-Results` header counts, because it was
+  added by the server closest to the mailbox. A sender's forged header sits further down and is
+  never read. The verdict must be `dmarc=pass` for the From domain, and the message must have
+  exactly one author. Some servers write no `dmarc=` result, only DKIM and SPF; amavis is one of
+  them. Then a `dkim=pass` whose `header.d`, or an `spf=pass` whose `smtp.mailfrom` domain, is
+  the From domain or a parent of it counts as the DMARC pass, because that is the check DMARC
+  itself makes. A subdomain never counts. An explicit `dmarc=` result always wins.
+- **That header comes from your server.** If your mail server adds no `Authentication-Results`
+  of its own, the topmost header could be one the sender wrote. Set
+  `SOCKLESS_MAIL_BIMI_AUTHSERV_IDS` to your server's authserv-id to close that gap. Only headers
+  with those ids then count.
+- **The domain enforces DMARC.** Its policy must be `quarantine` or `reject` at 100 %, and must
+  not be in test mode. The policy is found with the DMARCbis DNS tree walk.
+- **The BIMI record is checked.** It is read at `<selector>._bimi.<domain>`, or else at the
+  organizational domain where the DMARC policy was found. It is never read at a public suffix
+  (`psd=y`), so a registry's logo does not appear on its customers' mail. The logo URL must be
+  HTTPS.
+- **The logo is a static SVG of at most 32 KB.** It must have no scripts, event handlers, foreign
+  content, animation, DTD or references outside the document. It is fetched through the same
+  address policy as remote images.
+
+Lookups are cached in the database and shared by all users, because they hold public DNS and
+web content. One lookup per domain and selector is kept:
+
+| Result | Kept for |
+|---|---|
+| A logo | 24 hours |
+| No logo to show | 6 hours |
+| DNS or the logo server failed | 1 hour; a logo already known stays meanwhile |
+
+The browser loads logos from `/api/bimi/<domain>` and caches each answer: a logo for a day, a
+404 for an hour. A long list therefore costs one request per sender domain. The endpoint
+serves the logo with the sandbox CSP and is rate-limited to 300 requests per minute per user.
+Users can turn logos off in the view menu ("Sender logos").
+
 ### Connections to mail servers
 
 Any user can make the app connect to a host and port of their choice. Without limits that would
@@ -623,6 +670,9 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
 - Sign-ins in progress live in memory: a restart during a sign-in means starting it again. The
   callback page carries no script, so the popup is closed by the app's window when it sees the
   result.
+- Sender logos (BIMI) do not check Verified Mark Certificates (VMC/CMC). Any domain that
+  enforces DMARC can show a logo, including look-alike domains. Gmail and Apple Mail require a
+  certificate. The logo appears next to the sender's address, not in place of it.
 - Mail servers with self-signed certificates cannot be used. There is no "trust this certificate"
   option yet.
 - Nextcloud installs translations only from app store release archives, so the UI is English

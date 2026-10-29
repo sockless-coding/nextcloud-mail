@@ -83,6 +83,7 @@
 						<span class="message-row__stripe" />
 						<span class="message-row__avatar">
 							<NcAvatar :display-name="sender(row.message)"
+								:url="bimiUrl(row.message)"
 								is-no-user
 								disable-menu
 								disable-tooltip
@@ -160,6 +161,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { bimiUrl } from '../bimi.js'
 import { accountColor, accountsState } from '../store/accounts.js'
 import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { layout, readingPane } from '../store/layout.js'

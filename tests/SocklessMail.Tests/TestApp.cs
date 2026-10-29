@@ -24,7 +24,7 @@ namespace SocklessMail.Tests;
 /// fake Nextcloud. Pass a <paramref name="storageDirectory"/> to start a second instance over the
 /// same data, e.g. to simulate a restart with different settings.
 /// </summary>
-public sealed class TestApp(string? storageDirectory = null, IReadOnlyDictionary<string, string>? settings = null)
+public sealed class TestApp(string? storageDirectory = null, IReadOnlyDictionary<string, string>? settings = null, Action<IServiceCollection>? services = null)
     : WebApplicationFactory<Program>
 {
     public const string Secret = "test-secret-0123456789abcdefghijklmnop";
@@ -39,6 +39,7 @@ public sealed class TestApp(string? storageDirectory = null, IReadOnlyDictionary
     };
 
     private readonly bool _ownsStorage = storageDirectory is null;
+    private readonly Action<IServiceCollection>? _configureServices = services;
 
     public string StorageDirectory { get; } =
         storageDirectory ?? Path.Combine(Path.GetTempPath(), "sockless-mail-tests", Guid.NewGuid().ToString("N"));
@@ -69,6 +70,7 @@ public sealed class TestApp(string? storageDirectory = null, IReadOnlyDictionary
             services.AddHttpClient(OAuthTokens.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => TokenEndpoint);
             // Test accounts point at made-up servers; no background IMAP connections.
             services.AddSingleton(new WatcherOptions { MaxWatchers = 0 });
+            _configureServices?.Invoke(services);
         });
     }
 

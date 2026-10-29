@@ -71,6 +71,15 @@ public sealed class CachedMessage
     /// </summary>
     public string? Preview { get; set; }
 
+    /// <summary>
+    /// The From domain whose BIMI logo the message may show (<see cref="Bimi.BimiSenders"/>); ""
+    /// when it may show none, null for rows cached before BIMI was, which syncs fill in.
+    /// </summary>
+    public string? BimiDomain { get; set; }
+
+    /// <summary>The BIMI-Selector the sender asked for; null for the default one.</summary>
+    public string? BimiSelector { get; set; }
+
     /// <summary>Subject, names and addresses in <see cref="SearchTerms.Normalize"/>d form, for searching the cache.</summary>
     public required string SearchText { get; init; }
 }

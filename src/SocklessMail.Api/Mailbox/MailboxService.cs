@@ -4,6 +4,7 @@ using MailKit.Search;
 using MimeKit;
 using MimeKit.Text;
 using SocklessMail.Api.Accounts;
+using SocklessMail.Api.Bimi;
 using SocklessMail.Api.Compose;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Sync;
@@ -25,7 +26,7 @@ public sealed record PartContent(string FileName, string ContentType, Func<Strea
 public sealed partial class MailboxService(
     ImapConnections imap, MailLogins logins, ImageProxyTokens proxyTokens,
     MailServerConnector connector, AttachmentUploads uploads, FolderCache cache, SyncLocks syncLocks,
-    MailboxWatchers watchers, TimeProvider clock, ILogger<MailboxService> logger)
+    MailboxWatchers watchers, BimiSenders bimi, TimeProvider clock, ILogger<MailboxService> logger)
 {
     public const int DefaultPageSize = 50;
     public const int MaxPageSize = 100;
@@ -123,7 +124,7 @@ public sealed partial class MailboxService(
             if (!MessageFilters.NeedsStructureCheck(filter))
             {
                 var page = matches.Take(limit).ToList();
-                var summaries = page.Count == 0 ? [] : await folder.FetchAsync(page, FolderCache.ListItems, token);
+                var summaries = page.Count == 0 ? [] : await folder.FetchAsync(page, FolderCache.ListRequest(), token);
                 return new SearchPage(
                     summaries.OrderByDescending(s => s.UniqueId.Id).Select(s => ToSummaryDto(folder.UidValidity, s)).ToList(),
                     matches.Count > limit ? page[^1].Id : null,
@@ -143,7 +144,7 @@ public sealed partial class MailboxService(
                 kept.AddRange(structures.Where(s => s.Attachments.Any()));
             }
 
-            var withAttachments = kept.Count == 0 ? [] : await folder.FetchAsync(kept.Select(s => s.UniqueId).ToList(), FolderCache.ListItems, token);
+            var withAttachments = kept.Count == 0 ? [] : await folder.FetchAsync(kept.Select(s => s.UniqueId).ToList(), FolderCache.ListRequest(), token);
             var more = read < matches.Count;
             return new SearchPage(
                 withAttachments.OrderByDescending(s => s.UniqueId.Id).Select(s => ToSummaryDto(folder.UidValidity, s)).ToList(),
@@ -213,7 +214,7 @@ public sealed partial class MailboxService(
         {
             var (folder, uid) = await OpenMessageAsync(client, folderId, messageId, token);
             // The view shows the text itself, not a preview of it.
-            var summary = await FetchOneAsync(folder, uid, FolderCache.ListItems & ~MessageSummaryItems.PreviewText, token);
+            var summary = await FetchOneAsync(folder, uid, FolderCache.ListRequest(FolderCache.ListItems & ~MessageSummaryItems.PreviewText), token);
 
             var html = "";
             BodyPartText? bodyPart = summary.HtmlBody ?? summary.TextBody;
@@ -249,7 +250,8 @@ public sealed partial class MailboxService(
                 sanitized.Html,
                 sanitized.HasRemoteContent,
                 allowRemote,
-                summary.Attachments.Select(ToAttachmentDto).ToArray());
+                summary.Attachments.Select(ToAttachmentDto).ToArray(),
+                bimi.Find(summary));
         }, ct);
 
     private static AttachmentDto ToAttachmentDto(BodyPartBasic part) => new(
@@ -331,9 +333,12 @@ public sealed partial class MailboxService(
         return (folder, new UniqueId(uidValidity, uid));
     }
 
-    private static async Task<IMessageSummary> FetchOneAsync(IMailFolder folder, UniqueId uid, MessageSummaryItems items, CancellationToken ct)
+    private static Task<IMessageSummary> FetchOneAsync(IMailFolder folder, UniqueId uid, MessageSummaryItems items, CancellationToken ct) =>
+        FetchOneAsync(folder, uid, new FetchRequest(items), ct);
+
+    private static async Task<IMessageSummary> FetchOneAsync(IMailFolder folder, UniqueId uid, IFetchRequest request, CancellationToken ct)
     {
-        var summaries = await folder.FetchAsync([uid], items, ct);
+        var summaries = await folder.FetchAsync([uid], request, ct);
         return summaries.FirstOrDefault(s => s.UniqueId == uid) ?? throw new MailboxNotFoundException("The message");
     }
 
@@ -407,7 +412,7 @@ public sealed partial class MailboxService(
 
     private static bool IsInbox(string fullName) => fullName.Equals("INBOX", StringComparison.OrdinalIgnoreCase);
 
-    private static MessageSummaryDto ToSummaryDto(uint uidValidity, IMessageSummary s) => new(
+    private MessageSummaryDto ToSummaryDto(uint uidValidity, IMessageSummary s) => new(
         MailboxIds.MessageId(uidValidity, s.UniqueId.Id),
         s.Envelope?.Subject ?? "",
         AddressDto.From(s.Envelope?.From),
@@ -418,7 +423,8 @@ public sealed partial class MailboxService(
         s.Flags?.HasFlag(MessageFlags.Answered) ?? false,
         s.Attachments.Any(),
         (long)(s.Size ?? 0),
-        MessagePreview.Normalize(s.PreviewText));
+        MessagePreview.Normalize(s.PreviewText),
+        bimi.Find(s));
 
     private static FolderDto ToDto(IMailFolder f)
     {

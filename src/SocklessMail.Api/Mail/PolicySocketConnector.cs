@@ -61,3 +61,23 @@ public sealed class PolicySocketConnector(ServerAddressPolicy policy)
         throw last ?? new SocketException((int)SocketError.HostNotFound);
     }
 }
+
+/// <summary>HTTP clients that fetch from sender-chosen URLs (remote images, BIMI logos) through <see cref="PolicySocketConnector"/>.</summary>
+public static class PolicyHttp
+{
+    public static SocketsHttpHandler CreateHandler(IServiceProvider services) => new()
+    {
+        AllowAutoRedirect = true,
+        MaxAutomaticRedirections = 3,
+        UseCookies = false,
+        // An HTTP proxy would resolve the host itself and bypass the address policy.
+        UseProxy = false,
+        AutomaticDecompression = DecompressionMethods.All,
+        ConnectCallback = async (context, ct) =>
+        {
+            var socket = await services.GetRequiredService<PolicySocketConnector>()
+                .ConnectAsync(context.DnsEndPoint.Host, context.DnsEndPoint.Port, ct);
+            return new NetworkStream(socket, ownsSocket: true);
+        },
+    };
+}
