@@ -4,6 +4,8 @@ namespace SocklessMail.Api.AppApi;
 /// The top-menu page. AppAPI renders it at /index.php/apps/app_api/embedded/sockless_mail/sockless_mail
 /// as an empty #content element, injects the registered script and style (both fetched through
 /// the PHP proxy) and provides the initial state under the app_api namespace.
+/// The companion PHP app (companion/socklessmail) shows the same page at /apps/socklessmail/
+/// from this registration, and relies on its menu name, icon and bundle paths.
 /// </summary>
 public sealed class UiRegistration(NextcloudClient nextcloud, AppApiOptions options, ILogger<UiRegistration> logger)
 {

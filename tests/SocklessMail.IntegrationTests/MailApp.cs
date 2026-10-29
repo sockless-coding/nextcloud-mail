@@ -1,7 +1,9 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,6 +49,43 @@ public sealed class MailApp(Action<IServiceCollection>? services = null) : WebAp
         client.DefaultRequestHeaders.Add(AppApiHeaders.Authorization, AppApiHeaders.BuildAuthorization(userId, Secret));
         client.DefaultRequestHeaders.Add("X-Sockless-Request", "1");
         return client;
+    }
+
+    /// <summary>A push connection over WebSockets with what HaRP would forward for <paramref name="userId"/>.</summary>
+    public HubConnection HubAs(string userId)
+    {
+        var headers = new Dictionary<string, string>
+        {
+            [AppApiHeaders.ExAppId] = "sockless_mail",
+            [AppApiHeaders.ExAppVersion] = "0.3.0",
+            [AppApiHeaders.Authorization] = AppApiHeaders.BuildAuthorization(userId, Secret),
+            ["X-Sockless-Request"] = "1",
+        };
+        var server = Server;
+        return new HubConnectionBuilder()
+            .WithUrl(new Uri(server.BaseAddress, "/api/hub"), options =>
+            {
+                options.Transports = HttpTransportType.WebSockets;
+                options.HttpMessageHandlerFactory = _ => server.CreateHandler();
+                foreach (var (name, value) in headers)
+                {
+                    options.Headers[name] = value;
+                }
+
+                options.WebSocketFactory = async (context, ct) =>
+                {
+                    var client = server.CreateWebSocketClient();
+                    client.ConfigureRequest = request =>
+                    {
+                        foreach (var (name, value) in headers)
+                        {
+                            request.Headers[name] = value;
+                        }
+                    };
+                    return await client.ConnectAsync(context.Uri, ct);
+                };
+            })
+            .Build();
     }
 
     /// <summary>Adds an account for the GreenMail mailbox over the API and returns its id.</summary>

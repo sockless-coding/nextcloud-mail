@@ -66,6 +66,8 @@ builder.Services.AddScoped<NextcloudAdmins>();
 builder.Services.AddSingleton<SyncLocks>();
 builder.Services.AddSingleton(new WatcherOptions());
 builder.Services.AddSingleton<UserActivity>();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<MailPush>();
 builder.Services.AddSingleton<MailboxWatchers>();
 builder.Services.AddHostedService(services => services.GetRequiredService<MailboxWatchers>());
 builder.Services.AddHostedService<MailCacheJanitor>();
@@ -123,6 +125,7 @@ api.MapAccountEndpoints();
 api.MapMailboxEndpoints();
 api.MapComposeEndpoints();
 api.MapOAuthEndpoints();
+api.MapHub<MailHub>("/hub");
 app.MapOAuthCallback();
 
 // Unmatched paths must answer 404, not the fallback policy's 401/403: AppAPI calls POST /init

@@ -4,7 +4,9 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -81,6 +83,43 @@ public sealed class TestApp(string? storageDirectory = null, IReadOnlyDictionary
         // What the frontend sends on every request (CSRF guard).
         client.DefaultRequestHeaders.Add("X-Sockless-Request", "1");
         return client;
+    }
+
+    /// <summary>A push connection over WebSockets with what HaRP would forward (null: no AppAPI headers).</summary>
+    public HubConnection HubAs(string? userId)
+    {
+        var headers = userId is null ? [] : new Dictionary<string, string>
+        {
+            [AppApiHeaders.ExAppId] = "sockless_mail",
+            [AppApiHeaders.ExAppVersion] = "0.1.0",
+            [AppApiHeaders.Authorization] = AppApiHeaders.BuildAuthorization(userId, Secret),
+            ["X-Sockless-Request"] = "1",
+        };
+        var server = Server;
+        return new HubConnectionBuilder()
+            .WithUrl(new Uri(server.BaseAddress, "/api/hub"), options =>
+            {
+                options.Transports = HttpTransportType.WebSockets;
+                options.HttpMessageHandlerFactory = _ => server.CreateHandler();
+                foreach (var (name, value) in headers)
+                {
+                    options.Headers[name] = value;
+                }
+
+                options.WebSocketFactory = async (context, ct) =>
+                {
+                    var client = server.CreateWebSocketClient();
+                    client.ConfigureRequest = request =>
+                    {
+                        foreach (var (name, value) in headers)
+                        {
+                            request.Headers[name] = value;
+                        }
+                    };
+                    return await client.ConnectAsync(context.Uri, ct);
+                };
+            })
+            .Build();
     }
 
     /// <summary>A DbContext acting for <paramref name="userId"/> (null: no user, as in background work).</summary>

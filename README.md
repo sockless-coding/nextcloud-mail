@@ -24,6 +24,7 @@ the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with
 
 ```
 appinfo/info.xml            ExApp manifest: id sockless_mail, image, routes, env allow-list
+companion/socklessmail/     optional PHP app: serves the mail page at /apps/socklessmail/
 Dockerfile                  frontend build → dotnet publish → aspnet:10.0-alpine + frpc
 docker/entrypoint.sh        runs as root, fixes ownership, drops to the "sockless" user
 docker/start.sh             opens the FRP tunnel to HaRP, then starts the app
@@ -70,9 +71,12 @@ node layout.mjs      # multi-select and actions on it, reading pane and density 
 node filters.mjs     # previews, Unread/Flagged/Attachments in a folder and in all inboxes, polling in a filter
 node workspace.mjs   # sender details, attachment cards, composer window, recipient chips, keyboard shortcuts
 node drafts.mjs      # rich text reaching the recipient, drafts saved while writing, Close, Continue editing, plain text
+node push.mjs        # WebSocket to the hub (HaRP), no inbox polling while connected, new mail shown after a push
+node companion.mjs   # /apps/socklessmail/: address kept, app menu entry, deep links, AppAPI's page still works
 ```
 
 They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console errors.
+They open the app at `/apps/socklessmail/`. `APP_PAGE=embedded` uses AppAPI's page instead.
 
 Database changes: `dotnet tool restore`, then
 `dotnet ef migrations add <Name> --project src/SocklessMail.Api --output-dir Data/Migrations`.
@@ -86,6 +90,9 @@ Nextcloud 35 on **http://localhost:8180** (admin/admin), HaRP behind the same ng
 ```bash
 dev/dev.sh up        # start the stack, register the deploy daemons harp_dev and manual_dev
 ```
+
+The companion app is mounted read-only into `custom_apps/socklessmail` and enabled by `up`, so
+PHP changes there apply on the next page load.
 
 GreenMail has two mailboxes, `alice@example.test` (password `alice`) and `bob@example.test`
 (password `bob`), with no encryption: IMAP on port 3143, SMTP on 3025. Use the server name
@@ -127,8 +134,10 @@ registry in info.xml is fictional, and `dev.sh up` maps it to "local" so AppAPI 
 1. **HaRP**: run it and register it as a deploy daemon, as described in the
    [HaRP README](https://github.com/nextcloud/HaRP) and the admin manual, section
    *AppAPI and External Apps*. Your reverse proxy must forward `/exapps/` to HaRP. AppAPI itself
-   reaches the app through that path, so installation fails without it. `dev/nginx.conf` has a
-   working example.
+   reaches the app through that path, so installation fails without it. For push (new mail
+   without polling), the rule must also pass WebSocket upgrades (`Upgrade` and `Connection`
+   headers in nginx). Without them, SignalR falls back to SSE or long polling. `dev/nginx.conf`
+   has a working example.
 2. **Image**: build and push to a registry Nextcloud's Docker engine can pull from, and set
    `<registry>`, `<image>` and `<image-tag>` in `appinfo/info.xml` accordingly.
 3. **Register**:
@@ -142,6 +151,39 @@ registry in info.xml is fictional, and `dev.sh up` maps it to "local" so AppAPI 
    unless you pass `--rm-data`. If every `/exapps/sockless_mail/...` request answers 404 after the
    update, run `occ app_api:app:disable sockless_mail` and `occ app_api:app:enable sockless_mail`
    (see "Known limitations").
+5. **Web address (optional)**: AppAPI shows the app at
+   `/apps/app_api/embedded/sockless_mail/sockless_mail`. For `/apps/socklessmail/`, copy
+   `companion/socklessmail/` into a Nextcloud apps directory (usually `custom_apps/`), then run
+   `occ app:enable socklessmail`. Keep its `<version>` in step with the ExApp's.
+   - The app menu entry then points at the new address. AppAPI's address keeps working.
+   - The page itself still comes from the ExApp, so the companion has no settings and stores
+     nothing.
+   - With the ExApp disabled, `/apps/socklessmail/` answers 404. If a future AppAPI no longer
+     offers what the companion uses, it redirects to AppAPI's address instead.
+
+## The companion app (`companion/socklessmail/`)
+
+An ExApp has no PHP code, so it cannot add routes under `/apps/`. Only AppAPI's own
+`/apps/app_api/embedded/<appid>/<menu>/` page is available. Collabora (`richdocuments`) and
+ONLYOFFICE-style connectors get their address the same way: a PHP app in front of a backend
+container. The companion stays small:
+
+- `PageController` serves `/apps/socklessmail/` and every path below it. It renders the same
+  empty `#content` element as AppAPI's page, with the same Content Security Policy.
+- AppAPI adds the registered bundles in a middleware that only runs for its own controller. So
+  `js/socklessmail-main.js`, a plain loader script, adds the ExApp's stylesheet and script from
+  AppAPI's proxy (`/apps/app_api/proxy/sockless_mail/...`). The bundle paths are fixed in
+  `lib/Service/ExApp.php` and must match `vite.config.js`.
+- The initial state the ExApp registered (`UiRegistration.cs`) is read from AppAPI's
+  `InitialStateService` and passed on under the `socklessmail` id. The frontend reads that id
+  first, then `app_api`.
+- `NavigationListener` adds a menu entry with AppAPI's id (`app_api_sockless_mail_sockless_mail`).
+  Nextcloud keys entries by id and resolves plain entries after AppAPI's closures, so this entry
+  replaces AppAPI's. The page also marks it active.
+- AppAPI has no public PHP API for this, so `ExAppService` and `InitialStateService` are used
+  directly, behind `class_exists` checks and try/catch.
+- AppAPI loads an ExApp's translations only on its own pages. The app has no translations yet;
+  once it has, the companion must load them as well.
 
 ## Configuration
 
@@ -341,10 +383,21 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
 
   The answer says `reset: true` instead when the token is older than the kept removals, comes
   from before a rebuilt window, or more than 500 messages changed. The UI then reloads the list.
-- **New mail in the UI** is found by polling the changes endpoint every 15 seconds, and when the
-  tab becomes visible again. The folder lists (LIST + STATUS) of every account are reloaded every
-  60 seconds, for the unread counts in the account rail.
-  There is no WebSocket or SSE channel to the browser (see "Known limitations").
+- **New mail in the UI** is pushed with HaRP. The browser holds a SignalR connection to
+  `/api/hub` (WebSockets, with SSE and long polling as fallbacks). It has the same route and
+  authentication as the rest of the API, and the negotiate POST passes the same CSRF check.
+  - Every cache write that a list or count would show (sync, flag change, removal) sends the
+    owner's tabs `folderChanged { accountId, folderId }`. It is only a nudge: the tab asks the
+    changes endpoint what changed and reloads that account's folder list (once per 2 s burst).
+  - An open connection keeps the user active, so the IDLE watchers keep running while a tab is
+    open, also in the background. The window of 10 minutes starts when the last tab closes.
+  - While connected, inboxes and the unified inbox are polled every 2 minutes only, in case a
+    watcher is down. Other folders have no watcher and are polled every 60 seconds. The folder
+    lists are reloaded every 2 minutes.
+  - Without a connection (AppAPI's PHP proxy, which buffers responses, or while reconnecting),
+    the UI polls the open folder's changes endpoint every 15 seconds and reloads the folder lists
+    (LIST + STATUS) every 60 seconds, for the unread counts in the account rail.
+  - Everything is refreshed when the tab becomes visible again and after a reconnect.
 - **Search** has two scopes, chosen next to the search box in the command bar:
   - **This folder** (`GET …/folders/{id}/search?q=…&before=<uid>`) asks the mail server:
     `UID SEARCH TEXT <term> TEXT <term> …`. It matches headers and message text, finds old mail
@@ -533,7 +586,7 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
 ## Known limitations
 
 - The PHP proxy (manual-install) forwards only GET, HEAD, POST, PUT and DELETE, so the API uses
-  no PATCH. It buffers responses, so the app polls instead of using WebSockets or SSE.
+  no PATCH. It buffers responses, so without HaRP the app polls instead of using push.
 - SQLite limits the app to a single instance.
 - View settings (reading pane position, density, folder pane, pane sizes) are kept in the
   browser's local storage per Nextcloud user, so they do not follow the user to another browser.

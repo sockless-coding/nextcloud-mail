@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>socklessmail</id>
+	<name>Sockless Mail (web address)</name>
+	<summary>Serves the Sockless Mail External App at /apps/socklessmail/</summary>
+	<description><![CDATA[A companion to the Sockless Mail External App (app id sockless_mail, deployed through AppAPI).
+It shows the same mail page at /apps/socklessmail/ instead of AppAPI's /apps/app_api/embedded/sockless_mail/sockless_mail
+and points the Sockless Mail entry of the app menu there. Everything else, including the mail page itself, still comes from the External App.]]></description>
+	<!-- Same version as the External App (appinfo/info.xml at the repository root). -->
+	<version>0.11.1</version>
+	<licence>MIT</licence>
+	<author>Jimmy Everling</author>
+	<namespace>SocklessMail</namespace>
+	<category>social</category>
+	<category>office</category>
+	<dependencies>
+		<nextcloud min-version="32" max-version="36"/>
+	</dependencies>
+</info>

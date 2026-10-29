@@ -28,9 +28,10 @@ public sealed record FolderChanges(
 /// and only when the message count or UIDNEXT moved.</item>
 /// <item>Neither: the flags of the whole window are fetched and compared.</item>
 /// </list>
-/// Callers hold the folder's <see cref="SyncLocks"/> lock around every method that writes.
+/// Callers hold the folder's <see cref="SyncLocks"/> lock around every method that writes. Every
+/// write that a client's list or counts would show is pushed to the owner's open tabs.
 /// </summary>
-public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<FolderCache> logger)
+public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush push, ILogger<FolderCache> logger)
 {
     /// <summary>More new messages than this since the last sync: rebuild the window from the newest page instead.</summary>
     public const int MaxNewMessages = 500;
@@ -279,6 +280,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
         {
             state.ChangeSeq = seq;
             await db.SaveChangesAsync(ct);
+            await push.FolderChangedAsync(state.OwnerUserId, accountId, fullName);
         }
     }
 
@@ -307,6 +309,10 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
         }
 
         await transaction.CommitAsync(ct);
+        if (removed.Count > 0)
+        {
+            await push.FolderChangedAsync(state.OwnerUserId, accountId, fullName);
+        }
     }
 
     /// <summary>Drops the cache of folders that no longer exist on the server (deleted or renamed).</summary>
@@ -529,6 +535,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
         }
 
         var seq = plan.Quiet ? state.ChangeSeq : state.ChangeSeq + 1;
+        var (total, unread) = (state.Total, state.Unread);
         if (plan.Wipe)
         {
             await db.Messages.Where(m => m.FolderId == state.Id).ExecuteDeleteAsync(ct);
@@ -596,6 +603,12 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, ILogger<Fo
         }
 
         await transaction.CommitAsync(ct);
+        // Rows added by paging further back change no client's list.
+        if (!plan.Quiet && (plan.ChangesRows || state.Total != total || state.Unread != unread))
+        {
+            await push.FolderChangedAsync(state.OwnerUserId, account.Id, fullName);
+        }
+
         return state;
     }
 

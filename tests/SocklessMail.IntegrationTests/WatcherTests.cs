@@ -1,7 +1,9 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Security;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MimeKit;
@@ -81,12 +83,21 @@ public sealed class WatcherTests(GreenMailFixture greenMail, DovecotFixture dove
         var page = await Json(await client.GetAsync($"/api/accounts/{account}/folders/SU5CT1g/messages", Ct));
         await WaitUntilAsync(() => Task.FromResult(watchers.IsCurrent(account, "INBOX")), "the inbox is watched");
 
+        // An open tab hears about the new mail without asking.
+        await using var hub = _app.HubAs(UserId);
+        var pushed = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        hub.On<JsonElement>(MailHub.FolderChanged, nudge => pushed.TrySetResult(nudge));
+        await hub.StartAsync(Ct);
+
         var subject = $"Pushed {Guid.NewGuid():N}";
         var message = new MimeMessage { Subject = subject, Body = new TextPart("plain") { Text = "hi" } };
         message.From.Add(new MailboxAddress("", "sender@example.test"));
         await imap.Inbox.AppendAsync(message, MessageFlags.None, Ct);
 
         await WaitUntilAsync(() => CachedAsync(subject), "the watcher cached the new message");
+        var nudge = await pushed.Task.WaitAsync(Patience, Ct);
+        Assert.Equal(account, nudge.GetProperty("accountId").GetGuid());
+        Assert.Equal("SU5CT1g", nudge.GetProperty("folderId").GetString());
         await WaitUntilAsync(() => Task.FromResult(watchers.IsCurrent(account, "INBOX")), "the watcher idles again");
 
         // Idling means idling: no syncs while nothing changes.

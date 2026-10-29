@@ -6,7 +6,9 @@
   "scripts": {
     "accounts": "node accounts.mjs",
     "mail": "node mail.mjs",
-    "actions": "node actions.mjs"
+    "actions": "node actions.mjs",
+    "push": "node push.mjs",
+    "companion": "node companion.mjs"
   },
   "dependencies": {
     "playwright-core": "^1.64.1"

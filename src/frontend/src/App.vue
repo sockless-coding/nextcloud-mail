@@ -130,20 +130,28 @@ import { hasPendingWrites, loadFolders, mailboxState, refreshMessages } from './
 import { accountSaved, loadAllFolders, openUnified, removeAccount, selectAccount } from './store/navigation.js'
 import { loadOAuthState } from './store/oauth.js'
 import { clearSelection, selection } from './store/selection.js'
+import { push, startPush } from './store/push.js'
 import { installShortcuts } from './store/shortcuts.js'
-import { refreshUnified } from './store/unified.js'
+import { INBOX_ID, refreshUnified } from './store/unified.js'
 
 /**
- * No push channel to the browser (see README); new mail is found by polling. The open folder is
- * polled through the cheap changes endpoint, the folder lists (LIST + STATUS on the server, for
- * the counts in the rail and the folder pane) only every FOLDER_POLL_EVERY ticks and when the tab
- * becomes visible.
+ * Without push (proxy mode, or the connection is down) new mail is found by polling: the open
+ * folder through the cheap changes endpoint every tick, the folder lists (LIST + STATUS on the
+ * server, for the counts in the rail and the folder pane) every FOLDER_POLL_EVERY ticks.
+ * With push, the server's IDLE watchers announce INBOX changes, so inboxes are only polled every
+ * SAFETY_POLL_EVERY ticks in case a watcher is down; other folders have no watcher and keep
+ * FOLDER_POLL_EVERY. Everything is refreshed when the tab becomes visible.
  */
 const POLL_INTERVAL_MS = 15_000
 const FOLDER_POLL_EVERY = 4
+const SAFETY_POLL_EVERY = 8
+/** Pushes come in bursts (one per synced change); the folder list is reloaded once per burst. */
+const FOLDER_RELOAD_DELAY_MS = 2_000
 let pollCount = 0
 let pollTimer = null
 let removeShortcuts = null
+let stopPush = null
+const folderReloads = new Map()
 
 /** With the reading pane off, the list and the open message take turns. */
 const listShown = computed(() => readingPane.value !== 'off' || !mailboxState.open.id || selection.rows.length > 0)
@@ -227,15 +235,41 @@ const permanentButtons = computed(() => [
 	},
 ])
 
+function refreshList() {
+	return mailboxState.selected.unified ? refreshUnified() : refreshMessages()
+}
+
 async function poll(event) {
 	if (document.hidden || hasPendingWrites()) {
 		return
 	}
-	const withFolders = event?.type === 'visibilitychange' || ++pollCount % FOLDER_POLL_EVERY === 0
+	const tick = ++pollCount
+	const everything = event?.type === 'visibilitychange'
+	const inbox = mailboxState.selected.unified || mailboxState.selected.folderId === INBOX_ID
+	const withList = everything || !push.connected || tick % (inbox ? SAFETY_POLL_EVERY : FOLDER_POLL_EVERY) === 0
+	const withFolders = everything || tick % (push.connected ? SAFETY_POLL_EVERY : FOLDER_POLL_EVERY) === 0
 	await Promise.all([
-		mailboxState.selected.unified ? refreshUnified() : refreshMessages(),
+		...(withList ? [refreshList()] : []),
 		...(withFolders ? Object.keys(mailboxState.folders).map((id) => loadFolders(id, true)) : []),
 	])
+}
+
+/** A push: refresh the list if it shows that folder, and the account's counts. */
+function folderChanged({ accountId, folderId }) {
+	// Hidden tabs catch up when they become visible.
+	if (document.hidden) {
+		return
+	}
+	const { selected } = mailboxState
+	if (selected.unified ? folderId === INBOX_ID : selected.accountId === accountId && selected.folderId === folderId) {
+		refreshList()
+	}
+	if (mailboxState.folders[accountId] && !folderReloads.has(accountId)) {
+		folderReloads.set(accountId, window.setTimeout(() => {
+			folderReloads.delete(accountId)
+			loadFolders(accountId, true)
+		}, FOLDER_RELOAD_DELAY_MS))
+	}
 }
 
 onMounted(async () => {
@@ -252,11 +286,14 @@ onMounted(async () => {
 	}
 	pollTimer = window.setInterval(poll, POLL_INTERVAL_MS)
 	document.addEventListener('visibilitychange', poll)
+	stopPush = startPush({ folderChanged, reconnected: () => poll({ type: 'visibilitychange' }) })
 	removeShortcuts = installShortcuts()
 })
 
 onBeforeUnmount(() => {
 	window.clearInterval(pollTimer)
+	stopPush?.()
+	folderReloads.forEach((timer) => window.clearTimeout(timer))
 	document.removeEventListener('visibilitychange', poll)
 	removeShortcuts?.()
 })

@@ -24,6 +24,8 @@ services:
       TRUSTED_PROXIES: "172.16.0.0/12 192.168.0.0/16"
     volumes:
       - nextcloud:/var/www/html
+      # The companion app for /apps/socklessmail/ (dev/dev.sh up enables it).
+      - ../companion/socklessmail:/var/www/html/custom_apps/socklessmail:ro
     extra_hosts:
       # Manual-install daemon: AppAPI reaches the app running on your machine here.
       - "host.docker.internal:host-gateway"

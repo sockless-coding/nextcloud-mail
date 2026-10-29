@@ -49,6 +49,7 @@ cmd_up() {
     occ status --output=json | grep -q '"installed":true' || { echo "Nextcloud did not come up; see: ${COMPOSE[*]} logs nextcloud"; exit 1; }
 
     occ app:enable app_api >/dev/null
+    occ app:enable socklessmail >/dev/null
     # Its welcome modal covers every page of a fresh instance.
     occ app:disable firstrunwizard >/dev/null || true
     local daemons; daemons="$(occ app_api:daemon:list)"

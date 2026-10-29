@@ -6,8 +6,9 @@ export const EX_APP_ID = 'sockless_mail'
 
 // Provided by the ExApp when it is enabled (UiRegistration.cs). AppAPI serves top-menu
 // initial state under its own app id, and stores the value JSON-encoded, so it arrives
-// as a JSON string (observed on AppAPI 35) rather than as an object.
-const rawConfig = loadState('app_api', 'sockless_mail_config', '{}')
+// as a JSON string (observed on AppAPI 35) rather than as an object. The companion app at
+// /apps/socklessmail/ passes the same value on under its own id.
+const rawConfig = loadState('socklessmail', 'sockless_mail_config', null) ?? loadState('app_api', 'sockless_mail_config', '{}')
 const config = typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig
 
 /**

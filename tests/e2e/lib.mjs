@@ -5,7 +5,10 @@ import { chromium } from 'playwright-core'
 
 export const base = process.env.NC_URL ?? 'http://localhost:8180'
 export const mailHost = process.env.MAIL_HOST ?? 'greenmail'
-export const appPage = `${base}/index.php/apps/app_api/embedded/sockless_mail/sockless_mail`
+// The companion app's address; APP_PAGE=embedded uses AppAPI's own page instead.
+export const appPage = process.env.APP_PAGE === 'embedded'
+	? `${base}/index.php/apps/app_api/embedded/sockless_mail/sockless_mail`
+	: `${base}/index.php/apps/socklessmail/`
 
 export async function start() {
 	const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL ?? 'msedge', headless: true })
