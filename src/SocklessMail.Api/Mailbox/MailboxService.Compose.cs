@@ -92,6 +92,19 @@ public sealed partial class MailboxService
     }
 
     /// <summary>
+    /// Sends a message the app built itself (an invitation reply) from the account, with a copy
+    /// in Sent like any other message.
+    /// </summary>
+    public async Task<SendResult> SendGeneratedAsync(MailAccount account, MimeMessage message, CancellationToken ct)
+    {
+        message.Date = clock.GetUtcNow();
+        message.MessageId ??= MimeUtils.GenerateMessageId(account.EmailAddress.Split('@')[^1]);
+        await DeliverAsync(account, await logins.ForConnectionAsync(account, ct), message, ct);
+        logger.LogInformation("Sent a generated message from account {AccountId}", account.Id);
+        return await AfterSendAsync(account, message, null, ct);
+    }
+
+    /// <summary>
     /// Stores the draft in the account's Drafts folder (created when there is none), flagged
     /// \Draft and \Seen, then removes the version it replaces. A continued draft (source mode
     /// Edit) takes its attachments from the version it replaces, so the new copy becomes its

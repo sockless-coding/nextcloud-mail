@@ -269,8 +269,48 @@ public sealed partial class MailboxService(
                 sanitized.HasRemoteContent,
                 allowRemote,
                 summary.Attachments.Select(ToAttachmentDto).ToArray(),
-                bimi.Find(summary));
+                bimi.Find(summary),
+                LeafParts(summary.Body).Where(IsCalendarPart)
+                    .Select(p => new CalendarPartDto(MailboxIds.PartId(p.PartSpecifier), p.ContentType.Parameters["method"]?.Trim().ToUpperInvariant()))
+                    .ToArray());
         }, ct);
+
+    /// <summary>Calendar data travels as text/calendar (iMIP), sometimes as application/ics or just an .ics file.</summary>
+    private static bool IsCalendarPart(BodyPartBasic part) =>
+        part.ContentType.IsMimeType("text", "calendar") || part.ContentType.IsMimeType("application", "ics")
+        || (part.FileName ?? part.ContentType.Name ?? "").EndsWith(".ics", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The text of a calendar part (at most <see cref="MaxCalendarBytes"/>).</summary>
+    public Task<string> GetCalendarTextAsync(MailAccount account, string folderId, string messageId, string partId, CancellationToken ct) =>
+        Run(account, async (client, token) =>
+        {
+            var (folder, uid) = await OpenMessageAsync(client, folderId, messageId, token);
+            var summary = await FetchOneAsync(folder, uid, MessageSummaryItems.UniqueId | MessageSummaryItems.BodyStructure, token);
+            var specifier = MailboxIds.PartSpecifier(partId);
+            var part = LeafParts(summary.Body).FirstOrDefault(p => p.PartSpecifier == specifier && IsCalendarPart(p))
+                       ?? throw new MailboxNotFoundException("The calendar part");
+            if (part.Octets > MaxCalendarBytes * 2)
+            {
+                throw new MailboxValidationException("partId", "The calendar data is too large.");
+            }
+
+            if (await FetchPartAsync(folder, uid, part, token) is not MimePart mime || mime.Content is null)
+            {
+                throw new MailboxNotFoundException("The calendar part");
+            }
+
+            using var buffer = new MemoryStream();
+            await mime.Content.DecodeToAsync(buffer, token);
+            if (buffer.Length > MaxCalendarBytes)
+            {
+                throw new MailboxValidationException("partId", "The calendar data is too large.");
+            }
+
+            // A text part decodes its charset; an application/ics file is UTF-8 by definition.
+            return mime is TextPart text ? text.Text : System.Text.Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+        }, ct);
+
+    public const int MaxCalendarBytes = 1024 * 1024;
 
     private static AttachmentDto ToAttachmentDto(BodyPartBasic part) => new(
         MailboxIds.PartId(part.PartSpecifier),

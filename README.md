@@ -5,7 +5,7 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 12b (Nextcloud Contacts)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> Status: **phase 12c (Nextcloud Calendar)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
 > (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
 > with remote images blocked by default, attachments), works with it (read/unread, flag, move,
 > delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
@@ -23,6 +23,9 @@ the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with
 > as links, attachments saved into Files, and files sent from the Files app ("Send by email").
 > Recipients are suggested from the user's Nextcloud address books (contact groups add all
 > their members), and a sender can be added to an address book from the message view.
+> Invitations show as a card with Accept, Maybe and Decline: the event goes into a Nextcloud
+> calendar and the answer to the organizer goes out from the mail account. Cancellations,
+> attendees' replies and .ics files update the calendar the same way.
 
 ## Layout
 
@@ -43,6 +46,7 @@ src/SocklessMail.Api/       ASP.NET Core minimal APIs
   Bimi/                     sender logos: DMARC verdicts, DNS lookups, SVG checks, logo cache
   Files/                    Nextcloud Files over WebDAV as the user: attach, share links, save attachments
   Contacts/                 Nextcloud address books over CardDAV: suggestions, groups, adding senders
+  Calendar/                 invitations (iMIP) and .ics files against Nextcloud calendars over CalDAV
   Sync/                     header cache, folder sync (QRESYNC/CONDSTORE/plain), IDLE watchers
   Security/                 Data Protection key ring wrapping
 src/frontend/               Vue 3 + @nextcloud/vue 9, built into wwwroot/js and wwwroot/css
@@ -524,6 +528,36 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
     not read (photos, addresses) stay as they were. The `PUT` carries the card's ETag
     (`If-Match`), so an edit made elsewhere in the meantime is not overwritten; the user is
     asked to try again.
+- **Nextcloud Calendar** (`Calendar/`): CalDAV on `remote.php/dav/calendars/<user>/`, as the
+  user. Event calendars only: subscriptions, task lists, the scheduling inbox/outbox and the
+  trash bin are left out.
+  - *Calendar parts*: a message lists its `text/calendar`, `application/ics` and `*.ics` parts
+    with their iTIP method. The reader shows the iMIP one (with a method) before plain files.
+    The card resolves the event's times with NodaTime, which knows IANA and Windows zone names.
+    Outlook-style names with an offset ("(UTC+01:00) …"), a VTIMEZONE's `X-LIC-LOCATION`, or a
+    VTIMEZONE without daylight saving also work. Anything else is shown as written, with the
+    zone's name.
+  - *Text, not a model*: calendar objects are changed as iCalendar text (`ICalText.cs`); only
+    the lines the app changes are rewritten. A library round trip (Ical.Net) was tried and
+    dropped: it lost DTSTART for a zone name it did not know.
+  - *Answering* (Accept, Maybe, Decline): the invitation's events go into the chosen calendar
+    without METHOD, with the user's PARTSTAT, merged into the stored object when it is there
+    already. An updated occurrence replaces only its own copy. A declined invitation that is
+    not in a calendar is not added. The REPLY (RFC 6047) goes to the organizer from the mail
+    account, with a copy in Sent.
+  - *Who sends the reply*: stored as is, an accepted invitation makes Nextcloud mail the
+    organizer itself, "via Nextcloud" from the instance's address (seen on Nextcloud 35). So the
+    object is first written with `SCHEDULE-AGENT=CLIENT` on ORGANIZER, the app sends the reply,
+    and then the object is written once more without the parameter. That second write changes
+    no answer, so Nextcloud sends nothing for it, and later changes made in the Calendar app
+    are scheduled by Nextcloud as usual.
+  - *Cancellations* delete the event, or add an EXDATE for a cancelled occurrence. The object
+    is first written with `SCHEDULE-AGENT=CLIENT`, because an attendee deleting an event makes
+    Nextcloud decline it to the organizer.
+  - *Replies* to the user's own meetings update that attendee's PARTSTAT in the stored event.
+    Nextcloud does not mail the attendees about that change.
+  - *.ics files* (no method or PUBLISH): "Add to calendar" adds every event, updating events
+    that are already there (by UID).
 
 ## Security model
 
@@ -702,6 +736,10 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
   enabling the app fixes it, because that pushes the app's metadata to HaRP again.
   `dev/dev.sh update-docker` does this automatically. This looks like an upstream issue.
 - There is no signature yet.
+- Invitations: counter-proposals (COUNTER), delegation and REFRESH are not supported, and the
+  card has no comment field (the API takes one). Recurrence is described from FREQ and
+  INTERVAL only ("Repeats weekly"). Free/busy conflicts are not checked. Reply mails are in
+  English, whatever the user's language.
 - Changes made to contacts outside the app can take up to 30 seconds to show in suggestions.
   Contact groups are the Contacts app's groups (`CATEGORIES`); vCard 4 group cards
   (`KIND:group`) are not read.

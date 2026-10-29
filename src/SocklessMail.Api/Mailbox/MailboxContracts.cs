@@ -46,6 +46,9 @@ public sealed record MessagePage(
 
 public sealed record AttachmentDto(string PartId, string FileName, string ContentType, long? Size);
 
+/// <summary>A part with calendar data: an iMIP invitation/reply/cancellation (with its method) or an .ics file.</summary>
+public sealed record CalendarPartDto(string PartId, string? Method);
+
 public sealed record MessageDto(
     string Id,
     string Subject,
@@ -60,7 +63,8 @@ public sealed record MessageDto(
     bool HasRemoteContent,
     bool RemoteContentAllowed,
     AttachmentDto[] Attachments,
-    BimiDto? Bimi);
+    BimiDto? Bimi,
+    CalendarPartDto[] CalendarParts);
 
 /// <summary>The message's header block exactly as the server has it, folded lines and encoded words included.</summary>
 public sealed record MessageHeadersDto(string Headers);

@@ -156,6 +156,13 @@
 				</button>
 			</div>
 
+			<InvitationCard v-if="calendarPart"
+				:key="`${message.id}/${calendarPart.partId}`"
+				:where="where"
+				:message-id="message.id"
+				:part="calendarPart"
+				:account-address="accountAddress" />
+
 			<section v-if="message.attachments.length" class="message-view__attachments">
 				<h3>
 					{{ n('sockless_mail', '{count} attachment', '{count} attachments', message.attachments.length, { count: message.attachments.length }) }}
@@ -227,11 +234,13 @@ import { bimiUrl } from '../bimi.js'
 import { accountColor, accountsState } from '../store/accounts.js'
 import { askMove, dialogs, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { composeEdit, composeReply } from '../store/compose.js'
+import { primaryCalendarPart } from '../store/calendar.js'
 import { saveAttachmentsToFiles } from '../store/files.js'
 import { readingPane } from '../store/layout.js'
 import { formatFileSize } from '../fileSize.js'
 import { pageColors } from '../mailColors.js'
 import { closeMessage, emlUrl, mailboxState, openMessage, partUrl } from '../store/mailbox.js'
+import InvitationCard from './InvitationCard.vue'
 import MessageBody from './MessageBody.vue'
 import MessageSourceDialog from './MessageSourceDialog.vue'
 
@@ -285,6 +294,9 @@ const detailRows = computed(() => {
 		m.replyTo.length && { label: t('sockless_mail', 'Reply to'), value: full(m.replyTo) },
 	].filter(Boolean)
 })
+
+const calendarPart = computed(() => primaryCalendarPart(message.value.calendarParts ?? []))
+const accountAddress = computed(() => accountsState.accounts.find((a) => a.id === where.value.accountId)?.emailAddress ?? '')
 
 const attachmentsSize = computed(() => message.value.attachments.reduce((sum, a) => sum + (a.size ?? 0), 0))
 

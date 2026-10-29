@@ -10,7 +10,8 @@
     "push": "node push.mjs",
     "companion": "node companion.mjs",
     "files": "node files.mjs",
-    "contacts": "node contacts.mjs"
+    "contacts": "node contacts.mjs",
+    "calendar": "node calendar.mjs"
   },
   "dependencies": {
     "playwright-core": "^1.64.1"
