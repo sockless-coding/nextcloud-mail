@@ -29,14 +29,29 @@
 		</div>
 		<ul v-if="suggestions.length" class="recipients__suggestions" role="listbox" :aria-label="t('sockless_mail', 'Suggestions')">
 			<li v-for="(suggestion, index) in suggestions"
-				:key="suggestion.address"
+				:key="suggestion.group ? `group:${suggestion.name}` : suggestion.address"
 				role="option"
 				:aria-selected="String(index === highlighted)"
 				class="recipients__suggestion"
-				:class="{ 'recipients__suggestion--active': index === highlighted }"
+				:class="{ 'recipients__suggestion--active': index === highlighted, 'recipients__suggestion--group': suggestion.group }"
 				@mousedown.prevent="pick(suggestion)">
-				<strong v-if="suggestion.name">{{ suggestion.name }}</strong>
-				<span>{{ suggestion.address }}</span>
+				<template v-if="suggestion.group">
+					<NcIconSvgWrapper :path="mdiAccountGroupOutline" :size="20" />
+					<span class="recipients__suggestion-text">
+						<strong>{{ suggestion.name }}</strong>
+						<span>{{ n('sockless_mail', 'Group, {count} member', 'Group, {count} members', suggestion.members.length, { count: suggestion.members.length }) }}</span>
+					</span>
+				</template>
+				<template v-else>
+					<NcIconSvgWrapper v-if="suggestion.contact"
+						:path="mdiAccountOutline"
+						:size="20"
+						:title="t('sockless_mail', 'In {book}', { book: suggestion.addressBook })" />
+					<span class="recipients__suggestion-text">
+						<strong v-if="suggestion.name">{{ suggestion.name }}</strong>
+						<span>{{ suggestion.address }}</span>
+					</span>
+				</template>
 			</li>
 		</ul>
 		<p v-if="error" :id="`${id}-error`" class="recipients__error">
@@ -46,11 +61,12 @@
 </template>
 
 <script setup>
-import { mdiClose } from '@mdi/js'
-import { t } from '@nextcloud/l10n'
+import { mdiAccountGroupOutline, mdiAccountOutline, mdiClose } from '@mdi/js'
+import { n, t } from '@nextcloud/l10n'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { knownAddresses } from '../store/compose.js'
+import { searchContacts } from '../store/contacts.js'
 
 /**
  * Recipients as chips, like desktop mail programs. The model stays the plain comma-separated
@@ -173,25 +189,74 @@ function removeChip(index) {
 	update()
 }
 
+/** "Name" <address>, or the bare address. */
+function chipFor(name, address) {
+	return name && name !== address ? `"${name.replace(/"/g, '')}" <${address}>` : address
+}
+
+/** An address, or every member of a group not yet among the recipients. */
 function pick(suggestion) {
-	const name = suggestion.name ? `"${suggestion.name.replace(/"/g, '')}" ` : ''
-	chips.value = [...chips.value, suggestion.name ? `${name}<${suggestion.address}>` : suggestion.address]
+	const chosen = chosenAddresses()
+	const entries = suggestion.group
+		? suggestion.members.filter((m) => !chosen.has(m.address.toLowerCase()))
+		: [suggestion]
+	chips.value = [...chips.value, ...entries.map((e) => chipFor(e.name, e.address))]
 	pending.value = ''
 	update()
 	input.value?.focus()
 }
 
-/** Addresses from mail already loaded that match what is being typed. */
+function chosenAddresses() {
+	return new Set(chips.value.map((c) => parse(c).address.toLowerCase()))
+}
+
+/** Matches from Nextcloud's address books for what is being typed (asked a moment after typing stops). */
+const found = ref({ query: '', contacts: [], groups: [] })
+let searchTimer
+watch(pending, (value) => {
+	window.clearTimeout(searchTimer)
+	const query = value.trim()
+	if (query.length < 2) {
+		return
+	}
+	searchTimer = window.setTimeout(async () => {
+		const result = await searchContacts(query)
+		if (pending.value.trim() === query) {
+			found.value = { query, ...result }
+		}
+	}, 150)
+})
+onBeforeUnmount(() => window.clearTimeout(searchTimer))
+
+/**
+ * Contacts first, then addresses from mail already loaded, then groups. Contacts found for an
+ * earlier prefix of the text stay shown until the newer answer arrives, if they still match.
+ */
 const suggestions = computed(() => {
 	const query = pending.value.trim().toLowerCase()
 	if (query.length < 2) {
 		return []
 	}
-	const chosen = new Set(chips.value.map((c) => parse(c).address.toLowerCase()))
-	return knownAddresses()
-		.filter((a) => !chosen.has(a.address.toLowerCase()))
-		.filter((a) => a.address.toLowerCase().includes(query) || a.name?.toLowerCase().includes(query))
-		.slice(0, 6)
+	const chosen = chosenAddresses()
+	const matches = (a) => a.address.toLowerCase().includes(query) || a.name?.toLowerCase().includes(query)
+	const current = query.startsWith(found.value.query.toLowerCase()) && found.value.query
+	const contacts = current ? found.value.contacts.filter((c) => found.value.query.toLowerCase() === query || matches(c)) : []
+	const seen = new Set(chosen)
+	const people = []
+	for (const entry of [...contacts.map((c) => ({ ...c, contact: true })), ...knownAddresses().filter(matches)]) {
+		const key = entry.address.toLowerCase()
+		if (!seen.has(key)) {
+			seen.add(key)
+			people.push(entry)
+		}
+	}
+	const groups = current
+		? found.value.groups
+			.filter((g) => g.name.toLowerCase().includes(query))
+			.filter((g) => g.members.some((m) => !chosen.has(m.address.toLowerCase())))
+			.map((g) => ({ ...g, group: true }))
+		: []
+	return [...people.slice(0, 8), ...groups]
 })
 </script>
 
@@ -297,14 +362,31 @@ const suggestions = computed(() => {
 
 .recipients__suggestion {
 	display: flex;
-	flex-direction: column;
+	align-items: center;
+	gap: 8px;
 	padding: 6px 10px;
 	border-radius: 6px;
 	cursor: pointer;
 }
 
-.recipients__suggestion span {
+.recipients__suggestion-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.recipients__suggestion-text span {
 	font-size: 12.5px;
+	color: var(--color-text-maxcontrast);
+}
+
+/* Addresses from loaded mail have no icon; keep their text in line with the contacts'. */
+.recipients__suggestion-text:first-child {
+	margin-inline-start: 28px;
+}
+
+.recipients__suggestion :deep(.icon-vue) {
+	flex: none;
 	color: var(--color-text-maxcontrast);
 }
 

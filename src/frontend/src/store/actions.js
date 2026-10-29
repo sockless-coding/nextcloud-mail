@@ -20,6 +20,8 @@ export const dialogs = reactive({
 	/** Account waiting for confirmation to be removed. */
 	accountToDelete: null,
 	oauthSettings: false,
+	/** A sender to add to the address book: { name, address }. */
+	addContact: null,
 	/** The keyboard shortcut help. */
 	shortcuts: false,
 })

@@ -99,6 +99,14 @@
 									</template>
 									{{ t('sockless_mail', 'Delete') }}
 								</NcActionButton>
+								<NcActionButton v-if="message.from[0]"
+									close-after-click
+									@click="dialogs.addContact = { name: message.from[0].name, address: message.from[0].address }">
+									<template #icon>
+										<NcIconSvgWrapper :path="mdiAccountPlusOutline" />
+									</template>
+									{{ t('sockless_mail', 'Add sender to contacts') }}
+								</NcActionButton>
 								<NcActionSeparator />
 								<NcActionButton close-after-click @click="rawView = 'headers'">
 									<template #icon>
@@ -202,7 +210,7 @@
 </template>
 
 <script setup>
-import { mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
+import { mdiAccountPlusOutline, mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -217,7 +225,7 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { computed, ref, watch } from 'vue'
 import { bimiUrl } from '../bimi.js'
 import { accountColor, accountsState } from '../store/accounts.js'
-import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
+import { askMove, dialogs, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { composeEdit, composeReply } from '../store/compose.js'
 import { saveAttachmentsToFiles } from '../store/files.js'
 import { readingPane } from '../store/layout.js'

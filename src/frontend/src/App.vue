@@ -81,6 +81,10 @@
 			:request="dialogs.move"
 			@close="dialogs.move = null" />
 
+		<AddContactDialog v-if="dialogs.addContact"
+			:request="dialogs.addContact"
+			@close="dialogs.addContact = null" />
+
 		<FolderNameDialog v-if="dialogs.folderName"
 			:prompt="dialogs.folderName"
 			@close="dialogs.folderName = null" />
@@ -113,6 +117,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import AccountDialog from './components/AccountDialog.vue'
+import AddContactDialog from './components/AddContactDialog.vue'
 import AccountRail from './components/AccountRail.vue'
 import CommandBar from './components/CommandBar.vue'
 import Composer from './components/Composer.vue'

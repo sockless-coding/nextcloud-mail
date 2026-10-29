@@ -5,7 +5,7 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 12a (Nextcloud Files)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> Status: **phase 12b (Nextcloud Contacts)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
 > (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
 > with remote images blocked by default, attachments), works with it (read/unread, flag, move,
 > delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
@@ -21,6 +21,8 @@ the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with
 > or off, a composer window docked at the bottom with rich-text editing and drafts saved while
 > writing, and Outlook's keyboard shortcuts. Files can be attached from Nextcloud Files or shared
 > as links, attachments saved into Files, and files sent from the Files app ("Send by email").
+> Recipients are suggested from the user's Nextcloud address books (contact groups add all
+> their members), and a sender can be added to an address book from the message view.
 
 ## Layout
 
@@ -40,6 +42,7 @@ src/SocklessMail.Api/       ASP.NET Core minimal APIs
   Mailbox/                  folders, message list, message view, parts, remote image proxy
   Bimi/                     sender logos: DMARC verdicts, DNS lookups, SVG checks, logo cache
   Files/                    Nextcloud Files over WebDAV as the user: attach, share links, save attachments
+  Contacts/                 Nextcloud address books over CardDAV: suggestions, groups, adding senders
   Sync/                     header cache, folder sync (QRESYNC/CONDSTORE/plain), IDLE watchers
   Security/                 Data Protection key ring wrapping
 src/frontend/               Vue 3 + @nextcloud/vue 9, built into wwwroot/js and wwwroot/css
@@ -502,6 +505,25 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
     does nothing but answer `redirect_handler`, so AppAPI opens our page with `?fileIds=…`. The
     page opens a new message and attaches the files, looked up by id with a WebDAV `SEARCH`. If
     AppAPI cannot register the action, enabling still succeeds.
+- **Nextcloud Contacts** (`Contacts/`): CardDAV on `remote.php/dav/addressbooks/users/<user>/`,
+  as the user in the same way as Files. That home lists the user's own address books, books
+  shared with them, the system address book ("Accounts") and "Recently contacted". Nextcloud's
+  privileges say which books are writable.
+  - *Suggestions*: `ContactDirectory` keeps each user's contacts in memory: name, addresses,
+    groups and organization, fetched with an `addressbook-query` REPORT that asks for those
+    properties only (no photos) and only for cards with an address. The list of books is
+    checked at most every 30 seconds, and a book is fetched again only when its ctag changed.
+    Users who stop searching are dropped after an hour. Words that start with what is typed
+    rank first; each address appears once, from the user's own books before shared, system and
+    collected ones. The composer shows contacts first, then addresses from loaded mail, then
+    groups.
+  - *Groups* are the Contacts app's groups (vCard `CATEGORIES`), with each member's first
+    address. "Recently contacted" never forms a group.
+  - *Add sender to contacts*: a new vCard 3.0 in a writable book, or one more `EMAIL` line in
+    an existing card. The line goes into the card's original text, so properties the app does
+    not read (photos, addresses) stay as they were. The `PUT` carries the card's ETag
+    (`If-Match`), so an edit made elsewhere in the meantime is not overwritten; the user is
+    asked to try again.
 
 ## Security model
 
@@ -679,8 +701,10 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
   404 ("No defined route"), although the routes were in Nextcloud's database. Disabling and
   enabling the app fixes it, because that pushes the app's metadata to HaRP again.
   `dev/dev.sh update-docker` does this automatically. This looks like an upstream issue.
-- Writing is plain text only, with no drafts saved to the server, no address-book
-  autocompletion and no signature yet.
+- There is no signature yet.
+- Changes made to contacts outside the app can take up to 30 seconds to show in suggestions.
+  Contact groups are the Contacts app's groups (`CATEGORIES`); vCard 4 group cards
+  (`KIND:group`) are not read.
 - Some providers (Gmail, Outlook) store a copy of everything sent over their SMTP in Sent
   themselves, so the app's own copy duplicates it. This needs a per-account setting.
 - Upload sizes through AppAPI's PHP proxy (manual-install) are also limited by PHP's
