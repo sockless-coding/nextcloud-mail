@@ -132,7 +132,7 @@ import { loadOAuthState } from './store/oauth.js'
 import { clearSelection, selection } from './store/selection.js'
 import { push, startPush } from './store/push.js'
 import { installShortcuts } from './store/shortcuts.js'
-import { INBOX_ID, refreshUnified } from './store/unified.js'
+import { INBOX_ID, inUnifiedView, refreshUnified, viewOf } from './store/unified.js'
 
 /**
  * Without push (proxy mode, or the connection is down) new mail is found by polling: the open
@@ -245,7 +245,9 @@ async function poll(event) {
 	}
 	const tick = ++pollCount
 	const everything = event?.type === 'visibilitychange'
-	const inbox = mailboxState.selected.unified || mailboxState.selected.folderId === INBOX_ID
+	// Push covers inboxes only (IDLE); other folders are polled more often.
+	const { selected } = mailboxState
+	const inbox = selected.unified ? viewOf(selected.unified).roles.every((use) => use === 'inbox') : selected.folderId === INBOX_ID
 	const withList = everything || !push.connected || tick % (inbox ? SAFETY_POLL_EVERY : FOLDER_POLL_EVERY) === 0
 	const withFolders = everything || tick % (push.connected ? SAFETY_POLL_EVERY : FOLDER_POLL_EVERY) === 0
 	await Promise.all([
@@ -261,7 +263,7 @@ function folderChanged({ accountId, folderId }) {
 		return
 	}
 	const { selected } = mailboxState
-	if (selected.unified ? folderId === INBOX_ID : selected.accountId === accountId && selected.folderId === folderId) {
+	if (selected.unified ? inUnifiedView(accountId, folderId) : selected.accountId === accountId && selected.folderId === folderId) {
 		refreshList()
 	}
 	if (mailboxState.folders[accountId] && !folderReloads.has(accountId)) {

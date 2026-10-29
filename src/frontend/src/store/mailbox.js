@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
 import { apiBase, apiGet, apiSend } from '../api.js'
 import { dropHits, mergeFolderChanges, searchState } from './search.js'
-import { INBOX_ID, refreshUnified, unifiedState } from './unified.js'
+import { inUnifiedView, refreshUnified, unifiedState } from './unified.js'
 
 /**
  * Folders, the message list of the selected folder and the open message. Everything is read
@@ -10,8 +10,8 @@ import { INBOX_ID, refreshUnified, unifiedState } from './unified.js'
  *
  * A message is addressed by where it lives ({ accountId, folderId }) and its id: lists can show
  * messages of other folders (search results, the unified inbox), so actions take the location
- * of the message rather than assume the selected folder. selected.unified marks the unified
- * inbox (see unified.js); accountId and folderId are null then.
+ * of the message rather than assume the selected folder. selected.unified holds the unified
+ * view shown (see unified.js); accountId and folderId are null then.
  */
 export const mailboxState = reactive({
 	/** accountId -> { list, loading, error } */
@@ -365,7 +365,7 @@ function afterTransfer(accountId, targetFolderId) {
 	if (targetFolderId && isSelected(accountId, targetFolderId)) {
 		refreshMessages()
 	}
-	if (targetFolderId === INBOX_ID && mailboxState.selected.unified) {
+	if (targetFolderId && inUnifiedView(accountId, targetFolderId)) {
 		refreshUnified()
 	}
 }
@@ -380,7 +380,7 @@ function folderEntry({ accountId, folderId }) {
 
 /**
  * Every copy of the given messages the UI holds: in the message list (when it shows their
- * folder), in search results, in the unified inbox and as the open message.
+ * folder), in search results, in the unified view and as the open message.
  *
  * @param {{accountId: string, folderId: string}} where the messages' folder
  * @param {string[]} ids message ids
@@ -416,7 +416,7 @@ export async function setFlags(where, messageIds, { seen, flagged }) {
 		if (folder && folder.unread !== undefined && folder.unread !== null) {
 			folder.unread = adjust(folder.unread)
 		}
-		if (where.folderId === INBOX_ID && unifiedState.unread !== null) {
+		if (inUnifiedView(where.accountId, where.folderId) && unifiedState.unread !== null) {
 			unifiedState.unread = adjust(unifiedState.unread)
 		}
 	}
@@ -477,7 +477,7 @@ function removeFromList(where, messageIds) {
 		if (searchState.hits === hitsAfterDrop) {
 			searchState.hits = previousHits
 		}
-		// Unless the unified inbox was reloaded or merged changes meanwhile.
+		// Unless the unified view was reloaded or merged changes meanwhile.
 		if (unifiedState.list === unifiedAfterDrop) {
 			Object.assign(unifiedState, { list: previous.unified, total: previous.unifiedTotal, unread: previous.unifiedUnread })
 		}

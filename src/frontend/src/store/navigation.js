@@ -42,11 +42,15 @@ export function openFolder(accountId, folderId) {
 	selectFolder(accountId, folderId)
 }
 
-export function openUnified() {
+/**
+ * @param {string} view an id of UNIFIED_VIEWS (unified.js); by default the unified view already
+ *   shown (as selectAccount keeps the account's folder), else the inbox
+ */
+export function openUnified(view = mailboxState.selected.unified || 'inbox') {
 	clearSearch()
 	endSelectionMode()
 	closeDrawer()
-	showUnified()
+	showUnified(view)
 }
 
 /** Folder lists of every account, for the unread badges in the rail. */
@@ -54,7 +58,7 @@ export function loadAllFolders() {
 	return Promise.all(accountsState.accounts.map((a) => loadFolders(a.id, !!mailboxState.folders[a.id])))
 }
 
-/** The account whose folders the folder pane shows, or null in the unified inbox. */
+/** The account whose folders the folder pane shows, or null in a unified view. */
 export function currentAccount() {
 	return accountsState.accounts.find((a) => a.id === mailboxState.selected.accountId) ?? null
 }

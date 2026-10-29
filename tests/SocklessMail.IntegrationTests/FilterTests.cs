@@ -174,7 +174,7 @@ public sealed class FilterTests(GreenMailFixture greenMail, DovecotFixture dovec
         var pages = 0;
         do
         {
-            var page = await Json(await client.GetAsync($"/api/unified/filter?filter=unread&limit=2{(before is null ? "" : $"&before={before}")}", Ct));
+            var page = await Json(await client.GetAsync($"/api/unified/inbox/filter?filter=unread&limit=2{(before is null ? "" : $"&before={before}")}", Ct));
             Assert.Empty(page.GetProperty("errors").EnumerateArray());
             if (pages == 0)
             {
@@ -189,7 +189,7 @@ public sealed class FilterTests(GreenMailFixture greenMail, DovecotFixture dovec
 
         Assert.Equal(["B6", "A5", "A4", "B3", "B2", "A1"], subjects);
 
-        var invalid = await client.GetAsync("/api/unified/filter", Ct);
+        var invalid = await client.GetAsync("/api/unified/inbox/filter", Ct);
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
     }
 }

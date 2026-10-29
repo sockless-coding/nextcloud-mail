@@ -91,7 +91,7 @@ export async function askMoveRows(rows) {
 }
 
 export async function askMove(where, messageIds) {
-	// In the unified inbox the account's folders may not have been loaded yet.
+	// In a unified view the account's folders may not have been loaded yet.
 	if (!mailboxState.folders[where.accountId]?.list.length) {
 		await loadFolders(where.accountId)
 	}

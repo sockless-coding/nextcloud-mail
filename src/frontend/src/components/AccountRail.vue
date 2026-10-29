@@ -3,12 +3,12 @@
 		<button v-if="accountsState.accounts.length > 1"
 			class="account-rail__button account-rail__button--unified"
 			:class="{ 'account-rail__button--active': mailboxState.selected.unified }"
-			:aria-label="t('sockless_mail', 'All inboxes')"
+			:aria-label="t('sockless_mail', 'All accounts')"
 			:aria-current="mailboxState.selected.unified ? 'page' : undefined"
-			:title="t('sockless_mail', 'All inboxes')"
-			@click="openUnified">
+			:title="t('sockless_mail', 'All accounts')"
+			@click="openUnified()">
 			<NcIconSvgWrapper :path="mdiInboxMultipleOutline" />
-			<span v-if="unifiedState.unread" class="account-rail__badge">{{ badge(unifiedState.unread) }}</span>
+			<span v-if="viewUnread('inbox')" class="account-rail__badge">{{ badge(viewUnread('inbox')) }}</span>
 		</button>
 		<button v-for="account in accountsState.accounts"
 			:key="account.id"
@@ -48,7 +48,7 @@ import { dialogs } from '../store/actions.js'
 import { mailboxState } from '../store/mailbox.js'
 import { inboxUnread, openUnified, selectAccount } from '../store/navigation.js'
 import { oauthState } from '../store/oauth.js'
-import { unifiedState } from '../store/unified.js'
+import { viewUnread } from '../store/unified.js'
 
 function isCurrent(account) {
 	return !mailboxState.selected.unified && mailboxState.selected.accountId === account.id

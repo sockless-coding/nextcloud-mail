@@ -11,8 +11,9 @@ the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with
 > delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
 > with a copy saved to Sent. Message lists come from a local header cache kept in sync with
 > QRESYNC/CONDSTORE and IMAP IDLE. Search covers the open folder on the server (message text
-> included) or all accounts from the cache. With several accounts, "All inboxes" shows every
-> account's inbox in one list. Google and Microsoft accounts can be added by signing in (OAuth2),
+> included) or all accounts from the cache. With several accounts, "All accounts" shows unified
+> folders (every account's Inbox, Drafts, Sent, Archive, Junk or Trash in one list) and the smart
+> folders Unread and Flagged. Google and Microsoft accounts can be added by signing in (OAuth2),
 > once an admin has registered the app with them. The interface follows desktop mail programs:
 > an account rail with a colour and unread count per account, a folder pane, a command bar, a
 > message list grouped by day with a line of each message's text, hover actions, multi-select
@@ -66,10 +67,10 @@ node mail.mjs        # paging, sanitized view, remote images, attachments, polli
 node actions.mjs     # read/unread, flag, delete (with and without Trash), move, create/rename folders
 node compose.mjs     # new message with attachment, validation (invalid recipient chip), reply, forward, copies in Sent
 node search.mjs      # folder search (body text), search across accounts, opening a result
-node unified.mjs     # all inboxes: merged order, reading, deleting and new mail across accounts
+node unified.mjs     # unified folders: merged order, reading, deleting and new mail across accounts, smart folders
 node oauth.mjs       # admin sign-in settings, Google popup with PKCE, callback through HaRP, non-admin user
 node layout.mjs      # multi-select and actions on it, reading pane and density (kept on reload), folder pane
-node filters.mjs     # previews, Unread/Flagged/Attachments in a folder and in all inboxes, polling in a filter
+node filters.mjs     # previews, Unread/Flagged/Attachments in a folder and in the unified inbox, polling in a filter
 node workspace.mjs   # sender details, attachment cards, composer window, recipient chips, keyboard shortcuts
 node drafts.mjs      # rich text reaching the recipient, drafts saved while writing, Close, Continue editing, plain text
 node push.mjs        # WebSocket to the hub (HaRP), no inbox polling while connected, new mail shown after a push
@@ -336,7 +337,7 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
     asks first.
   - Recipients are chips. What is still being typed counts too, so sending without finishing an
     entry loses nothing; invalid addresses are marked. Suggestions come from the addresses of
-    mail the app has loaded (lists, search results, all inboxes); there is no address book
+    mail the app has loaded (lists, search results, unified folders); there is no address book
     lookup yet.
 - **Keyboard shortcuts** follow Outlook, with single keys for the ones browsers keep for
   themselves (Ctrl+N opens a window): N or Ctrl+Shift+M new message; R or Ctrl+R reply; Shift+R
@@ -396,8 +397,9 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
     changes endpoint what changed and reloads that account's folder list (once per 2 s burst).
   - An open connection keeps the user active, so the IDLE watchers keep running while a tab is
     open, also in the background. The window of 10 minutes starts when the last tab closes.
-  - While connected, inboxes and the unified inbox are polled every 2 minutes only, in case a
-    watcher is down. Other folders have no watcher and are polled every 60 seconds. The folder
+  - While connected, inboxes and the unified views of inboxes only (Inbox, Unread) are polled
+    every 2 minutes only, in case a watcher is down. Other folders and unified views have no
+    watcher and are polled every 60 seconds. The folder
     lists are reloaded every 2 minutes.
   - Without a connection (AppAPI's PHP proxy, which buffers responses, or while reconnecting),
     the UI polls the open folder's changes endpoint every 15 seconds and reloads the folder lists
@@ -430,28 +432,42 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
   - While a filter is shown without words, polling keeps it current: new mail that passes the
     filter is added, removed mail leaves. A message that stops passing (read while the Unread
     filter is shown) stays until the filter is shown again, as in Outlook.
-- **All inboxes** (shown with two or more accounts, and opened first then) lists the INBOX of
-  every account, newest first, from the header cache:
-  - `GET /api/unified/messages?before=<cursor>` syncs every account's INBOX at once, each in its
-    own service scope (or takes it as is while an IDLE watcher keeps it current), then merges
-    the cached rows by date, account id and UID. The cursor is that triple, so pages neither
-    skip nor repeat messages when dates are equal. Older pages read the cache without syncing.
+- **All accounts** (shown with two or more accounts, and opened first then, on the unified
+  Inbox) replaces the folder tree with views across every account. `{view}` is one of:
+  - unified folders `inbox`, `drafts`, `sent`, `archive`, `junk`, `trash`: that special-use folder
+    of every account, from the header cache. An account's folder is the one its folder list shows
+    for the use (RFC 6154 attributes, else common names), picked like the folder pane does. Which
+    folder has which use is remembered per account for 10 minutes and refreshed by every folder
+    list the app loads, so a page does not LIST every account. Accounts without such a folder are
+    left out; the pane hides a unified folder no account has.
+  - smart folders `unread` (unread mail in every inbox) and `flagged` (flagged mail in every
+    inbox, archive and sent folder). They are quick filters asked of each mail server, like
+    `filter` below, merged by date; their total counts matches, and they take no further filter.
+  - `GET /api/unified/{view}/messages?before=<cursor>` syncs the view's folder of every account
+    at once, each account in its own service scope (an INBOX is taken as is while an IDLE
+    watcher keeps it current), then merges the cached rows by date, account id and UID. The
+    cursor is that triple, so pages neither skip nor repeat messages when dates are equal. Older
+    pages read the cache without syncing.
   - The cache holds a UID window per folder, the list is ordered by date. A page is only
     served when every account has more than a page of cached messages below the cursor or its
-    whole INBOX cached; a shorter window is extended on the server first. This assumes UIDs
-    follow dates, as they do for delivered mail: messages appended with an old date (imports)
-    may appear later than their date suggests.
+    whole folder cached; a shorter window is extended on the server first. This assumes UIDs
+    follow dates, as they do for delivered mail: messages appended with an old date (imports,
+    mail filed into Archive) may appear later than their date suggests.
   - An account whose server fails (unreachable, wrong password) does not fail the list: its
     messages are shown as last cached, and `errors` names it, which the UI shows above the list.
-  - `GET /api/unified/changes?since=<token>` answers like the folder changes endpoint. The token
-    holds each INBOX's change token; when an inbox appeared or went away since (account added,
-    deleted or first reached), the answer is `reset: true` and the UI reloads the list.
-  - `GET /api/unified/filter?filter=…&before=<cursor>` is a quick filter over all inboxes. It
-    asks each mail server (like a folder filter) rather than the cache, which holds only part of
-    each inbox, and merges the matches by date. The cursor holds where each account stands.
+  - `GET /api/unified/{view}/changes?since=<token>` answers like the folder changes endpoint. The
+    token holds each folder's change token (`{account}.{folder}.{token}` joined by `~`); when a
+    folder appeared or went away since (account added, deleted or first reached), the answer is
+    `reset: true` and the UI reloads the list. A smart folder merges the changes that pass its
+    filter; a message that stops passing stays until the folder is shown again.
+  - `GET /api/unified/{view}/filter?filter=…&before=<cursor>` is a quick filter over a unified
+    folder. It asks each mail server (like a folder filter) rather than the cache, which holds
+    only part of each folder, and merges the matches by date. The cursor holds where each
+    account's folder stands.
   - Every list entry carries its account and folder, so reading, flags, move and delete go to
-    the message's own account; reply and forward send from it. Search in this view covers all
-    accounts and folders.
+    the message's own account (delete in the unified Trash deletes for good, as in an account's
+    Trash); reply and forward send from it, and a draft opens in the composer. Search in these
+    views covers all accounts and folders.
 - **IDLE watchers** keep the INBOX cache current without any request:
   - Only accounts of users who used the app in the last 10 minutes are watched, at most 50
     accounts in total. A user's first request starts their watchers at once.
@@ -656,8 +672,9 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
 - Search across accounts only knows the subjects and addresses of cached messages, and shows at
   most 50 results. To find message text or older mail, search one folder; there is no search of
   all folders on the servers at once.
-- All inboxes is limited to INBOX folders: there is no unified view of Sent, Drafts or flagged
-  messages yet, and searching it searches the cache of all folders.
+- The unified folders cover special-use folders only (no unified view of a custom folder), the
+  Flagged smart folder looks in inboxes, archives and sent folders only, and searching any of
+  them searches the cache of all folders.
 - Only the INBOX is watched with IDLE. Other folders are synced when they are shown or polled.
 - The UI still polls: IDLE makes those polls cheap and current, but the browser learns about new
   mail up to 15 seconds late.

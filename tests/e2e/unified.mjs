@@ -1,4 +1,5 @@
-// The unified inbox: all accounts' inboxes in one list, opening, actions and polling there.
+// Unified folders: all accounts' inboxes in one list, opening, actions and polling there; the
+// folder pane's unified and smart folders.
 // Needs: dev/dev.sh up and the app deployed. Adds accounts for alice@example.test and
 // bob@example.test (GreenMail users) if the user has none for those addresses.
 import { execSync } from 'node:child_process'
@@ -13,10 +14,12 @@ const { page, step, finish } = await start()
 const items = messageRows(page)
 const item = (subject) => items.filter({ hasText: subject }).first()
 const header = page.locator('.message-list__header h2')
-const unifiedEntry = page.getByRole('navigation', { name: 'Accounts' }).getByRole('button', { name: 'All inboxes' })
+const unifiedEntry = page.getByRole('navigation', { name: 'Accounts' }).getByRole('button', { name: 'All accounts' })
+const view = (id) => page.locator(`.folder-pane__unified[data-view="${id}"]`)
+const unifiedInboxShown = () => view('inbox').and(page.locator('[aria-current="page"]')).waitFor({ timeout: 30000 })
 // The folder pane's count: the rail's badge stops at 99+.
 const unifiedUnread = async () => {
-	const counter = page.locator('.folder-pane__unified .folder-pane__count')
+	const counter = view('inbox').locator('.folder-pane__count')
 	return (await counter.count()) ? Number((await counter.innerText()).trim()) : 0
 }
 
@@ -63,8 +66,10 @@ send('bob@example.test', bobSubject)
 
 // With several accounts, the app opens on all inboxes.
 await page.goto(appPage)
-await header.filter({ hasText: 'All inboxes' }).waitFor({ timeout: 30000 })
+await unifiedInboxShown()
 step('unified inbox shown')
+check(await page.locator('.folder-pane__heading').count() === 0, 'the folder pane lists no accounts')
+check(await view('unread').count() === 1 && await view('flagged').count() === 1, 'the smart folders are listed')
 check(await until(async () => (await item(aliceSubject).count()) > 0 && (await item(bobSubject).count()) > 0, 20),
 	'messages of both accounts are listed')
 const subjects = await items.allInnerTexts()
@@ -77,7 +82,7 @@ await item(aliceSubject).click()
 await page.locator('.message-view h2', { hasText: aliceSubject }).waitFor({ timeout: 20000 })
 check(await until(async () => (await unifiedUnread()) === unreadBefore - 1), 'opening a message lowers the unread count of all inboxes')
 check(await until(async () => !(await isUnread(item(aliceSubject)))), 'the opened message is shown as read')
-check((await header.innerText()).includes('All inboxes'), 'opening a message stays in the unified inbox')
+check(await view('inbox').getAttribute('aria-current') === 'page', 'opening a message stays in the unified inbox')
 
 step('delete from the list')
 await rowAction(item(bobSubject), 'Delete')
@@ -100,7 +105,18 @@ await openAccount(page, bobName)
 await header.filter({ hasText: 'Inbox' }).waitFor()
 check(await until(async () => (await item(laterSubject).count()) > 0), 'the account inbox shows its own mail')
 await unifiedEntry.click()
-await header.filter({ hasText: 'All inboxes' }).waitFor()
+await unifiedInboxShown()
 check(await until(async () => (await item(aliceSubject).count()) > 0 && (await item(laterSubject).count()) > 0), 'back in all inboxes')
+
+step('the Unread smart folder')
+await view('unread').click()
+await header.filter({ hasText: 'Unread' }).waitFor()
+check(await until(async () => (await item(laterSubject).count()) > 0 && (await item(aliceSubject).count()) === 0, 20), 'Unread lists unread mail only')
+await item(laterSubject).click()
+await page.locator('.message-view h2', { hasText: laterSubject }).waitFor({ timeout: 20000 })
+await page.waitForTimeout(1000)
+check((await item(laterSubject).count()) === 1, 'a message read in Unread stays until the folder is shown again')
+await unifiedEntry.click()
+check(await view('unread').getAttribute('aria-current') === 'page', 'the rail keeps the unified folder shown')
 
 await finish()

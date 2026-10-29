@@ -116,47 +116,67 @@ public sealed partial class MailboxService
         return result;
     }
 
-    public Task<FolderDto> CreateFolderAsync(MailAccount account, CreateFolderInput input, CancellationToken ct) =>
-        Run(account, async (client, token) =>
+    public async Task<FolderDto> CreateFolderAsync(MailAccount account, CreateFolderInput input, CancellationToken ct)
+    {
+        // A new folder can take a special use by its name ("Archive"); forgotten afterwards, so a
+        // unified page that listed the folders meanwhile does not keep the old map.
+        try
         {
-            var parent = input.ParentId is { Length: > 0 } parentId
-                ? await FindFolderAsync(client, parentId, token)
-                : client.GetFolder(client.PersonalNamespaces.Count > 0 ? client.PersonalNamespaces[0] : new FolderNamespace('/', ""));
-            var name = ValidateFolderName(input.Name, parent.DirectorySeparator);
-            await EnsureFolderDoesNotExistAsync(client, parent, name, token);
+            return await Run(account, async (client, token) =>
+            {
+                var parent = input.ParentId is { Length: > 0 } parentId
+                    ? await FindFolderAsync(client, parentId, token)
+                    : client.GetFolder(client.PersonalNamespaces.Count > 0 ? client.PersonalNamespaces[0] : new FolderNamespace('/', ""));
+                var name = ValidateFolderName(input.Name, parent.DirectorySeparator);
+                await EnsureFolderDoesNotExistAsync(client, parent, name, token);
 
-            var created = await parent.CreateAsync(name, isMessageFolder: true, token)
-                          ?? throw new MailboxConflictException("folder_exists", $"A folder named \"{name}\" already exists here.");
-            await created.SubscribeAsync(token);
-            return await ToDtoWithStatusAsync(created, token);
-        }, ct, retry: false);
-
-    public Task<FolderDto> RenameFolderAsync(MailAccount account, string folderId, RenameFolderInput input, CancellationToken ct) =>
-        Run(account, async (client, token) =>
+                var created = await parent.CreateAsync(name, isMessageFolder: true, token)
+                              ?? throw new MailboxConflictException("folder_exists", $"A folder named \"{name}\" already exists here.");
+                await created.SubscribeAsync(token);
+                return await ToDtoWithStatusAsync(created, token);
+            }, ct, retry: false);
+        }
+        finally
         {
-            var folder = await FindFolderAsync(client, folderId, token);
-            if (IsInbox(folder.FullName))
-            {
-                throw new MailboxValidationException("name", "The inbox cannot be renamed.");
-            }
+            roles.Forget(account.Id);
+        }
+    }
 
-            var parent = folder.ParentFolder ?? client.GetFolder(client.PersonalNamespaces[0]);
-            var name = ValidateFolderName(input.Name, folder.DirectorySeparator);
-            if (name == folder.Name)
+    public async Task<FolderDto> RenameFolderAsync(MailAccount account, string folderId, RenameFolderInput input, CancellationToken ct)
+    {
+        try
+        {
+            return await Run(account, async (client, token) =>
             {
+                var folder = await FindFolderAsync(client, folderId, token);
+                if (IsInbox(folder.FullName))
+                {
+                    throw new MailboxValidationException("name", "The inbox cannot be renamed.");
+                }
+
+                var parent = folder.ParentFolder ?? client.GetFolder(client.PersonalNamespaces[0]);
+                var name = ValidateFolderName(input.Name, folder.DirectorySeparator);
+                if (name == folder.Name)
+                {
+                    return await ToDtoWithStatusAsync(folder, token);
+                }
+
+                await EnsureFolderDoesNotExistAsync(client, parent, name, token);
+                // A selected folder cannot be renamed on some servers; this connection may still have it open.
+                if (folder.IsOpen)
+                {
+                    await folder.CloseAsync(false, token);
+                }
+
+                await folder.RenameAsync(parent, name, token);
                 return await ToDtoWithStatusAsync(folder, token);
-            }
-
-            await EnsureFolderDoesNotExistAsync(client, parent, name, token);
-            // A selected folder cannot be renamed on some servers; this connection may still have it open.
-            if (folder.IsOpen)
-            {
-                await folder.CloseAsync(false, token);
-            }
-
-            await folder.RenameAsync(parent, name, token);
-            return await ToDtoWithStatusAsync(folder, token);
-        }, ct, retry: false);
+            }, ct, retry: false);
+        }
+        finally
+        {
+            roles.Forget(account.Id);
+        }
+    }
 
     /// <summary>
     /// Message ids of one folder as UIDs. Ids from before the folder was renumbered (another

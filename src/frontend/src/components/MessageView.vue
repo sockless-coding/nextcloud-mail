@@ -220,7 +220,7 @@ const REPLIES = [
 ]
 
 const open = mailboxState.open
-// Where the open message lives; it can be another folder than the selected one (search, unified inbox).
+// Where the open message lives; it can be another folder than the selected one (search, unified views).
 const where = computed(() => ({ accountId: open.accountId, folderId: open.folderId }))
 const message = computed(() => open.message)
 const sender = computed(() => message.value?.from[0] ?? null)

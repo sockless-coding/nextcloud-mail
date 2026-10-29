@@ -1,33 +1,34 @@
 <template>
 	<aside class="folder-pane" :aria-label="t('sockless_mail', 'Folders')">
-		<!-- All inboxes: one shortcut per account to its main folders. -->
+		<!-- All accounts: each special-use folder of every account as one, then the smart folders. -->
 		<template v-if="mailboxState.selected.unified">
-			<ul class="folder-pane__group">
-				<li>
-					<div class="folder-row folder-row--active">
-						<button class="folder-pane__unified" aria-current="page" @click="openUnified">
-							<NcIconSvgWrapper :path="mdiInboxMultipleOutline" :size="20" />
-							<span class="folder-pane__unified-name">{{ t('sockless_mail', 'All inboxes') }}</span>
-							<span v-if="unifiedState.unread" class="folder-pane__count">{{ unifiedState.unread }}</span>
+			<header class="folder-pane__account">
+				<NcIconSvgWrapper :path="mdiInboxMultipleOutline" :size="20" class="folder-pane__all-icon" />
+				<div class="folder-pane__account-text">
+					<h2 class="folder-pane__account-name">{{ t('sockless_mail', 'All accounts') }}</h2>
+					<span class="folder-pane__account-address">
+						{{ n('sockless_mail', '{count} account', '{count} accounts', accountsState.accounts.length, { count: accountsState.accounts.length }) }}
+					</span>
+				</div>
+			</header>
+			<ul v-for="(group, i) in unifiedGroups"
+				:key="i"
+				class="folder-pane__group"
+				:class="{ 'folder-pane__group--smart': i > 0 }"
+				:aria-label="i > 0 ? t('sockless_mail', 'Smart folders') : t('sockless_mail', 'Unified folders')">
+				<li v-for="view in group" :key="view.id">
+					<div class="folder-row" :class="{ 'folder-row--active': mailboxState.selected.unified === view.id, 'folder-row--unread': viewUnread(view.id) > 0 }">
+						<button class="folder-pane__unified"
+							:data-view="view.id"
+							:aria-current="mailboxState.selected.unified === view.id ? 'page' : undefined"
+							@click="openUnified(view.id)">
+							<NcIconSvgWrapper :path="view.icon" :size="20" />
+							<span class="folder-pane__unified-name">{{ view.name }}</span>
+							<span v-if="viewUnread(view.id)" class="folder-pane__count">{{ viewUnread(view.id) }}</span>
 						</button>
 					</div>
 				</li>
 			</ul>
-			<section v-for="account in accountsState.accounts" :key="account.id" class="folder-pane__section">
-				<h3 class="folder-pane__heading">
-					<button class="folder-pane__heading-button" @click="selectAccount(account)">
-						<span class="folder-pane__dot" :style="{ background: accountColor(account.id) }" />
-						<span class="folder-pane__heading-name">{{ account.displayName }}</span>
-					</button>
-				</h3>
-				<ul class="folder-pane__group">
-					<FolderItem v-for="folder in shortcuts(account.id)"
-						:key="folder.id"
-						:account-id="account.id"
-						:folder="folder"
-						compact />
-				</ul>
-			</section>
 		</template>
 
 		<template v-else-if="account">
@@ -98,7 +99,7 @@
 
 <script setup>
 import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiDelete, mdiFolderPlusOutline, mdiInboxMultipleOutline, mdiPencil, mdiRefresh } from '@mdi/js'
-import { t } from '@nextcloud/l10n'
+import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -107,13 +108,11 @@ import { computed } from 'vue'
 import { accountColor, accountsState } from '../store/accounts.js'
 import { dialogs } from '../store/actions.js'
 import { loadFolders, mailboxState } from '../store/mailbox.js'
-import { currentAccount, moveAccountBy, newFolder, openUnified, selectAccount } from '../store/navigation.js'
-import { unifiedState } from '../store/unified.js'
+import { currentAccount, moveAccountBy, newFolder, openUnified } from '../store/navigation.js'
+import { availableViews, viewUnread } from '../store/unified.js'
 import FolderItem from './FolderItem.vue'
 
 const EMPTY_FOLDERS = { list: [], loading: false, error: null }
-/** The folders the unified overview links to, in this order. */
-const SHORTCUTS = ['inbox', 'drafts', 'sent']
 
 const account = computed(() => currentAccount())
 const index = computed(() => accountsState.accounts.indexOf(account.value))
@@ -130,12 +129,11 @@ const tree = computed(() => {
 	return roots
 })
 
-function shortcuts(accountId) {
-	const list = mailboxState.folders[accountId]?.list ?? []
-	return SHORTCUTS.map((use) => list.find((f) => f.specialUse === use))
-		.filter(Boolean)
-		.map((f) => ({ ...f, children: [] }))
-}
+/** Unified folders, then smart folders. */
+const unifiedGroups = computed(() => {
+	const views = availableViews()
+	return [views.filter((v) => !v.filter), views.filter((v) => v.filter)]
+})
 </script>
 
 <style scoped>
@@ -199,54 +197,29 @@ function shortcuts(accountId) {
 	height: 12px;
 }
 
-.folder-pane__section {
-	margin-top: 8px;
-}
-
-.folder-pane__heading {
-	margin: 0;
-}
-
-.folder-pane__heading-button {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	width: 100%;
-	min-height: 28px;
-	margin: 0;
-	padding: 0 8px;
-	border: 0;
-	border-radius: var(--border-radius-element, 8px);
-	background: none;
-	font-size: 12px;
-	font-weight: 600;
-	letter-spacing: 0.04em;
-	text-transform: uppercase;
-	text-align: start;
+.folder-pane__all-icon {
+	flex: none;
 	color: var(--color-text-maxcontrast);
-	cursor: pointer;
 }
 
-.folder-pane__heading-button:hover {
-	--sm-button-background: var(--color-background-hover);
-	--sm-button-color: var(--color-main-text);
-	color: var(--color-main-text);
-	background: var(--color-background-hover);
+.folder-pane__group--smart {
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px solid var(--color-border);
 }
 
-.folder-pane__heading-name {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-/* The unified entry looks like a folder row (FolderItem.vue). */
+/* The unified rows look like folder rows (FolderItem.vue). */
 .folder-row {
 	display: flex;
 	border-radius: var(--border-radius-element, 8px);
 }
 
-.folder-row--active {
+.folder-row:hover {
+	background: var(--color-background-hover);
+}
+
+.folder-row--active,
+.folder-row--active:hover {
 	background: var(--color-primary-element-light);
 	color: var(--color-primary-element-light-text);
 }
@@ -263,18 +236,38 @@ function shortcuts(accountId) {
 	background: none;
 	color: inherit;
 	font: inherit;
-	font-weight: 600;
 	cursor: pointer;
+}
+
+.folder-pane__unified:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -2px;
+	border-radius: var(--border-radius-element, 8px);
 }
 
 .folder-pane__unified-name {
 	flex: 1;
+	min-width: 0;
+	overflow: hidden;
 	text-align: start;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.folder-row--active .folder-pane__unified-name,
+.folder-row--unread .folder-pane__unified-name {
+	font-weight: 600;
 }
 
 .folder-pane__count {
 	font-size: 12px;
+	font-weight: 600;
 	font-variant-numeric: tabular-nums;
+	color: var(--color-primary-element);
+}
+
+.folder-row--active .folder-pane__count {
+	color: inherit;
 }
 
 .folder-pane__center {

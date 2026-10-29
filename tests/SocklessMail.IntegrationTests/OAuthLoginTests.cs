@@ -123,7 +123,7 @@ public sealed class OAuthLoginTests : IDisposable
         Assert.Equal("oauth_signin_required", test.GetProperty("imap").GetProperty("errorCode").GetString());
 
         // The unified inbox lists the account among its errors instead of failing.
-        var unified = await Json(await client.GetAsync("/api/unified/messages", Ct));
+        var unified = await Json(await client.GetAsync("/api/unified/inbox/messages", Ct));
         Assert.Equal("oauth_signin_required", Assert.Single(unified.GetProperty("errors").EnumerateArray()).GetProperty("error").GetString());
     }
 

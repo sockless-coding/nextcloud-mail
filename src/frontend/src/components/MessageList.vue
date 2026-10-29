@@ -13,7 +13,8 @@
 				{{ t('sockless_mail', 'Select') }}
 			</button>
 		</header>
-		<div class="message-list__filters" role="group" :aria-label="t('sockless_mail', 'Show')">
+		<!-- A smart folder is a filter already. -->
+		<div v-if="!unifiedView?.filter" class="message-list__filters" role="group" :aria-label="t('sockless_mail', 'Show')">
 			<button v-for="option in FILTERS"
 				:key="option.value"
 				class="message-list__filter"
@@ -168,7 +169,7 @@ import { layout, readingPane } from '../store/layout.js'
 import { loadMore, mailboxState, openMessage } from '../store/mailbox.js'
 import { searchMore, searchState as search, setFilter } from '../store/search.js'
 import { clearSelection, endSelectionMode, extendSelection, isSelected, pruneSelection, selectRange, selection, toggleRow } from '../store/selection.js'
-import { loadMoreUnified, unifiedState as unified } from '../store/unified.js'
+import { loadMoreUnified, unifiedState as unified, viewOf } from '../store/unified.js'
 
 const FILTERS = [
 	{ value: '', label: t('sockless_mail', 'All') },
@@ -181,15 +182,16 @@ const state = mailboxState.messages
 /** Words were searched for (not only a filter). */
 const searching = computed(() => search.active && search.query.trim() !== '')
 const unifiedShown = computed(() => !!mailboxState.selected.unified)
+const unifiedView = computed(() => viewOf(mailboxState.selected.unified))
 const listName = computed(() => {
 	if (unifiedShown.value) {
-		return t('sockless_mail', 'All inboxes')
+		return unifiedView.value?.name ?? ''
 	}
 	const { accountId, folderId } = mailboxState.selected
 	return mailboxState.folders[accountId]?.list.find((f) => f.id === folderId)?.name ?? ''
 })
 
-/** What the list shows: search results, the unified inbox, or the folder's messages. */
+/** What the list shows: search results, a unified view, or the folder's messages. */
 const view = computed(() => {
 	if (search.active) {
 		return { loading: search.loading, error: search.error, loadingMore: search.loadingMore, canLoadMore: !!search.nextBefore, loadMore: searchMore }
@@ -211,7 +213,9 @@ const rows = computed(() => {
 		}))
 	}
 	if (unifiedShown.value) {
-		return unified.list.map((h) => ({ ...h, key: hitKey(h), location: accountName(h.accountId) }))
+		// Flagged spans several folders of each account: say which.
+		const where = unifiedView.value?.roles.length > 1 ? location : (h) => accountName(h.accountId)
+		return unified.list.map((h) => ({ ...h, key: hitKey(h), location: where(h) }))
 	}
 	const { accountId, folderId } = mailboxState.selected
 	return state.list.map((message) => ({ accountId, folderId, message, key: `${accountId}/${folderId}/${message.id}`, location: null }))
@@ -235,6 +239,10 @@ const countText = computed(() => {
 			: n('sockless_mail', '{count} message', '{count} messages', search.total, { count: search.total })
 	}
 	const total = unifiedShown.value ? unified.total : state.total
+	// A smart folder does not always count every match.
+	if (total === null) {
+		return ''
+	}
 	return n('sockless_mail', '{count} message', '{count} messages', total, { count: total })
 })
 
@@ -249,7 +257,19 @@ const emptyText = computed(() => {
 			attachments: t('sockless_mail', 'No messages with attachments'),
 		}[search.filter]
 	}
-	return unifiedShown.value ? t('sockless_mail', 'No messages in your inboxes') : t('sockless_mail', 'No messages in this folder')
+	if (unifiedShown.value) {
+		return {
+			inbox: t('sockless_mail', 'No messages in your inboxes'),
+			drafts: t('sockless_mail', 'No drafts'),
+			sent: t('sockless_mail', 'No sent messages'),
+			archive: t('sockless_mail', 'No archived messages'),
+			junk: t('sockless_mail', 'No junk'),
+			trash: t('sockless_mail', 'Trash is empty'),
+			unread: t('sockless_mail', 'No unread messages'),
+			flagged: t('sockless_mail', 'No flagged messages'),
+		}[mailboxState.selected.unified]
+	}
+	return t('sockless_mail', 'No messages in this folder')
 })
 
 function accountName(accountId) {

@@ -73,12 +73,19 @@ check(await item(unreadSubject).count() === 1, 'a message read in the Unread fil
 await chip('All').click()
 check(await until(async () => (await item(readSubject).count()) > 0), '"All" shows every message again')
 
-step('filters in all inboxes')
-await page.getByRole('navigation', { name: 'Accounts' }).getByRole('button', { name: 'All inboxes' }).click()
-await page.locator('.message-list__header h2', { hasText: 'All inboxes' }).waitFor()
+step('filters in the unified inbox')
+await page.getByRole('navigation', { name: 'Accounts' }).getByRole('button', { name: 'All accounts' }).click()
+await page.locator('.folder-pane__unified[data-view="inbox"][aria-current="page"]').waitFor()
 await chip('Flagged').click()
 check(await until(async () => (await item(flaggedSubject).count()) > 0 && (await item(readSubject).count()) === 0, 20), 'Flagged across all inboxes')
 check((await item(flaggedSubject).innerText()).includes('Alice'), 'the row names its account')
 await chip('All').click()
+
+step('the Flagged smart folder')
+await page.locator('.folder-pane__unified[data-view="flagged"]').click()
+await page.locator('.message-list__header h2', { hasText: 'Flagged' }).waitFor()
+check(await until(async () => (await item(flaggedSubject).count()) > 0 && (await item(readSubject).count()) === 0, 20), 'Flagged lists flagged mail of every account')
+check(/Alice.* › Inbox/.test(await item(flaggedSubject).innerText()), 'the row names its account and folder')
+check(await page.locator('.message-list__filters').count() === 0, 'a smart folder has no filter chips')
 
 await finish()

@@ -168,27 +168,28 @@ public static class MailboxEndpoints
                 Math.Clamp(limit ?? MailboxService.DefaultPageSize, 1, MailboxService.MaxPageSize), ct));
         });
 
-        // All accounts' inboxes as one list, from the header cache (see UnifiedInbox).
-        var unified = api.MapGroup("/unified").AddEndpointFilter<MailErrorFilter>();
-        unified.MapGet("/messages", async (string? before, int? limit, ClaimsPrincipal user, UnifiedInbox inbox, CancellationToken ct) =>
-            Results.Ok(await inbox.GetPageAsync(user.GetNextcloudUserId(), UnifiedCursor.Parse(before),
+        // Unified folders (one special-use folder of every account) and smart folders (see UnifiedFolders).
+        var unified = api.MapGroup("/unified/{view}").AddEndpointFilter<MailErrorFilter>();
+        unified.MapGet("/messages", async (string view, string? before, int? limit, ClaimsPrincipal user, UnifiedFolders folders, CancellationToken ct) =>
+            Results.Ok(await folders.GetPageAsync(user.GetNextcloudUserId(), UnifiedView.Parse(view), before,
                 Math.Clamp(limit ?? MailboxService.DefaultPageSize, 1, MailboxService.MaxPageSize), ct)));
 
-        // A filter over all inboxes, asked of the mail servers.
-        unified.MapGet("/filter", async (string? filter, string? before, int? limit, ClaimsPrincipal user, UnifiedInbox inbox, CancellationToken ct) =>
+        // A filter over a unified folder, asked of the mail servers.
+        unified.MapGet("/filter", async (string view, string? filter, string? before, int? limit, ClaimsPrincipal user, UnifiedFolders folders, CancellationToken ct) =>
         {
+            var unifiedView = UnifiedView.Parse(view);
             var messageFilter = MessageFilters.Parse(filter);
             if (messageFilter == MessageFilter.None)
             {
                 throw new MailboxValidationException("filter", "Choose a filter.");
             }
 
-            return Results.Ok(await inbox.GetFilteredAsync(user.GetNextcloudUserId(), messageFilter, before,
+            return Results.Ok(await folders.GetFilteredAsync(user.GetNextcloudUserId(), unifiedView, messageFilter, before,
                 Math.Clamp(limit ?? MailboxService.DefaultPageSize, 1, MailboxService.MaxPageSize), ct));
         });
 
-        unified.MapGet("/changes", async (string? since, ClaimsPrincipal user, UnifiedInbox inbox, CancellationToken ct) =>
-            Results.Ok(await inbox.GetChangesAsync(user.GetNextcloudUserId(), since, ct)));
+        unified.MapGet("/changes", async (string view, string? since, ClaimsPrincipal user, UnifiedFolders folders, CancellationToken ct) =>
+            Results.Ok(await folders.GetChangesAsync(user.GetNextcloudUserId(), UnifiedView.Parse(view), since, ct)));
 
         api.MapGet("/image-proxy", async (string token, ClaimsPrincipal user, ImageProxyTokens tokens, ImageProxy proxy, HttpContext http, CancellationToken ct) =>
         {

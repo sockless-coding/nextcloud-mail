@@ -17,7 +17,7 @@
 				<span class="folder-row__name">{{ displayName }}</span>
 				<span v-if="folder.unread" class="folder-row__count">{{ folder.unread }}</span>
 			</button>
-			<NcActions v-if="!compact" class="folder-row__actions" :aria-label="t('sockless_mail', 'Folder actions')">
+			<NcActions class="folder-row__actions" :aria-label="t('sockless_mail', 'Folder actions')">
 				<NcActionButton close-after-click @click="askNewFolder(accountId, folder)">
 					<template #icon>
 						<NcIconSvgWrapper :path="mdiFolderPlusOutline" />
@@ -43,12 +43,13 @@
 </template>
 
 <script setup>
-import { mdiAlertOctagonOutline, mdiArchiveOutline, mdiChevronDown, mdiChevronRight, mdiDeleteOutline, mdiEmailMultipleOutline, mdiFileDocumentEditOutline, mdiFolderOutline, mdiFolderPlusOutline, mdiInbox, mdiPencil, mdiSendOutline, mdiStarOutline } from '@mdi/js'
+import { mdiChevronDown, mdiChevronRight, mdiFolderOutline, mdiFolderPlusOutline, mdiPencil } from '@mdi/js'
 import { t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { computed, ref } from 'vue'
+import { USE_ICONS, USE_NAMES } from '../folderUses.js'
 import { askNewFolder, askRenameFolder } from '../store/actions.js'
 import { mailboxState } from '../store/mailbox.js'
 import { openFolder } from '../store/navigation.js'
@@ -58,35 +59,13 @@ const props = defineProps({
 	/** FolderDto plus children: [] (see FolderPane.vue) */
 	folder: { type: Object, required: true },
 	depth: { type: Number, default: 0 },
-	/** Shortcut rows (the unified overview): no folder actions. */
-	compact: { type: Boolean, default: false },
 })
 
-const ICONS = {
-	inbox: mdiInbox,
-	drafts: mdiFileDocumentEditOutline,
-	sent: mdiSendOutline,
-	archive: mdiArchiveOutline,
-	junk: mdiAlertOctagonOutline,
-	trash: mdiDeleteOutline,
-	all: mdiEmailMultipleOutline,
-	flagged: mdiStarOutline,
-}
-
-const NAMES = {
-	inbox: t('sockless_mail', 'Inbox'),
-	drafts: t('sockless_mail', 'Drafts'),
-	sent: t('sockless_mail', 'Sent'),
-	junk: t('sockless_mail', 'Junk'),
-	trash: t('sockless_mail', 'Trash'),
-	archive: t('sockless_mail', 'Archive'),
-}
-
 const open = ref(false)
-const icon = computed(() => ICONS[props.folder.specialUse] ?? mdiFolderOutline)
+const icon = computed(() => USE_ICONS[props.folder.specialUse] ?? mdiFolderOutline)
 // Special folders get their translated name when the server uses the standard English one.
 const displayName = computed(() => (props.folder.specialUse && props.folder.name.toLowerCase() === props.folder.specialUse
-	? NAMES[props.folder.specialUse]
+	? USE_NAMES[props.folder.specialUse]
 	: null) ?? props.folder.name)
 const active = computed(() => mailboxState.selected.accountId === props.accountId && mailboxState.selected.folderId === props.folder.id)
 

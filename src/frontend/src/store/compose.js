@@ -62,7 +62,7 @@ export function hasContent(draft = composer.draft) {
 	return typed || draft.uploads.length > 0 || !!draft.saved
 }
 
-/** Addresses of mail the app has loaded (lists, search, unified inbox), for suggestions; newest first, once each. */
+/** Addresses of mail the app has loaded (lists, search, unified views), for suggestions; newest first, once each. */
 export function knownAddresses() {
 	const seen = new Map()
 	const messages = [
@@ -100,7 +100,7 @@ function emptyDraft(accountId) {
 	}
 }
 
-/** New message from the selected account (in the unified inbox: the open message's, or the first one). */
+/** New message from the selected account (in a unified view: the open message's, or the first one). */
 export function composeNew() {
 	const accountId = mailboxState.selected.accountId ?? mailboxState.open.accountId ?? accountsState.accounts[0]?.id
 	if (accountId && !busy()) {

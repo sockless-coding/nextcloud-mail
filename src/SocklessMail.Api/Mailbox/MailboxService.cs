@@ -26,7 +26,7 @@ public sealed record PartContent(string FileName, string ContentType, Func<Strea
 public sealed partial class MailboxService(
     ImapConnections imap, MailLogins logins, ImageProxyTokens proxyTokens,
     MailServerConnector connector, AttachmentUploads uploads, FolderCache cache, SyncLocks syncLocks,
-    MailboxWatchers watchers, BimiSenders bimi, TimeProvider clock, ILogger<MailboxService> logger)
+    MailboxWatchers watchers, BimiSenders bimi, FolderRoles roles, TimeProvider clock, ILogger<MailboxService> logger)
 {
     public const int DefaultPageSize = 50;
     public const int MaxPageSize = 100;
@@ -55,6 +55,7 @@ public sealed partial class MailboxService(
 
             return FolderOrdering.Order(folders.Select(ToDto).ToList());
         }, ct);
+        roles.Remember(account, list);
 
         // Folders deleted or renamed elsewhere leave their cache behind; this list is the authority.
         try
@@ -162,13 +163,30 @@ public sealed partial class MailboxService(
         return await cache.ChangesAsync(await CurrentStateAsync(account, folderId, fullName, ct), since, ct);
     }
 
-    /// <summary>The INBOX cache state for the unified inbox, synced now unless an IDLE watcher already keeps it current.</summary>
-    public Task<CachedFolder> InboxStateAsync(MailAccount account, CancellationToken ct) =>
-        CurrentStateAsync(account, MailboxIds.FolderId("INBOX"), "INBOX", ct);
+    /// <summary>The folder's cache state for the unified folders, synced now unless an IDLE watcher already keeps it current.</summary>
+    public Task<CachedFolder> FolderStateAsync(MailAccount account, string folderId, CancellationToken ct) =>
+        CurrentStateAsync(account, folderId, FullNameOf(folderId), ct);
 
-    /// <summary>Syncs the INBOX and caches at least <paramref name="need"/> more messages below its window.</summary>
-    public Task<CachedFolder> ExtendInboxAsync(MailAccount account, int need, CancellationToken ct) =>
-        SyncAsync(account, MailboxIds.FolderId("INBOX"), "INBOX", (null, need), ct);
+    /// <summary>Syncs the folder and caches at least <paramref name="need"/> more messages below its window.</summary>
+    public Task<CachedFolder> ExtendFolderAsync(MailAccount account, string folderId, int need, CancellationToken ct) =>
+        SyncAsync(account, folderId, FullNameOf(folderId), (null, need), ct);
+
+    /// <summary>The account's folder id for each special use (see <see cref="FolderRoles"/>), listed on the server when not known.</summary>
+    public async Task<IReadOnlyDictionary<string, string>> FolderRolesAsync(MailAccount account, CancellationToken ct)
+    {
+        if (roles.Find(account) is { } known)
+        {
+            return known;
+        }
+
+        var list = await Run(account, async (client, token) =>
+        {
+            var personal = client.PersonalNamespaces.Count > 0 ? client.PersonalNamespaces[0] : new FolderNamespace('/', "");
+            var folders = await client.GetFoldersAsync(personal, subscribedOnly: false, cancellationToken: token);
+            return FolderOrdering.Order(folders.Select(ToDto).ToList());
+        }, ct);
+        return roles.Remember(account, list);
+    }
 
     /// <summary>The folder's cache state, synced now unless an IDLE watcher already keeps it current.</summary>
     private async Task<CachedFolder> CurrentStateAsync(MailAccount account, string folderId, string fullName, CancellationToken ct) =>

@@ -120,22 +120,24 @@ public sealed record SearchHit(Guid AccountId, string FolderId, string FolderFul
 public sealed record CachedSearchResult(IReadOnlyList<SearchHit> Hits, bool More);
 
 /// <summary>
-/// The inboxes of all of a user's accounts as one list, newest first, served from the header
-/// cache. <see cref="NextBefore"/> is the cursor for the next (older) page; <see cref="Token"/> is
-/// what to pass to the unified changes endpoint. Accounts whose inbox could not be synced are in
-/// <see cref="Errors"/>; their messages are shown as last cached.
+/// A unified or smart folder (<see cref="UnifiedView"/>): one list across all of a user's accounts,
+/// newest first. <see cref="NextBefore"/> is the cursor for the next (older) page; <see cref="Token"/>
+/// is what to pass to the changes endpoint (on the first page). Accounts that could not be read are in
+/// <see cref="Errors"/>; their messages are shown as last cached. <see cref="Total"/> counts the
+/// folders' messages, or a smart folder's matches (null when not every match was counted);
+/// <see cref="Unread"/> is null for a smart folder.
 /// </summary>
 public sealed record UnifiedPage(
-    IReadOnlyList<SearchHit> Messages, string? NextBefore, int Total, int? Unread, string Token, IReadOnlyList<AccountError> Errors);
+    IReadOnlyList<SearchHit> Messages, string? NextBefore, int? Total, int? Unread, string Token, IReadOnlyList<AccountError> Errors);
 
-/// <summary>Like <see cref="Sync.FolderChanges"/>, across the inboxes of all accounts.</summary>
+/// <summary>Like <see cref="Sync.FolderChanges"/>, across the folders of a unified or smart folder.</summary>
 public sealed record UnifiedChanges(
     string Token, bool Reset, int Total, int? Unread,
     IReadOnlyList<SearchHit> Messages, IReadOnlyList<RemovedHit> Removed, IReadOnlyList<AccountError> Errors);
 
 /// <summary>
-/// A filter over the inboxes of all accounts, newest first, from each mail server. <see cref="NextBefore"/>
-/// holds where each account stands; <see cref="Total"/> is null when not every match was counted.
+/// A quick filter over a unified folder, newest first, from each mail server. <see cref="NextBefore"/>
+/// holds where each folder stands; <see cref="Total"/> is null when not every match was counted.
 /// </summary>
 public sealed record UnifiedFilterPage(IReadOnlyList<SearchHit> Messages, string? NextBefore, int? Total, IReadOnlyList<AccountError> Errors);
 

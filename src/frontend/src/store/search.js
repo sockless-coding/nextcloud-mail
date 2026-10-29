@@ -11,7 +11,8 @@ const PAGE_SIZE = 50
  *   the filter, over the whole folder);
  * - cache: words across every account and folder, from the app's header cache (subject, names,
  *   addresses of messages already synced), with the filter applied there too;
- * - unified: the filter alone over every account's inbox, asked of each mail server.
+ * - unified: the filter alone over the unified folder shown (every account's inbox, sent, …),
+ *   asked of each mail server.
  * With only a filter, polling keeps the results current (mergeFolderChanges, mergeUnifiedChanges).
  */
 export const searchState = reactive({
@@ -54,7 +55,7 @@ function folderPath(before) {
 }
 
 function unifiedPath(before) {
-	return `/unified/filter?${params({ filter: searchState.filter, limit: PAGE_SIZE, before })}`
+	return `/unified/${mailboxState.selected.unified}/filter?${params({ filter: searchState.filter, limit: PAGE_SIZE, before })}`
 }
 
 function folderHits(page) {
@@ -62,7 +63,7 @@ function folderHits(page) {
 	return page.messages.map((message) => ({ accountId, folderId, folderFullName: null, message }))
 }
 
-/** The scope a search runs in: the unified inbox has no single folder, so it searches everywhere. */
+/** The scope a search runs in: a unified folder has no single folder, so it searches everywhere. */
 export function currentScope() {
 	return mailboxState.selected.unified ? 'all' : searchState.scope
 }
@@ -113,7 +114,7 @@ export async function runSearch() {
 	}
 }
 
-/** Next page of a folder search or an inbox filter (the cached search returns one page). */
+/** Next page of a folder search or a unified filter (the cached search returns one page). */
 export async function searchMore() {
 	if (!searchState.nextBefore || searchState.loadingMore) {
 		return
@@ -213,7 +214,7 @@ export function mergeFolderChanges({ accountId, folderId }, messages, removed) {
 	mergeHits(hits, new Set(removed.map((id) => `${accountId}/${folderId}/${id}`)), byUid)
 }
 
-/** Polled changes of all inboxes (see refreshUnified). */
+/** Polled changes of the unified folder shown (see refreshUnified). */
 export function mergeUnifiedChanges(hits, removed) {
 	if (!merges() || searchState.source !== 'unified') {
 		return
