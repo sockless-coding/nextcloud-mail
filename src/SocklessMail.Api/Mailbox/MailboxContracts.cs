@@ -62,6 +62,15 @@ public sealed record MessageDto(
     AttachmentDto[] Attachments,
     BimiDto? Bimi);
 
+/// <summary>The message's header block exactly as the server has it, folded lines and encoded words included.</summary>
+public sealed record MessageHeadersDto(string Headers);
+
+/// <summary>
+/// The raw message for reading. <see cref="Size"/> is the whole message in bytes; when it exceeds
+/// <see cref="MailboxService.MaxSourceViewBytes"/>, <see cref="Text"/> holds only the start of it.
+/// </summary>
+public sealed record MessageSourceDto(string Text, long Size, bool Truncated);
+
 /// <summary>Opaque ids for the URL: folder full names and "{uidvalidity}-{uid}" message ids.</summary>
 public static class MailboxIds
 {

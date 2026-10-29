@@ -99,6 +99,25 @@
 									</template>
 									{{ t('sockless_mail', 'Delete') }}
 								</NcActionButton>
+								<NcActionSeparator />
+								<NcActionButton close-after-click @click="rawView = 'headers'">
+									<template #icon>
+										<NcIconSvgWrapper :path="mdiCodeTags" />
+									</template>
+									{{ t('sockless_mail', 'View headers') }}
+								</NcActionButton>
+								<NcActionButton close-after-click @click="rawView = 'source'">
+									<template #icon>
+										<NcIconSvgWrapper :path="mdiFileCodeOutline" />
+									</template>
+									{{ t('sockless_mail', 'View source') }}
+								</NcActionButton>
+								<NcActionLink :href="emlUrl(where, message.id)" download close-after-click>
+									<template #icon>
+										<NcIconSvgWrapper :path="mdiDownload" />
+									</template>
+									{{ t('sockless_mail', 'Download message (.eml)') }}
+								</NcActionLink>
 							</NcActions>
 						</div>
 						<div class="message-view__when">
@@ -158,16 +177,25 @@
 			<div class="message-view__body" :class="{ 'message-view__body--paper': darkTheme && original }">
 				<MessageBody :key="`${message.id}/${message.remoteContentAllowed}/${original}`" :html="message.html" :original="original" />
 			</div>
+
+			<MessageSourceDialog v-if="rawView"
+				:where="where"
+				:message-id="message.id"
+				:subject="message.subject"
+				:kind="rawView"
+				@close="rawView = null" />
 		</article>
 	</div>
 </template>
 
 <script setup>
-import { mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
+import { mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
-import { getCanonicalLocale, n, t } from '@nextcloud/l10n'
+import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActionLink from '@nextcloud/vue/components/NcActionLink'
 import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
@@ -179,9 +207,11 @@ import { accountColor, accountsState } from '../store/accounts.js'
 import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { composeEdit, composeReply } from '../store/compose.js'
 import { readingPane } from '../store/layout.js'
+import { formatFileSize } from '../fileSize.js'
 import { pageColors } from '../mailColors.js'
-import { closeMessage, mailboxState, openMessage, partUrl } from '../store/mailbox.js'
+import { closeMessage, emlUrl, mailboxState, openMessage, partUrl } from '../store/mailbox.js'
 import MessageBody from './MessageBody.vue'
+import MessageSourceDialog from './MessageSourceDialog.vue'
 
 const REPLIES = [
 	{ id: 'reply', icon: mdiReply, label: t('sockless_mail', 'Reply') },
@@ -213,10 +243,13 @@ const location = computed(() => {
 const darkTheme = pageColors().dark
 /** This message in the colours it was sent in, rather than recoloured for the dark theme. */
 const original = ref(false)
+/** 'headers' or 'source' while that dialog is open. */
+const rawView = ref(null)
 
 watch(() => open.id, () => {
 	details.value = false
 	original.value = false
+	rawView.value = null
 })
 
 /** Every address in full, for the details under the sender. */
@@ -270,14 +303,6 @@ function fileType(attachment) {
 	const label = (extension && extension.length <= 4 ? extension : attachment.contentType.split('/').pop().slice(0, 4)).toUpperCase()
 	const color = FILE_TYPES.find((f) => f.test.test(attachment.contentType))?.color ?? '#4f5d75'
 	return { label, color }
-}
-
-const UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte']
-
-function formatFileSize(bytes) {
-	const exponent = Math.min(Math.floor(Math.log(Math.max(bytes, 1)) / Math.log(1024)), UNITS.length - 1)
-	return new Intl.NumberFormat(getCanonicalLocale(), { style: 'unit', unit: UNITS[exponent], unitDisplay: 'short', maximumFractionDigits: 1 })
-		.format(bytes / 1024 ** exponent)
 }
 </script>
 

@@ -62,6 +62,36 @@ public static class MailboxEndpoints
                 ? Results.Ok(await mailbox.GetMessageAsync(a, folderId, messageId, remote == "allow", ct))
                 : NotFound());
 
+        account.MapGet("/folders/{folderId}/messages/{messageId}/headers", async (
+                Guid accountId, string folderId, string messageId,
+                ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
+            await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
+                ? Results.Ok(await mailbox.GetHeadersAsync(a, folderId, messageId, ct))
+                : NotFound());
+
+        // JSON for the source view; ?download=true is the whole message as an .eml file.
+        account.MapGet("/folders/{folderId}/messages/{messageId}/source", async (
+                Guid accountId, string folderId, string messageId, bool? download,
+                ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, HttpContext http, CancellationToken ct) =>
+            {
+                if (await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is not { } a)
+                {
+                    return NotFound();
+                }
+
+                if (download != true)
+                {
+                    return Results.Ok(await mailbox.GetSourceAsync(a, folderId, messageId, ct));
+                }
+
+                var raw = await mailbox.GetRawMessageAsync(a, folderId, messageId, ct);
+                http.Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileNameStar = raw.FileName }.ToString();
+                http.Response.Headers.ContentSecurityPolicy = ContentSandbox;
+                http.Response.ContentType = raw.ContentType;
+                await raw.WriteToAsync(http.Response.Body, ct);
+                return Results.Empty;
+            });
+
         account.MapGet("/folders/{folderId}/messages/{messageId}/parts/{partId}", async (
                 Guid accountId, string folderId, string messageId, string partId, bool? download,
                 ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, HttpContext http, CancellationToken ct) =>

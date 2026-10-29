@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using AngleSharp.Html.Parser;
 using MailKit;
@@ -43,6 +44,8 @@ public sealed class ReaderMailbox(GreenMailFixture mail) : IAsyncLifetime
         var projects = await root.CreateAsync("Projects", false) ?? throw new InvalidOperationException("Projects not created");
         var year = await projects.CreateAsync("2026", true) ?? throw new InvalidOperationException("2026 not created");
         await year.AppendAsync(Simple("Kick-off", "in a subfolder", start));
+        var big = await root.CreateAsync("Big", true) ?? throw new InvalidOperationException("Big not created");
+        await big.AppendAsync(Large());
         await client.DisconnectAsync(true);
     }
 
@@ -67,6 +70,16 @@ public sealed class ReaderMailbox(GreenMailFixture mail) : IAsyncLifetime
     private static MimeMessage Plain()
     {
         var message = Simple("Plain", "Line one\nVisit https://example.com/page <now> & then", new DateTimeOffset(2026, 2, 1, 0, 0, 0, TimeSpan.Zero));
+        return message;
+    }
+
+    /// <summary>Over the source view's limit, in 8-bit UTF-8 so the cut can land inside a character.</summary>
+    private static MimeMessage Large()
+    {
+        var line = new string('é', 333) + "x";
+        var text = string.Join("\n", Enumerable.Repeat(line, MailboxService.MaxSourceViewBytes / 600));
+        var message = Simple("Large", "", new DateTimeOffset(2026, 4, 1, 0, 0, 0, TimeSpan.Zero));
+        message.Body = new TextPart("plain") { Text = text, ContentTransferEncoding = ContentEncoding.EightBit };
         return message;
     }
 
@@ -129,7 +142,7 @@ public sealed class MailboxApiTests : IClassFixture<ReaderMailbox>, IAsyncLifeti
     private async Task<string> MessageIdAsync(string subject)
     {
         var inbox = await FolderIdAsync("INBOX");
-        return (await PageAsync(inbox, "?limit=5")).GetProperty("messages").EnumerateArray()
+        return (await PageAsync(inbox, "?limit=10")).GetProperty("messages").EnumerateArray()
             .First(m => m.GetProperty("subject").GetString() == subject).GetProperty("id").GetString()!;
     }
 
@@ -283,7 +296,90 @@ public sealed class MailboxApiTests : IClassFixture<ReaderMailbox>, IAsyncLifeti
         Assert.False(summary.Flags!.Value.HasFlag(MessageFlags.Seen));
     }
 
+    [Fact]
+    public async Task Headers_are_returned_raw_without_the_body_or_marking_read()
+    {
+        var id = await MessageIdAsync("Message 117");
+        var inbox = await FolderIdAsync("INBOX");
+
+        var headers = (await Json(await _client.GetAsync($"{Base}/folders/{inbox}/messages/{id}/headers", Ct)))
+            .GetProperty("headers").GetString()!;
+
+        Assert.Contains("Subject: Message 117\r\n", headers);
+        Assert.Contains("From: Sender <sender@example.test>\r\n", headers);
+        Assert.DoesNotContain("numbered", headers);
+        Assert.False(await IsSeenAsync(id));
+    }
+
+    [Fact]
+    public async Task Source_is_the_whole_message_without_marking_read()
+    {
+        var id = await MessageIdAsync("Message 116");
+        var inbox = await FolderIdAsync("INBOX");
+
+        var source = await Json(await _client.GetAsync($"{Base}/folders/{inbox}/messages/{id}/source", Ct));
+        var text = source.GetProperty("text").GetString()!;
+
+        Assert.False(source.GetProperty("truncated").GetBoolean());
+        Assert.Contains("Subject: Message 116\r\n", text);
+        Assert.EndsWith("numbered", text.TrimEnd());
+        Assert.Equal(Encoding.UTF8.GetByteCount(text), source.GetProperty("size").GetInt64());
+        Assert.False(await IsSeenAsync(id));
+    }
+
+    [Fact]
+    public async Task A_large_source_is_cut_at_the_limit_on_a_character_boundary()
+    {
+        var big = await FolderIdAsync("Big");
+        var id = (await PageAsync(big)).GetProperty("messages").EnumerateArray().Single().GetProperty("id").GetString()!;
+
+        var source = await Json(await _client.GetAsync($"{Base}/folders/{big}/messages/{id}/source", Ct));
+        var text = source.GetProperty("text").GetString()!;
+
+        Assert.True(source.GetProperty("truncated").GetBoolean());
+        Assert.True(source.GetProperty("size").GetInt64() > MailboxService.MaxSourceViewBytes);
+        var bytes = Encoding.UTF8.GetByteCount(text);
+        Assert.InRange(bytes, MailboxService.MaxSourceViewBytes - 3, MailboxService.MaxSourceViewBytes);
+        Assert.Contains("ééé", text);                // decoded as UTF-8, not Latin-1
+        Assert.DoesNotContain('�', text);
+    }
+
+    [Fact]
+    public async Task Message_downloads_as_eml_with_safe_headers()
+    {
+        var id = await MessageIdAsync("Newsletter");
+        var inbox = await FolderIdAsync("INBOX");
+
+        var response = await _client.GetAsync($"{Base}/folders/{inbox}/messages/{id}/source?download=true", Ct);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("message/rfc822", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("attachment", response.Content.Headers.ContentDisposition?.DispositionType);
+        Assert.Equal("Newsletter.eml", response.Content.Headers.ContentDisposition?.FileNameStar);
+        Assert.Contains("sandbox", response.Headers.GetValues("Content-Security-Policy").Single());
+        Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
+
+        var message = await MimeMessage.LoadAsync(await response.Content.ReadAsStreamAsync(Ct), Ct);
+        Assert.Equal("Newsletter", message.Subject);
+        using var pdf = new MemoryStream();
+        await ((MimePart)message.Attachments.Single()).Content!.DecodeToAsync(pdf, Ct);
+        Assert.Equal(ReaderMailbox.PdfBytes, pdf.ToArray());
+        Assert.False(await IsSeenAsync(id));
+    }
+
+    private async Task<bool> IsSeenAsync(string id)
+    {
+        using var imap = await ReaderMailbox.ConnectAsync(_mailbox.Mail);
+        await imap.Inbox.OpenAsync(FolderAccess.ReadOnly, Ct);
+        MailboxIds.TryParseMessageId(id, out _, out var uid);
+        var summary = (await imap.Inbox.FetchAsync([new UniqueId(uid)], MessageSummaryItems.Flags, Ct)).Single();
+        return summary.Flags!.Value.HasFlag(MessageFlags.Seen);
+    }
+
     [Theory]
+    [InlineData("messages/1-1/headers")]
+    [InlineData("messages/1-1/source")]
+    [InlineData("messages/1-1/source?download=true")]
     [InlineData("messages/1-1")]          // wrong UIDVALIDITY
     [InlineData("messages/not-an-id")]
     [InlineData("messages/{valid}/parts/99")]
@@ -315,6 +411,9 @@ public sealed class MailboxApiTests : IClassFixture<ReaderMailbox>, IAsyncLifeti
                      $"{Base}/folders/{inbox}/messages",
                      $"{Base}/folders/{inbox}/messages/{id}",
                      $"{Base}/folders/{inbox}/messages/{id}/parts/2",
+                     $"{Base}/folders/{inbox}/messages/{id}/headers",
+                     $"{Base}/folders/{inbox}/messages/{id}/source",
+                     $"{Base}/folders/{inbox}/messages/{id}/source?download=true",
                  })
         {
             Assert.Equal(HttpStatusCode.NotFound, (await other.GetAsync(path, Ct)).StatusCode);

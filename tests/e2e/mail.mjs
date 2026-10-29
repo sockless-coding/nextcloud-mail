@@ -2,7 +2,7 @@
 // Needs: dev/dev.sh up, the app deployed, dev/dev.sh seed-mail. Adds an account for
 // alice@example.test if the user has none for that address.
 import { execFileSync, execSync } from 'node:child_process'
-import { appPage, base, mailHost, messageRows, openAccount, start } from './lib.mjs'
+import { appPage, base, check, mailHost, messageRows, openAccount, start } from './lib.mjs'
 
 const { page, step, finish } = await start()
 const dialogs = []
@@ -75,6 +75,29 @@ step(`newsletter: ${JSON.stringify(view)}`)
 const href = await page.locator('a.message-view__attachment').first().getAttribute('href')
 const download = await page.request.get(new URL(href, base).toString())
 step(`attachment: ${download.status()} | ${download.headers()['content-disposition']} | ${download.headers()['content-security-policy']}`)
+
+// Headers, source and .eml download from the "More actions" menu.
+const moreActions = page.locator('.message-view__actions').getByRole('button', { name: 'More actions' })
+for (const [action, kind, expected] of [['View headers', 'headers', /^Subject: Weekly newsletter/m], ['View source', 'source', /Content-Type: multipart\//]]) {
+	await moreActions.click()
+	await page.getByRole('menuitem', { name: action }).click()
+	const raw = page.locator(`[data-sockless-raw="${kind}"]`)
+	await raw.waitFor({ timeout: 20000 })
+	const text = await raw.innerText()
+	check(expected.test(text), `${action}: ${text.split('\n').length} lines, matches ${expected}`)
+	if (kind === 'headers') {
+		check(!text.includes('<h1'), 'View headers: no body')
+	}
+	await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click()
+	await raw.waitFor({ state: 'detached' })
+}
+await moreActions.click()
+const emlHref = await page.getByRole('menuitem', { name: 'Download message (.eml)' }).getAttribute('href')
+await page.keyboard.press('Escape')
+const eml = await page.request.get(new URL(emlHref, base).toString())
+const emlText = await eml.text()
+check(eml.status() === 200 && /\.eml/.test(eml.headers()['content-disposition']) && /^Subject: Weekly newsletter/m.test(emlText),
+	`eml: ${eml.status()} | ${eml.headers()['content-type']} | ${eml.headers()['content-disposition']} | ${emlText.length} chars`)
 
 await page.getByRole('button', { name: 'Show images' }).click()
 await page.waitForFunction(() => document.querySelector('iframe.message-body')?.contentDocument?.querySelector('img[alt="remote image"]')?.getAttribute('src'), null, { timeout: 20000 })

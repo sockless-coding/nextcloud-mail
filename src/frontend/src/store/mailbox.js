@@ -38,6 +38,26 @@ export function partUrl(accountId, folderId, messageId, partId, download) {
 	return apiUrl(`accounts/${accountId}/folders/${folderId}/messages/${messageId}/parts/${encodeURIComponent(partId)}${download ? '?download=true' : ''}`)
 }
 
+/** The whole message as an .eml download. */
+export function emlUrl(where, messageId) {
+	return apiUrl(`accounts/${where.accountId}/folders/${where.folderId}/messages/${messageId}/source?download=true`)
+}
+
+/**
+ * The message as the server stores it; neither request marks it as read.
+ *
+ * @param {{accountId: string, folderId: string}} where the message's folder
+ * @param {string} messageId the message
+ * @param {'headers'|'source'} kind { headers } or { text, size, truncated }
+ */
+export async function loadRawMessage(where, messageId, kind) {
+	try {
+		return await apiGet(`/accounts/${where.accountId}/folders/${where.folderId}/messages/${messageId}/${kind}`)
+	} catch (e) {
+		throw toError(e)
+	}
+}
+
 /**
  * @param {string} accountId account to load
  * @param {boolean} quiet keep showing the old list while reloading (polling)
