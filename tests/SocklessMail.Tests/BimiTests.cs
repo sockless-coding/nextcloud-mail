@@ -153,6 +153,20 @@ public sealed class BimiSendersTests
         Assert.Null(Find(Any, Message("news@brand.example", $"Authentication-Results: {results}")));
     }
 
+    [Theory]
+    [InlineData("mx.local.test; dmarc=fail header.from=brand.example", true)]
+    [InlineData("mx.local.test; dmarc=fail", true)]
+    [InlineData("mx.local.test; dmarc=fail header.from=other.example", false)]
+    [InlineData("mx.local.test; dmarc=pass header.from=brand.example", false)]
+    [InlineData("mx.local.test; dmarc=none header.from=brand.example", false)]
+    [InlineData("mx.local.test; spf=fail smtp.mailfrom=brand.example", false)]
+    public void FailedDmarcReadsTheTrustedHeader(string results, bool failed)
+    {
+        var (from, headers) = Message("news@brand.example", $"Authentication-Results: {results}",
+            "Authentication-Results: forged.example; dmarc=fail header.from=brand.example");
+        Assert.Equal(failed, Any.FailedDmarc(from, headers));
+    }
+
     [Fact]
     public void OnlyTheTopmostHeaderCounts()
     {

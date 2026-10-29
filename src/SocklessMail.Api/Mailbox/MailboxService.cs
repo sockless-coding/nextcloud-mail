@@ -9,6 +9,7 @@ using SocklessMail.Api.Compose;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Sync;
 using SocklessMail.Api.OAuth;
+using SocklessMail.Api.Senders;
 
 namespace SocklessMail.Api.Mailbox;
 
@@ -26,7 +27,7 @@ public sealed record PartContent(string FileName, string ContentType, Func<Strea
 public sealed partial class MailboxService(
     ImapConnections imap, MailLogins logins, ImageProxyTokens proxyTokens,
     MailServerConnector connector, AttachmentUploads uploads, FolderCache cache, SyncLocks syncLocks,
-    MailboxWatchers watchers, BimiSenders bimi, FolderRoles roles, TimeProvider clock, ILogger<MailboxService> logger)
+    MailboxWatchers watchers, BimiSenders bimi, FolderRoles roles, SenderChecks senderChecks, TimeProvider clock, ILogger<MailboxService> logger)
 {
     public const int DefaultPageSize = 50;
     public const int MaxPageSize = 100;
@@ -227,8 +228,9 @@ public sealed partial class MailboxService(
     private static string FullNameOf(string folderId) =>
         MailboxIds.FolderFullName(folderId) is { } name ? FolderCache.Key(name) : throw new MailboxNotFoundException("The folder");
 
-    public Task<MessageDto> GetMessageAsync(MailAccount account, string folderId, string messageId, bool allowRemote, CancellationToken ct) =>
-        Run(account, async (client, token) =>
+    public async Task<MessageDto> GetMessageAsync(MailAccount account, string folderId, string messageId, bool allowRemote, CancellationToken ct)
+    {
+        var (message, dmarcFailed) = await Run(account, async (client, token) =>
         {
             var (folder, uid) = await OpenMessageAsync(client, folderId, messageId, token);
             // The view shows the text itself, not a preview of it.
@@ -255,7 +257,7 @@ public sealed partial class MailboxService(
                 allowRemote ? url => $"image-proxy?token={proxyTokens.Create(account.OwnerUserId, url)}" : null);
 
             var envelope = summary.Envelope ?? new Envelope();
-            return new MessageDto(
+            return (new MessageDto(
                 messageId,
                 envelope.Subject ?? "",
                 AddressDto.From(envelope.From),
@@ -272,8 +274,12 @@ public sealed partial class MailboxService(
                 bimi.Find(summary),
                 LeafParts(summary.Body).Where(IsCalendarPart)
                     .Select(p => new CalendarPartDto(MailboxIds.PartId(p.PartSpecifier), p.ContentType.Parameters["method"]?.Trim().ToUpperInvariant()))
-                    .ToArray());
+                    .ToArray(),
+                null), bimi.FailedDmarc(envelope.From, summary.Headers));
         }, ct);
+
+        return message with { SenderWarning = await senderChecks.CheckMessageAsync(account.OwnerUserId, message.From, message.ReplyTo, dmarcFailed, ct) };
+    }
 
     /// <summary>Calendar data travels as text/calendar (iMIP), sometimes as application/ics or just an .ics file.</summary>
     private static bool IsCalendarPart(BodyPartBasic part) =>

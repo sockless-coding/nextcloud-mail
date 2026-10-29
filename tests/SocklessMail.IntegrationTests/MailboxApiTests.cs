@@ -46,6 +46,8 @@ public sealed class ReaderMailbox(GreenMailFixture mail) : IAsyncLifetime
         await year.AppendAsync(Simple("Kick-off", "in a subfolder", start));
         var big = await root.CreateAsync("Big", true) ?? throw new InvalidOperationException("Big not created");
         await big.AppendAsync(Large());
+        var suspicious = await root.CreateAsync("Suspicious", true) ?? throw new InvalidOperationException("Suspicious not created");
+        await suspicious.AppendAsync(Phish());
         await client.DisconnectAsync(true);
     }
 
@@ -80,6 +82,17 @@ public sealed class ReaderMailbox(GreenMailFixture mail) : IAsyncLifetime
         var text = string.Join("\n", Enumerable.Repeat(line, MailboxService.MaxSourceViewBytes / 600));
         var message = Simple("Large", "", new DateTimeOffset(2026, 4, 1, 0, 0, 0, TimeSpan.Zero));
         message.Body = new TextPart("plain") { Text = text, ContentTransferEncoding = ContentEncoding.EightBit };
+        return message;
+    }
+
+    /// <summary>A look-alike of paypal.com (Cyrillic а) that failed DMARC, with replies going to another look-alike.</summary>
+    private static MimeMessage Phish()
+    {
+        var message = Simple("Your account is limited", "Log in to restore it.", new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero));
+        message.From.Clear();
+        message.From.Add(new MailboxAddress("service@paypal.com", "service@pаypal.com"));
+        message.ReplyTo.Add(new MailboxAddress("PayPal", "billing@paypa1.com"));
+        message.Headers.Insert(0, new Header("Authentication-Results", "mx.local.test; dmarc=fail header.from=xn--pypal-4ve.com"));
         return message;
     }
 
@@ -280,6 +293,27 @@ public sealed class MailboxApiTests : IClassFixture<ReaderMailbox>, IAsyncLifeti
         Assert.Contains("&lt;now&gt;", html);
         Assert.Contains("href=\"https://example.com/page\"", html);
         Assert.Contains("target=\"_blank\"", html);
+    }
+
+    [Fact]
+    public async Task A_look_alike_sender_carries_a_warning_and_ordinary_mail_none()
+    {
+        var folder = await FolderIdAsync("Suspicious");
+        var id = (await PageAsync(folder)).GetProperty("messages")[0].GetProperty("id").GetString()!;
+        var warning = (await Json(await _client.GetAsync($"{Base}/folders/{folder}/messages/{id}", Ct))).GetProperty("senderWarning");
+
+        Assert.Equal("danger", warning.GetProperty("level").GetString());
+        Assert.Equal("pаypal.com", warning.GetProperty("domain").GetString());
+        Assert.Equal("xn--pypal-4ve.com", warning.GetProperty("asciiDomain").GetString());
+        Assert.Equal("xn--pypal-4ve.com", warning.GetProperty("registered").GetString());
+        var reasons = warning.GetProperty("reasons").EnumerateArray()
+            .Select(r => $"{r.GetProperty("code").GetString()}/{r.GetProperty("field").GetString()}/{r.GetProperty("looksLike").GetString()}")
+            .ToList();
+        Assert.Equal(["lookalike/from/paypal.com", "nameShowsDomain/from/paypal.com", "dmarcFail/from/", "lookalike/replyTo/paypal.com"], reasons);
+
+        var plain = await MessageIdAsync("Plain");
+        var inbox = await FolderIdAsync("INBOX");
+        Assert.Equal(JsonValueKind.Null, (await Json(await _client.GetAsync($"{Base}/folders/{inbox}/messages/{plain}", Ct))).GetProperty("senderWarning").ValueKind);
     }
 
     [Fact]

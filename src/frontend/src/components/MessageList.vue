@@ -98,7 +98,15 @@
 							</span>
 						</span>
 						<span v-if="isSelected(row)" class="hidden-visually">{{ t('sockless_mail', 'Selected') }}</span>
-						<span class="message-row__from">{{ sender(row.message) }}</span>
+						<span class="message-row__from">
+							<span v-if="listWarning(row.message)"
+								class="message-row__warning"
+								:class="`message-row__warning--${listWarning(row.message).level}`"
+								:title="warningTooltip(listWarning(row.message))">
+								<NcIconSvgWrapper :path="mdiShieldAlertOutline" :size="16" inline :name="warningTitle(listWarning(row.message))" />
+							</span>
+							{{ sender(row.message) }}
+						</span>
 						<span class="message-row__date">{{ formatDate(row.message.date) }}</span>
 						<span class="message-row__subject">
 							<NcIconSvgWrapper v-if="row.message.flagged" :path="mdiFlag" :size="16" class="message-row__flag" :name="t('sockless_mail', 'Flagged')" />
@@ -153,7 +161,7 @@
 </template>
 
 <script setup>
-import { mdiCheck, mdiCheckboxMultipleMarkedCircleOutline, mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiMagnify, mdiPaperclip, mdiReply } from '@mdi/js'
+import { mdiCheck, mdiCheckboxMultipleMarkedCircleOutline, mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiMagnify, mdiPaperclip, mdiReply, mdiShieldAlertOutline } from '@mdi/js'
 import { getCanonicalLocale, getFirstDay, n, t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -168,6 +176,7 @@ import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { layout, readingPane } from '../store/layout.js'
 import { loadMore, mailboxState, openMessage } from '../store/mailbox.js'
 import { searchMore, searchState as search, setFilter } from '../store/search.js'
+import { checkSenders, listWarning, reasonText, warningTitle } from '../store/senders.js'
 import { clearSelection, endSelectionMode, extendSelection, isSelected, pruneSelection, selectRange, selection, toggleRow } from '../store/selection.js'
 import { loadMoreUnified, unifiedState as unified, viewOf } from '../store/unified.js'
 
@@ -222,6 +231,15 @@ const rows = computed(() => {
 })
 
 watch(rows, (list) => pruneSelection(list))
+watch([rows, () => layout.suspiciousSenders], ([list]) => checkSenders(list.map((row) => row.message)), { immediate: true })
+
+/**
+ * @param {object} warning a sender warning
+ * @return {string} its heading and reasons, for the row's tooltip
+ */
+function warningTooltip(warning) {
+	return [warningTitle(warning), ...warning.reasons.map(reasonText)].join('\n')
+}
 
 const accountErrors = computed(() => (unifiedShown.value && !search.active ? unified.errors : []))
 
@@ -769,6 +787,16 @@ onBeforeUnmount(() => observer?.disconnect())
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.message-row__warning {
+	margin-inline-end: 2px;
+	color: var(--color-warning-text);
+	vertical-align: text-bottom;
+}
+
+.message-row__warning--danger {
+	color: var(--color-error-text);
 }
 
 .message-row__date {

@@ -24,6 +24,8 @@ export const dialogs = reactive({
 	addContact: null,
 	/** The keyboard shortcut help. */
 	shortcuts: false,
+	/** The domains exempt from suspicious-sender warnings. */
+	trustedSenders: false,
 })
 
 function fail(what, e) {

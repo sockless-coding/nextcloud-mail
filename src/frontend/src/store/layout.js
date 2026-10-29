@@ -22,6 +22,8 @@ const DEFAULTS = {
 	composeFormat: 'html',
 	/** Show senders' brand logos (BIMI) in place of their initials. */
 	senderLogos: true,
+	/** Warn about look-alike sender domains and the like (store/senders.js). */
+	suspiciousSenders: true,
 }
 
 function load() {

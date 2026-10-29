@@ -17,6 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Senders/Data/*.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="SocklessMail.Tests" />
     <InternalsVisibleTo Include="SocklessMail.IntegrationTests" />
   </ItemGroup>

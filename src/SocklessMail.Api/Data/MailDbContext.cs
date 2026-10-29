@@ -7,6 +7,7 @@ using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Bimi;
 using SocklessMail.Api.Mailbox;
 using SocklessMail.Api.OAuth;
+using SocklessMail.Api.Senders;
 using SocklessMail.Api.Sync;
 
 namespace SocklessMail.Api.Data;
@@ -35,6 +36,8 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
     public DbSet<BimiLookup> BimiLookups => Set<BimiLookup>();
 
     public DbSet<BimiLogo> BimiLogos => Set<BimiLogo>();
+
+    public DbSet<TrustedSender> TrustedSenders => Set<TrustedSender>();
 
     // SQLite cannot order or compare DateTimeOffset natively; store UTC ticks.
     private static readonly ValueConverter<DateTimeOffset, long> UtcTicks =
@@ -145,6 +148,16 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             logo.ToTable("bimi_logos");
             logo.HasKey(l => l.Hash);
             logo.Property(l => l.Hash).HasMaxLength(64);
+        });
+
+        model.Entity<TrustedSender>(trusted =>
+        {
+            trusted.ToTable("trusted_senders");
+            trusted.HasKey(t => new { t.OwnerUserId, t.Domain });
+            trusted.Property(t => t.OwnerUserId).HasMaxLength(64);
+            trusted.Property(t => t.Domain).HasMaxLength(253);
+            trusted.Property(t => t.CreatedAt).HasConversion(UtcTicks);
+            trusted.HasQueryFilter(t => t.OwnerUserId == _userId);
         });
     }
 }

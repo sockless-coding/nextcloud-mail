@@ -77,6 +77,8 @@
 
 		<ShortcutsDialog v-if="dialogs.shortcuts" @close="dialogs.shortcuts = false" />
 
+		<TrustedSendersDialog v-if="dialogs.trustedSenders" @close="dialogs.trustedSenders = false" />
+
 		<MoveDialog v-if="dialogs.move"
 			:request="dialogs.move"
 			@close="dialogs.move = null" />
@@ -128,6 +130,7 @@ import MessageView from './components/MessageView.vue'
 import MoveDialog from './components/MoveDialog.vue'
 import OAuthSettingsDialog from './components/OAuthSettingsDialog.vue'
 import ShortcutsDialog from './components/ShortcutsDialog.vue'
+import TrustedSendersDialog from './components/TrustedSendersDialog.vue'
 import { accountsState, loadAccounts } from './store/accounts.js'
 import { dialogs, removePermanently } from './store/actions.js'
 import { composeNew, composer } from './store/compose.js'

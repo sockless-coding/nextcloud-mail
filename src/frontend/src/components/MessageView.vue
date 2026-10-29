@@ -33,7 +33,7 @@
 					<div class="message-view__people">
 						<div class="message-view__sender">
 							<strong>{{ senderName }}</strong>
-							<span v-if="sender?.name" class="message-view__address">{{ " " }}&lt;{{ sender.address }}&gt;</span>
+							<span v-if="sender?.name" class="message-view__address">{{ " " }}&lt;{{ senderAddress }}&gt;</span>
 						</div>
 						<button class="message-view__recipients"
 							:aria-expanded="String(details)"
@@ -148,6 +148,27 @@
 				</dl>
 			</header>
 
+			<section v-if="warning"
+				class="message-view__warning"
+				:class="`message-view__warning--${warning.level}`"
+				role="alert">
+				<NcIconSvgWrapper :path="mdiShieldAlertOutline" :size="22" class="message-view__warning-icon" />
+				<div class="message-view__warning-text">
+					<strong>{{ warningTitle(warning) }}</strong>
+					<ul>
+						<li v-for="(reason, index) in warning.reasons" :key="index">
+							{{ reasonText(reason) }}
+						</li>
+					</ul>
+					<p v-if="warning.asciiDomain" class="message-view__warning-ascii">
+						{{ t('sockless_mail', 'The domain is spelled {ascii} in plain letters.', { ascii: warning.asciiDomain }) }}
+					</p>
+				</div>
+				<NcButton variant="secondary" :disabled="trusting" @click="trust(warning.registered)">
+					{{ t('sockless_mail', 'Trust {domain}', { domain: warning.registered }) }}
+				</NcButton>
+			</section>
+
 			<div v-if="message.hasRemoteContent && !message.remoteContentAllowed" class="message-view__notice" role="status">
 				<NcIconSvgWrapper :path="mdiImageOffOutline" :size="18" inline />
 				<span>{{ t('sockless_mail', 'Remote images are blocked to protect your privacy.') }}</span>
@@ -217,7 +238,7 @@
 </template>
 
 <script setup>
-import { mdiAccountPlusOutline, mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
+import { mdiAccountPlusOutline, mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldAlertOutline, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -225,6 +246,7 @@ import NcActionLink from '@nextcloud/vue/components/NcActionLink'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -238,6 +260,7 @@ import { primaryCalendarPart } from '../store/calendar.js'
 import { saveAttachmentsToFiles } from '../store/files.js'
 import { readingPane } from '../store/layout.js'
 import { formatFileSize } from '../fileSize.js'
+import { messageWarning, reasonText, trustDomain, warningTitle } from '../store/senders.js'
 import { pageColors } from '../mailColors.js'
 import { closeMessage, emlUrl, mailboxState, openMessage, partUrl } from '../store/mailbox.js'
 import InvitationCard from './InvitationCard.vue'
@@ -254,7 +277,26 @@ const open = mailboxState.open
 // Where the open message lives; it can be another folder than the selected one (search, unified views).
 const where = computed(() => ({ accountId: open.accountId, folderId: open.folderId }))
 const message = computed(() => open.message)
+const warning = computed(() => messageWarning(message.value))
+const trusting = ref(false)
+
+async function trust(domain) {
+	trusting.value = true
+	try {
+		await trustDomain(domain)
+	} catch (e) {
+		showError(t('sockless_mail', 'Could not trust {domain}: {error}', { domain, error: e.message }))
+	} finally {
+		trusting.value = false
+	}
+}
 const sender = computed(() => message.value?.from[0] ?? null)
+/** A look-alike international domain reads as what it imitates; show it as spelled then. */
+const senderAddress = computed(() => {
+	const address = sender.value?.address ?? ''
+	const ascii = warning.value?.asciiDomain
+	return ascii ? `${address.slice(0, address.lastIndexOf('@') + 1)}${ascii}` : address
+})
 const senderName = computed(() => sender.value?.name || sender.value?.address || t('sockless_mail', 'Unknown sender'))
 const details = ref(false)
 /** A saved draft: it is continued rather than replied to. */
@@ -536,6 +578,48 @@ function fileType(attachment) {
 .message-view__details dd {
 	margin: 0;
 	overflow-wrap: anywhere;
+}
+
+.message-view__warning {
+	display: flex;
+	align-items: flex-start;
+	flex-wrap: wrap;
+	gap: 6px 12px;
+	margin-top: 16px;
+	padding: 10px 8px 10px 12px;
+	border-inline-start: 4px solid var(--color-warning);
+	border-radius: var(--border-radius-element, 8px);
+	background: var(--color-background-hover);
+}
+
+.message-view__warning--danger {
+	border-inline-start-color: var(--color-error);
+}
+
+.message-view__warning-icon {
+	color: var(--color-warning-text);
+}
+
+.message-view__warning--danger .message-view__warning-icon {
+	color: var(--color-error-text);
+}
+
+.message-view__warning-text {
+	align-self: center;
+	flex: 1;
+	min-width: 12em;
+}
+
+.message-view__warning-text ul {
+	margin: 4px 0 0;
+	padding-inline-start: 18px;
+	list-style: disc;
+}
+
+.message-view__warning-ascii {
+	margin-top: 4px;
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
 }
 
 .message-view__notice {

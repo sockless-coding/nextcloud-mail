@@ -1,0 +1,190 @@
+# Domains that phishing imitates most, for the suspicious-sender checks (SenderIndex).
+# One brand per line: its domains, the first one is what a warning names. "name.*" means the brand
+# owns that name under many endings (amazon.de, amazon.co.uk, ...): a different ending is then not
+# a look-alike. "~" marks a name that is also a common word: only look-alikes of it count, not
+# other domains that merely contain it (orange-county.org). Only registered domains; subdomains of
+# them count automatically.
+#
+# Mail, cloud and software
+google.* google-analytics.com gmail.com googlemail.com youtube.com
+microsoft.com microsoftonline.com ~office.com office365.com ~live.* outlook.* hotmail.* msn.com onmicrosoft.com sharepoint.com onedrive.com skype.com xbox.com bing.com azure.com ~windows.com
+apple.com icloud.com ~me.com ~mac.com itunes.com
+yahoo.* aol.com ymail.com
+~proton.me protonmail.com protonmail.ch
+gmx.* web.de ~mail.ru yandex.* zoho.com fastmail.com tutanota.com tuta.com
+dropbox.com dropboxmail.com
+~box.com
+wetransfer.com
+docusign.com docusign.net
+adobe.com adobesign.com
+~zoom.us ~zoom.com
+~slack.com
+atlassian.com atlassian.net
+github.com
+gitlab.com
+salesforce.com
+intuit.com quickbooks.com turbotax.com
+nextcloud.com
+# Social and messaging
+facebook.com facebookmail.com fb.com ~meta.com instagram.com whatsapp.com ~messenger.com
+linkedin.com
+twitter.com x.com
+tiktok.com
+snapchat.com
+discord.com discord.gg discordapp.com
+~telegram.org
+~signal.org
+reddit.com
+pinterest.*
+# Shopping and payments
+amazon.* amazon-adsystem.com amazonaws.com amazonses.com primevideo.com ~audible.*
+ebay.*
+paypal.* paypal-communication.com paypal.me
+~stripe.com
+klarna.* klarnaservices.com
+alibaba.com aliexpress.com
+temu.com
+shein.com
+walmart.com
+~target.com
+bestbuy.com
+costco.com
+ikea.*
+zalando.*
+etsy.com
+shopify.com
+booking.com
+airbnb.*
+expedia.*
+tripadvisor.*
+netflix.com
+spotify.com
+steampowered.com steamcommunity.com
+epicgames.com
+playstation.com sony.com
+nintendo.*
+~visa.com
+mastercard.com
+americanexpress.com
+~wise.com transferwise.com
+revolut.com
+coinbase.com
+binance.com
+~kraken.com
+~blockchain.com
+metamask.io
+~ledger.com
+trezor.io
+venmo.com
+~cash.app
+zelle.com
+western-union.com westernunion.com
+moneygram.com
+# Banks (Nordics first: the app's home turf)
+swedbank.se swedbank.com
+seb.se sebgroup.com
+handelsbanken.se handelsbanken.com
+nordea.se nordea.com nordea.fi nordea.dk nordea.no
+danskebank.se danskebank.dk danskebank.fi danskebank.no danskebank.com
+lansforsakringar.se
+icabanken.se
+skandia.se
+avanza.se
+nordnet.se nordnet.no nordnet.dk nordnet.fi
+sparbanken.se
+dnb.no
+op.fi
+bankid.com bankid.no
+~swish.nu
+~chase.com
+bankofamerica.com bofa.com
+wellsfargo.com
+citi.com citibank.com
+capitalone.com
+usbank.com
+hsbc.*
+barclays.* barclaycard.co.uk
+lloydsbank.com
+natwest.com
+santander.*
+ing.* ing-diba.de
+deutsche-bank.de db.com
+commerzbank.de
+sparkasse.de
+postbank.de
+bnpparibas.*
+societegenerale.fr
+credit-agricole.fr
+rabobank.nl rabobank.com
+abnamro.nl abnamro.com
+ubs.com
+credit-suisse.com
+n26.com
+monzo.com
+# Carriers and delivery
+dhl.* dhl.com
+ups.com
+fedex.com
+usps.com
+postnord.se postnord.com postnord.dk
+~bring.no ~bring.com
+~posten.no
+posti.fi
+budbee.com
+instabee.com
+royalmail.com
+dpd.* dpd.com
+gls-group.eu gls-group.com
+hermesworld.com myhermes.de
+deutschepost.de
+laposte.fr
+correos.es
+canadapost.ca canadapost-postescanada.ca
+auspost.com.au
+# Authorities and public services
+skatteverket.se
+forsakringskassan.se
+polisen.se
+kronofogden.se
+transportstyrelsen.se
+1177.se
+csn.se
+arbetsformedlingen.se
+~verksamt.se
+bolagsverket.se
+skatteetaten.no
+~nav.no
+~vero.fi
+kela.fi
+~skat.dk
+borger.dk
+irs.gov
+ssa.gov
+usa.gov
+hmrc.gov.uk
+# Telecoms
+telia.se telia.com telia.fi telia.no
+tele2.se tele2.com
+telenor.se telenor.no telenor.com telenor.dk
+tre.se
+comviq.se
+~elisa.fi
+vodafone.*
+t-mobile.com ~telekom.de
+verizon.com
+att.com
+~orange.*
+# Others often imitated
+~norton.com
+mcafee.com
+~avast.com
+kaspersky.com
+godaddy.com
+namecheap.com
+cloudflare.com
+ovh.com ovhcloud.com
+hetzner.com
+ionos.*
+~one.com
+loopia.se loopia.com
+binero.se

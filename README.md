@@ -47,13 +47,14 @@ src/SocklessMail.Api/       ASP.NET Core minimal APIs
   Files/                    Nextcloud Files over WebDAV as the user: attach, share links, save attachments
   Contacts/                 Nextcloud address books over CardDAV: suggestions, groups, adding senders
   Calendar/                 invitations (iMIP) and .ics files against Nextcloud calendars over CalDAV
+  Senders/                  suspicious-sender checks: look-alike domains (Unicode confusables), brand list, trust
   Sync/                     header cache, folder sync (QRESYNC/CONDSTORE/plain), IDLE watchers
   Security/                 Data Protection key ring wrapping
 src/frontend/               Vue 3 + @nextcloud/vue 9, built into wwwroot/js and wwwroot/css
 tests/SocklessMail.Tests/   xUnit v3: auth, CSRF, accounts, user isolation, key ring, pool, sanitizer
 tests/SocklessMail.IntegrationTests/  API and IMAP against GreenMail and Dovecot in Docker (Testcontainers)
 tests/e2e/                  browser checks against the dev stack (Playwright with installed Edge/Chrome)
-dev/                        local Nextcloud + HaRP + GreenMail stack and the dev.sh helper
+dev/                        local Nextcloud + HaRP + GreenMail stack, the dev.sh helper, unicode-data.sh
 ```
 
 ## Build and test
@@ -706,6 +707,46 @@ The browser loads logos from `/api/bimi/<domain>` and caches each answer: a logo
 404 for an hour. A long list therefore costs one request per sender domain. The endpoint
 serves the logo with the sandbox CSP and is rate-limited to 300 requests per minute per user.
 Users can turn logos off in the view menu ("Sender logos").
+
+### Suspicious senders
+
+Senders whose domain imitates one the user knows get a shield icon in the message list. The
+open message shows a banner that explains why. The checks run in the app (`Senders/`) and send
+nothing anywhere. A domain is compared with:
+
+- a bundled list of the brands phishing imitates most (`Senders/Data/brands.txt`: banks,
+  payment services, carriers, authorities, mail and cloud providers, with Nordic ones first);
+- the user's own account domains, the domains in their Nextcloud address books, and the people
+  they wrote to (Sent folders in the cache) or answered.
+
+These are the checks:
+
+| Found | Example | Level |
+|---|---|---|
+| Letters from another alphabet that look the same (UTS #39 confusables) | `pаypal.com` (Cyrillic а) | danger |
+| Look-alike characters within ASCII | `paypa1.com`, `rnicrosoft.com`, `vvise.com` | danger |
+| One letter off (insertion, deletion, substitution, swap); names of 5 letters or more | `micorsoft.com` | warning |
+| A brand's name under another ending (brands only) | `dropbox.net` | warning |
+| A brand's name as a word of the domain or a subdomain | `apple-support.com`, `paypal.com.login.top` | warning |
+| Letters from several alphabets in one label | `exаmple.org` | warning |
+| The sender's name shows another domain | `"service@paypal.com" <x@example.net>` | warning |
+| Your mail server says the message failed DMARC (open message only) | `dmarc=fail` | danger |
+| Replies go to a look-alike (open message only) | Reply-To `billing@paypa1.com` | warning |
+
+A different Reply-To domain is mentioned only along with another reason, because newsletters
+and ticket systems use one all the time. A domain the user knows, or any of its subdomains,
+is never a look-alike. Brand names that are also common words (`~orange.*` in the list) only
+count as look-alikes. A domain that merely contains them, such as `orange-county.org`, does not.
+The app runs with invariant globalization, where `string.Normalize` does not decompose.
+Unicode's confusables and canonical decompositions therefore ship as data files in
+`Senders/Data`. To update them, run `dev/unicode-data.sh`.
+
+"Trust this domain" on a warning stops warnings for that registered domain and its subdomains.
+It also adds the domain to the domains look-alikes are compared with. The view menu lists the
+trusted domains ("Trusted domains") and turns warnings off ("Warn about suspicious senders").
+Each user's known domains are kept in memory for 5 minutes (30 seconds when the address
+books could not be read). The list asks `POST /api/sender-checks` once per sender for each
+session.
 
 ### Connections to mail servers
 

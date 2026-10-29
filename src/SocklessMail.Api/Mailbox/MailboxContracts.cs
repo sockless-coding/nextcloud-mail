@@ -2,6 +2,7 @@ using System.Buffers.Text;
 using System.Text;
 using MimeKit;
 using SocklessMail.Api.Bimi;
+using SocklessMail.Api.Senders;
 
 namespace SocklessMail.Api.Mailbox;
 
@@ -64,7 +65,8 @@ public sealed record MessageDto(
     bool RemoteContentAllowed,
     AttachmentDto[] Attachments,
     BimiDto? Bimi,
-    CalendarPartDto[] CalendarParts);
+    CalendarPartDto[] CalendarParts,
+    SenderWarning? SenderWarning);
 
 /// <summary>The message's header block exactly as the server has it, folded lines and encoded words included.</summary>
 public sealed record MessageHeadersDto(string Headers);

@@ -179,6 +179,24 @@ namespace SocklessMail.Api.Data.Migrations
                     b.ToTable("oauth_clients", (string)null);
                 });
 
+            modelBuilder.Entity("SocklessMail.Api.Senders.TrustedSender", b =>
+                {
+                    b.Property<string>("OwnerUserId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Domain")
+                        .HasMaxLength(253)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("OwnerUserId", "Domain");
+
+                    b.ToTable("trusted_senders", (string)null);
+                });
+
             modelBuilder.Entity("SocklessMail.Api.Sync.CachedFolder", b =>
                 {
                     b.Property<Guid>("Id")

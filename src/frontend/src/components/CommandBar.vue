@@ -108,7 +108,17 @@
 				@update:model-value="layout.senderLogos = $event">
 				{{ t('sockless_mail', 'Sender logos') }}
 			</NcActionCheckbox>
+			<NcActionCheckbox :model-value="layout.suspiciousSenders"
+				@update:model-value="layout.suspiciousSenders = $event">
+				{{ t('sockless_mail', 'Warn about suspicious senders') }}
+			</NcActionCheckbox>
 			<NcActionSeparator />
+			<NcActionButton close-after-click @click="dialogs.trustedSenders = true">
+				<template #icon>
+					<NcIconSvgWrapper :path="mdiShieldCheckOutline" />
+				</template>
+				{{ t('sockless_mail', 'Trusted domains') }}
+			</NcActionButton>
 			<NcActionButton close-after-click @click="dialogs.shortcuts = true">
 				<template #icon>
 					<NcIconSvgWrapper :path="mdiKeyboardOutline" />
@@ -120,7 +130,7 @@
 </template>
 
 <script setup>
-import { mdiArchiveArrowDownOutline, mdiClose, mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFolderMoveOutline, mdiKeyboardOutline, mdiMagnify, mdiMenu, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiViewSplitVertical } from '@mdi/js'
+import { mdiArchiveArrowDownOutline, mdiClose, mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFolderMoveOutline, mdiKeyboardOutline, mdiMagnify, mdiMenu, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldCheckOutline, mdiViewSplitVertical } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'

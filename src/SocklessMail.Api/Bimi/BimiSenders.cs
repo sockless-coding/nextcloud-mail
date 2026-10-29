@@ -42,6 +42,16 @@ public sealed class BimiSenders(SocklessMailOptions options)
         return new BimiDto(domain, selector is null or BimiNames.DefaultSelector ? null : selector);
     }
 
+    /// <summary>
+    /// Whether the same trusted header says the message failed DMARC for its From domain: the domain
+    /// publishes a policy and the message is not one of its own. For the suspicious-sender warning.
+    /// </summary>
+    public bool FailedDmarc(InternetAddressList? from, HeaderList? headers) =>
+        from?.Mailboxes.FirstOrDefault() is { } author && BimiNames.DomainOf(author.Address) is { } domain
+        && headers is not null && TrustedResults(headers) is { } results
+        && results.Results.Any(r => Is(r.Method, "dmarc") && Is(r.Result, "fail")
+            && r.Properties.Where(p => Is(p.PropertyType, "header") && Is(p.Property, "from")).All(p => BimiNames.NormalizeDomain(p.Value) == domain));
+
     private AuthenticationResults? TrustedResults(HeaderList headers)
     {
         foreach (var header in headers.Where(h => h.Id == HeaderId.AuthenticationResults))
