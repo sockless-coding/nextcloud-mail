@@ -9,6 +9,7 @@ using SocklessMail.Api.Compose;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Sync;
 using SocklessMail.Api.OAuth;
+using SocklessMail.Api.Rules;
 using SocklessMail.Api.Senders;
 
 namespace SocklessMail.Api.Mailbox;
@@ -27,7 +28,7 @@ public sealed record PartContent(string FileName, string ContentType, Func<Strea
 public sealed partial class MailboxService(
     ImapConnections imap, MailLogins logins, ImageProxyTokens proxyTokens,
     MailServerConnector connector, AttachmentUploads uploads, FolderCache cache, SyncLocks syncLocks,
-    MailboxWatchers watchers, BimiSenders bimi, FolderRoles roles, SenderChecks senderChecks, TimeProvider clock, ILogger<MailboxService> logger)
+    MailboxWatchers watchers, RuleEngine rules, BimiSenders bimi, FolderRoles roles, SenderChecks senderChecks, TimeProvider clock, ILogger<MailboxService> logger)
 {
     public const int DefaultPageSize = 50;
     public const int MaxPageSize = 100;
@@ -201,6 +202,12 @@ public sealed partial class MailboxService(
         using var _ = await syncLocks.AcquireAsync(account.Id, fullName, ct);
         return await Run(account, async (client, token) =>
         {
+            if (fullName == "INBOX")
+            {
+                // Rules first, so mail they move away never reaches the cached INBOX.
+                await rules.ApplyAsync(client, account, token);
+            }
+
             var folder = await OpenFolderAsync(client, folderId, token);
             var state = await cache.SyncAsync(client, account, folder, DefaultPageSize, token);
             return extend is { } e ? await cache.ExtendAsync(account, folder, state, e.Before, e.Need, token) : state;
@@ -376,7 +383,7 @@ public sealed partial class MailboxService(
         return folder;
     }
 
-    private static bool IsSelectable(IMailFolder folder) =>
+    internal static bool IsSelectable(IMailFolder folder) =>
         !folder.Attributes.HasFlag(FolderAttributes.NoSelect) && !folder.Attributes.HasFlag(FolderAttributes.NonExistent);
 
     private static async Task<(IMailFolder Folder, UniqueId Uid)> OpenMessageAsync(
@@ -474,7 +481,7 @@ public sealed partial class MailboxService(
 
     private static DateTimeOffset MessageDate(IMessageSummary s) => s.Envelope?.Date ?? s.InternalDate ?? DateTimeOffset.UnixEpoch;
 
-    private static bool IsInbox(string fullName) => fullName.Equals("INBOX", StringComparison.OrdinalIgnoreCase);
+    internal static bool IsInbox(string fullName) => fullName.Equals("INBOX", StringComparison.OrdinalIgnoreCase);
 
     private MessageSummaryDto ToSummaryDto(uint uidValidity, IMessageSummary s) => new(
         MailboxIds.MessageId(uidValidity, s.UniqueId.Id),

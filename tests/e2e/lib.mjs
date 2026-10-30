@@ -71,7 +71,20 @@ export async function accountNames(page) {
 export async function openAccount(page, name) {
 	await page.locator('.account-rail__account').first().waitFor()
 	const pattern = typeof name === 'string' ? exact(name) : name
-	await page.getByRole('navigation', { name: 'Accounts' }).getByRole('button', { name: pattern }).first().click()
+	// The app restores the last view on load (view state), which can switch to another account
+	// after the click; checks must never act on a real account, so insist until it sticks.
+	const shown = page.locator('.folder-pane__account-name')
+	for (let attempt = 0; attempt < 10; attempt++) {
+		await page.getByRole('navigation', { name: 'Accounts' }).getByRole('button', { name: pattern }).first().click()
+		await page.waitForTimeout(500)
+		if (await shown.count() && pattern.test((await shown.innerText()).trim())) {
+			await page.waitForTimeout(1000)
+			if (pattern.test((await shown.innerText()).trim())) {
+				return
+			}
+		}
+	}
+	throw new Error(`Could not switch to account ${pattern}`)
 }
 
 /**

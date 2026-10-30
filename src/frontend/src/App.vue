@@ -79,6 +79,11 @@
 
 		<TrustedSendersDialog v-if="dialogs.trustedSenders" @close="dialogs.trustedSenders = false" />
 
+		<RulesDialog v-if="dialogs.rules"
+			:account="dialogs.rules.account"
+			:draft="dialogs.rules.draft"
+			@close="dialogs.rules = null" />
+
 		<MoveDialog v-if="dialogs.move"
 			:request="dialogs.move"
 			@close="dialogs.move = null" />
@@ -101,6 +106,13 @@
 			:buttons="permanentButtons"
 			:open="true"
 			@update:open="(isOpen) => !isOpen && (dialogs.confirmPermanent = null)" />
+
+		<NcDialog v-if="dialogs.folderToDelete"
+			:name="t('sockless_mail', 'Delete folder')"
+			:message="folderDeleteMessage"
+			:buttons="folderDeleteButtons"
+			:open="true"
+			@update:open="(isOpen) => !isOpen && (dialogs.folderToDelete = null)" />
 
 		<NcDialog v-if="dialogs.accountToDelete"
 			:name="t('sockless_mail', 'Delete account')"
@@ -133,11 +145,12 @@ import MessageList from './components/MessageList.vue'
 import MessageView from './components/MessageView.vue'
 import MoveDialog from './components/MoveDialog.vue'
 import OAuthSettingsDialog from './components/OAuthSettingsDialog.vue'
+import RulesDialog from './components/RulesDialog.vue'
 import ShortcutsDialog from './components/ShortcutsDialog.vue'
 import TaskDialog from './components/TaskDialog.vue'
 import TrustedSendersDialog from './components/TrustedSendersDialog.vue'
 import { accountsState, loadAccounts } from './store/accounts.js'
-import { dialogs, removePermanently } from './store/actions.js'
+import { dialogs, removeFolder, removePermanently } from './store/actions.js'
 import { composeNew, composer } from './store/compose.js'
 import { attachFileIds, takeFileIdsFromUrl } from './store/files.js'
 import { closeDrawer, folderPaneShown, layout, readingPane, viewport } from './store/layout.js'
@@ -240,6 +253,29 @@ const deleteButtons = computed(() => [
 		callback: () => removeAccount(dialogs.accountToDelete),
 	},
 ])
+
+const folderDeleteMessage = computed(() => {
+	const { folder } = dialogs.folderToDelete
+	if (folder.children?.length) {
+		return t('sockless_mail', '{name} has subfolders. Delete or move them first.', { name: folder.name })
+	}
+	return folder.total
+		? n('sockless_mail', 'Delete {name} and the message in it? This cannot be undone.', 'Delete {name} and the {count} messages in it? This cannot be undone.', folder.total, { name: folder.name, count: folder.total })
+		: t('sockless_mail', 'Delete {name}? This cannot be undone.', { name: folder.name })
+})
+
+const folderDeleteButtons = computed(() => dialogs.folderToDelete.folder.children?.length
+	? [{ label: t('sockless_mail', 'Close') }]
+	: [
+		{ label: t('sockless_mail', 'Cancel') },
+		{
+			label: t('sockless_mail', 'Delete folder'),
+			variant: 'error',
+			callback: () => {
+				removeFolder(dialogs.folderToDelete)
+			},
+		},
+	])
 
 const permanentButtons = computed(() => [
 	{ label: t('sockless_mail', 'Cancel') },

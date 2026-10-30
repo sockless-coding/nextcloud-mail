@@ -1,7 +1,9 @@
 import { showError, showSuccess } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import { reactive } from 'vue'
-import { createFolder, deleteMessages, loadFolders, mailboxState, moveMessages, renameFolder, setFlags } from './mailbox.js'
+import { accountsState } from './accounts.js'
+import { createFolder, deleteFolder, deleteMessages, loadFolders, loadRawMessage, mailboxState, moveMessages, renameFolder, setFlags } from './mailbox.js'
+import { ruleFromMessage } from './rules.js'
 
 /**
  * User-facing message and folder actions: run the store change, report failures as toasts and
@@ -28,6 +30,10 @@ export const dialogs = reactive({
 	shortcuts: false,
 	/** The domains exempt from suspicious-sender warnings. */
 	trustedSenders: false,
+	/** The rules dialog: { account, draft } (draft: a new rule to open in the editor, or null). */
+	rules: null,
+	/** A folder waiting for confirmation to be deleted: { accountId, folder }. */
+	folderToDelete: null,
 })
 
 function fail(what, e) {
@@ -151,6 +157,34 @@ export function askRenameFolder(accountId, folder) {
 		value: folder.name,
 		submitLabel: t('sockless_mail', 'Rename'),
 		submit: (name) => renameFolder(accountId, folder.id, name),
+	}
+}
+
+/** Opens the rules dialog with a new rule for mail like this message. */
+export async function createRuleFrom(where, message) {
+	const account = accountsState.accounts.find((a) => a.id === where.accountId)
+	if (!account) {
+		return
+	}
+	let headers = ''
+	try {
+		headers = (await loadRawMessage(where, message.id, 'headers')).headers
+	} catch {
+		// Without the headers the rule goes by the sender, which the summary has.
+	}
+	dialogs.rules = { account, draft: ruleFromMessage(message, headers) }
+}
+
+export function askDeleteFolder(accountId, folder) {
+	dialogs.folderToDelete = { accountId, folder }
+}
+
+export async function removeFolder({ accountId, folder }) {
+	try {
+		await deleteFolder(accountId, folder.id)
+		showSuccess(t('sockless_mail', 'Folder {name} deleted', { name: folder.name }))
+	} catch (e) {
+		fail(t('sockless_mail', 'Deleting the folder'), e)
 	}
 }
 

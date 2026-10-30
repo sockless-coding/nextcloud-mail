@@ -5,7 +5,10 @@ using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Search;
 using MailKit.Security;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using MimeKit;
+using SocklessMail.Api.Data;
 using SocklessMail.Api.Mailbox;
 using static SocklessMail.IntegrationTests.MailApp;
 
@@ -226,4 +229,53 @@ public sealed class MailboxActionTests(GreenMailFixture mail) : IAsyncLifetime
         var response = await _client.PutAsJsonAsync($"{Base}/folders/{Inbox}", new { name = "Other" }, Ct);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Folders_are_deleted_with_their_messages()
+    {
+        var name = $"Doomed {Guid.NewGuid():N}"[..13];
+        var id = (await Json(await _client.PostAsJsonAsync($"{Base}/folders", new { name }, Ct))).GetProperty("id").GetString();
+        using (var imap = await ConnectAsync(Actions))
+        {
+            var folder = await imap.GetFolderAsync(name, Ct);
+            await folder.AppendAsync(new MimeMessage { Subject = "inside", Body = new TextPart("plain") { Text = "x" } }, MessageFlags.None, Ct);
+        }
+
+        // Cached by listing it, so dropping the cache is checked too.
+        Assert.Single((await Json(await _client.GetAsync($"{Base}/folders/{id}/messages", Ct))).GetProperty("messages").EnumerateArray());
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.DeleteAsync($"{Base}/folders/{id}", Ct)).StatusCode);
+
+        var folders = (await Json(await _client.GetAsync($"{Base}/folders", Ct))).EnumerateArray().Select(f => f.GetProperty("fullName").GetString()).ToList();
+        Assert.DoesNotContain(name, folders);
+        using (var imap = await ConnectAsync(Actions))
+        {
+            await Assert.ThrowsAsync<FolderNotFoundException>(() => imap.GetFolderAsync(name, Ct));
+        }
+
+        await using var scope = _app.Services.GetRequiredService<IServiceScopeFactory>().CreateUserScope("actions-user");
+        Assert.False(await scope.ServiceProvider.GetRequiredService<MailDbContext>().Folders.AnyAsync(f => f.FullName == name, Ct));
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.DeleteAsync($"{Base}/folders/{id}", Ct)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Folders_with_subfolders_are_not_deleted()
+    {
+        var name = $"Parent {Guid.NewGuid():N}"[..13];
+        var id = (await Json(await _client.PostAsJsonAsync($"{Base}/folders", new { name }, Ct))).GetProperty("id").GetString();
+        await Json(await _client.PostAsJsonAsync($"{Base}/folders", new { name = "Child", parentId = id }, Ct));
+
+        var response = await _client.DeleteAsync($"{Base}/folders/{id}", Ct);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("has_subfolders", (await Json409(response)).GetProperty("error").GetString());
+        Assert.Contains(name, (await Json(await _client.GetAsync($"{Base}/folders", Ct))).EnumerateArray().Select(f => f.GetProperty("fullName").GetString()));
+    }
+
+    [Fact]
+    public async Task Inbox_cannot_be_deleted()
+    {
+        Assert.Equal(HttpStatusCode.BadRequest, (await _client.DeleteAsync($"{Base}/folders/{Inbox}", Ct)).StatusCode);
+    }
+
+    private static async Task<JsonElement> Json409(HttpResponseMessage response) =>
+        JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
 }

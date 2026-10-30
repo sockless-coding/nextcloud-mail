@@ -149,6 +149,19 @@ public static class MailboxEndpoints
                 ? Results.Ok(await mailbox.RenameFolderAsync(a, folderId, input, ct))
                 : NotFound());
 
+        account.MapDelete("/folders/{folderId}", async (
+                Guid accountId, string folderId,
+                ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
+        {
+            if (await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is not { } a)
+            {
+                return NotFound();
+            }
+
+            await mailbox.DeleteFolderAsync(a, folderId, ct);
+            return Results.NoContent();
+        });
+
         // Across all accounts and folders, from the header cache only: no IMAP traffic.
         api.MapGet("/search", async (string? q, string? filter, int? limit, ClaimsPrincipal user, FolderCache cache, CancellationToken ct) =>
         {

@@ -96,6 +96,7 @@ public sealed class UserIsolationTests : IDisposable
     [InlineData("POST", "folders/SU5CT1g/messages/delete", """{"messageIds":["1-1"],"permanent":true}""")]
     [InlineData("POST", "folders", """{"name":"Planted"}""")]
     [InlineData("PUT", "folders/VHJhc2g", """{"name":"Renamed"}""")]
+    [InlineData("DELETE", "folders/VHJhc2g", "{}")]
     public async Task Other_users_mailbox_cannot_be_changed(string method, string path, string body)
     {
         var aliceId = await CreateAsync(_alice);

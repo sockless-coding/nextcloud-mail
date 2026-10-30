@@ -179,6 +179,53 @@ public sealed partial class MailboxService
     }
 
     /// <summary>
+    /// Deletes a folder and every message in it, permanently. Folders with subfolders are refused:
+    /// servers differ in what DELETE does to them (some refuse, some keep the parent as \Noselect).
+    /// </summary>
+    public async Task DeleteFolderAsync(MailAccount account, string folderId, CancellationToken ct)
+    {
+        var fullName = FullNameOf(folderId);
+        try
+        {
+            await Run(account, async (client, token) =>
+            {
+                var folder = await FindFolderAsync(client, folderId, token);
+                if (IsInbox(folder.FullName))
+                {
+                    throw new MailboxValidationException("folderId", "The inbox cannot be deleted.");
+                }
+
+                // MailKit caches folders per connection: another pooled connection may have deleted it already.
+                if (folder.ParentFolder is { } parent
+                    && !(await parent.GetSubfoldersAsync(false, token)).Any(f => f.FullName == folder.FullName))
+                {
+                    throw new MailboxNotFoundException("The folder");
+                }
+
+                if ((await folder.GetSubfoldersAsync(false, token)).Count > 0)
+                {
+                    throw new MailboxConflictException("has_subfolders", "Delete or move the folder's subfolders first.");
+                }
+
+                // A selected folder cannot be deleted on some servers; this connection may still have it open.
+                if (folder.IsOpen)
+                {
+                    await folder.CloseAsync(false, token);
+                }
+
+                await folder.DeleteAsync(token);
+                return true;
+            }, ct, retry: false);
+        }
+        finally
+        {
+            roles.Forget(account.Id);
+        }
+
+        await UpdateCacheAsync(account, fullName, () => cache.ForgetFolderAsync(account.Id, fullName, CancellationToken.None));
+    }
+
+    /// <summary>
     /// Message ids of one folder as UIDs. Ids from before the folder was renumbered (another
     /// UIDVALIDITY) are refused as a whole: acting on them would hit different messages.
     /// </summary>
@@ -255,7 +302,7 @@ public sealed partial class MailboxService
     }
 
     /// <summary>RFC 6154 special-use folder; by common name when the server does not announce them.</summary>
-    private static async Task<IMailFolder?> FindSpecialFolderAsync(ImapClient client, string use, CancellationToken ct)
+    internal static async Task<IMailFolder?> FindSpecialFolderAsync(ImapClient client, string use, CancellationToken ct)
     {
         if (use == "trash" && client.Capabilities.HasFlag(ImapCapabilities.SpecialUse) && client.GetFolder(SpecialFolder.Trash) is { } announced)
         {

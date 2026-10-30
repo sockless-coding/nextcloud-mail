@@ -545,6 +545,26 @@ export async function createFolder(accountId, name, parentId = null) {
 }
 
 /**
+ * Deletes a folder with everything in it. When it (or a folder below it) was open, the inbox opens.
+ *
+ * @param {string} accountId the folder's account
+ * @param {string} folderId the folder
+ */
+export async function deleteFolder(accountId, folderId) {
+	await send('DELETE', `/accounts/${accountId}/folders/${folderId}`)
+	await loadFolders(accountId, true)
+	const list = mailboxState.folders[accountId]?.list ?? []
+	if (mailboxState.selected.accountId === accountId && !list.some((f) => f.id === mailboxState.selected.folderId)) {
+		const inbox = list.find((f) => f.specialUse === 'inbox')
+		if (inbox) {
+			await selectFolder(accountId, inbox.id, true)
+		} else {
+			mailboxState.selected = { accountId: null, folderId: null }
+		}
+	}
+}
+
+/**
  * Renaming changes the folder's id (it is derived from the name), so a selected folder is
  * re-selected under its new id.
  *

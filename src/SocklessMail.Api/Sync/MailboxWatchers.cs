@@ -7,6 +7,7 @@ using SocklessMail.Api.Data;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Mailbox;
 using SocklessMail.Api.OAuth;
+using SocklessMail.Api.Rules;
 
 namespace SocklessMail.Api.Sync;
 
@@ -326,8 +327,10 @@ public sealed class MailboxWatchers(
     private async Task SyncInboxAsync(ImapClient client, MailAccount account, CancellationToken ct)
     {
         using var _ = await syncLocks.AcquireAsync(account.Id, "INBOX", ct);
-        await client.Inbox.OpenAsync(FolderAccess.ReadOnly, ct);
         await using var scope = scopes.CreateUserScope(account.OwnerUserId);
+        // Rules first, so mail they move away never reaches the cached INBOX.
+        await scope.ServiceProvider.GetRequiredService<RuleEngine>().ApplyAsync(client, account, ct);
+        await client.Inbox.OpenAsync(FolderAccess.ReadOnly, ct);
         await scope.ServiceProvider.GetRequiredService<FolderCache>()
             .SyncAsync(client, account, client.Inbox, MailboxService.DefaultPageSize, ct);
     }

@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging;
 using SocklessMail.Api.AppApi;
 using SocklessMail.Api.Data;
 using SocklessMail.Api.OAuth;
+using SocklessMail.Api.Rules;
 using SocklessMail.Api.Senders;
 using SocklessMail.Api.Sync;
 
@@ -75,6 +76,7 @@ public sealed class TestApp(string? storageDirectory = null, IReadOnlyDictionary
             services.AddHttpClient(DomainAges.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => Rdap);
             // Test accounts point at made-up servers; no background IMAP connections.
             services.AddSingleton(new WatcherOptions { MaxWatchers = 0 });
+            services.AddSingleton(new RuleRunnerOptions { Interval = TimeSpan.Zero });
             _configureServices?.Invoke(services);
         });
     }

@@ -96,4 +96,26 @@ await submitFolderName(`${folder} renamed`)
 await openFolder(`${folder} renamed`)
 check(await until(async () => await item(moveMe).count() === 1), 'renamed folder contains the moved message')
 
+// Deleting: a folder with subfolders is refused; an open folder goes with its message and the Inbox opens.
+await folderAction(page, `${folder} renamed`, 'New subfolder')
+await submitFolderName('Child')
+await folderAction(page, `${folder} renamed`, 'Delete folder')
+let confirm = page.getByRole('dialog', { name: 'Delete folder' })
+await confirm.waitFor()
+check((await confirm.innerText()).includes('has subfolders'), 'a folder with subfolders: asked to delete them first')
+await confirm.getByRole('button', { name: 'Close' }).first().click()
+await confirm.waitFor({ state: 'detached' })
+
+await folderAction(page, 'Child', 'Delete folder')
+confirm = page.getByRole('dialog', { name: 'Delete folder' })
+await confirm.getByRole('button', { name: 'Delete folder' }).click()
+check(await until(async () => !(await folderNames(page)).includes('Child')), 'the empty subfolder is deleted')
+
+await folderAction(page, `${folder} renamed`, 'Delete folder')
+confirm = page.getByRole('dialog', { name: 'Delete folder' })
+check((await confirm.innerText()).includes('and the message in it'), 'the confirmation counts the message')
+await confirm.getByRole('button', { name: 'Delete folder' }).click()
+check(await until(async () => !(await folderNames(page)).includes(`${folder} renamed`)), 'the folder is deleted')
+check(await until(async () => await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).count() === 1), 'the Inbox opens instead')
+
 await finish()

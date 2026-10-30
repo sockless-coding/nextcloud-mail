@@ -340,6 +340,10 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         }
     }
 
+    /// <summary>Drops the cache of a folder the app itself just deleted.</summary>
+    public Task ForgetFolderAsync(Guid accountId, string fullName, CancellationToken ct) =>
+        db.Folders.Where(f => f.AccountId == accountId && f.FullName == fullName).ExecuteDeleteAsync(ct);
+
     /// <summary>
     /// Deletes removal records older than <see cref="RemovedRetention"/>, for every user. The
     /// folder's <see cref="CachedFolder.ResetSeq"/> moves up first, so a client whose token predates

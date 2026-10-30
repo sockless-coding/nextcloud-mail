@@ -45,6 +45,12 @@
 						</template>
 						{{ t('sockless_mail', 'Edit account') }}
 					</NcActionButton>
+					<NcActionButton close-after-click @click="dialogs.rules = { account, draft: null }">
+						<template #icon>
+							<NcIconSvgWrapper :path="mdiFilterCogOutline" />
+						</template>
+						{{ t('sockless_mail', 'Rules') }}
+					</NcActionButton>
 					<NcActionButton close-after-click @click="newFolder(account)">
 						<template #icon>
 							<NcIconSvgWrapper :path="mdiFolderPlusOutline" />
@@ -98,7 +104,7 @@
 </template>
 
 <script setup>
-import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiDelete, mdiFolderPlusOutline, mdiInboxMultipleOutline, mdiPencil, mdiRefresh } from '@mdi/js'
+import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiDelete, mdiFilterCogOutline, mdiFolderPlusOutline, mdiInboxMultipleOutline, mdiPencil, mdiRefresh } from '@mdi/js'
 import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'

@@ -107,6 +107,12 @@
 									</template>
 									{{ t('sockless_mail', 'Create task…') }}
 								</NcActionButton>
+								<NcActionButton close-after-click @click="createRuleFrom(where, message)">
+									<template #icon>
+										<NcIconSvgWrapper :path="mdiFilterPlusOutline" />
+									</template>
+									{{ t('sockless_mail', 'Create rule…') }}
+								</NcActionButton>
 								<NcActionButton v-if="message.from[0]"
 									close-after-click
 									@click="dialogs.addContact = { name: message.from[0].name, address: message.from[0].address }">
@@ -253,7 +259,7 @@
 </template>
 
 <script setup>
-import { mdiAccountPlusOutline, mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiClipboardCheckOutline, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldAlertOutline, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
+import { mdiAccountPlusOutline, mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiClipboardCheckOutline, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFilterPlusOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldAlertOutline, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -269,7 +275,7 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { computed, ref, watch } from 'vue'
 import { bimiUrl } from '../bimi.js'
 import { accountColor, accountsState } from '../store/accounts.js'
-import { askMove, dialogs, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
+import { askMove, createRuleFrom, dialogs, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { composeEdit, composeReply } from '../store/compose.js'
 import { primaryCalendarPart } from '../store/calendar.js'
 import { saveAttachmentsToFiles } from '../store/files.js'

@@ -30,6 +30,12 @@
 					</template>
 					{{ t('sockless_mail', 'Rename') }}
 				</NcActionButton>
+				<NcActionButton v-if="folder.specialUse !== 'inbox'" close-after-click @click="askDeleteFolder(accountId, folder)">
+					<template #icon>
+						<NcIconSvgWrapper :path="mdiDeleteOutline" />
+					</template>
+					{{ t('sockless_mail', 'Delete folder') }}
+				</NcActionButton>
 			</NcActions>
 		</div>
 		<ul v-if="open && folder.children.length">
@@ -43,14 +49,14 @@
 </template>
 
 <script setup>
-import { mdiChevronDown, mdiChevronRight, mdiFolderOutline, mdiFolderPlusOutline, mdiPencil } from '@mdi/js'
+import { mdiChevronDown, mdiChevronRight, mdiDeleteOutline, mdiFolderOutline, mdiFolderPlusOutline, mdiPencil } from '@mdi/js'
 import { t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { computed } from 'vue'
 import { USE_ICONS, USE_NAMES } from '../folderUses.js'
-import { askNewFolder, askRenameFolder } from '../store/actions.js'
+import { askDeleteFolder, askNewFolder, askRenameFolder } from '../store/actions.js'
 import { mailboxState } from '../store/mailbox.js'
 import { openFolder } from '../store/navigation.js'
 import { isExpanded, setExpanded } from '../store/viewState.js'

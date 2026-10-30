@@ -249,6 +249,94 @@ namespace SocklessMail.Api.Data.Migrations
                     b.ToTable("oauth_clients", (string)null);
                 });
 
+            modelBuilder.Entity("SocklessMail.Api.Rules.MailRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Actions")
+                        .IsRequired()
+                        .HasMaxLength(50000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Conditions")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("LastErrorAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("LastMatchedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("MatchAll")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MatchCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Stop")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId", "SortOrder");
+
+                    b.ToTable("rules", (string)null);
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Rules.RuleCursor", b =>
+                {
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<uint>("LastUid")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<uint>("UidValidity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("AccountId");
+
+                    b.ToTable("rule_cursors", (string)null);
+                });
+
             modelBuilder.Entity("SocklessMail.Api.Senders.DomainAge", b =>
                 {
                     b.Property<string>("Domain")
@@ -451,6 +539,24 @@ namespace SocklessMail.Api.Data.Migrations
                 });
 
             modelBuilder.Entity("SocklessMail.Api.Accounts.AccountViewState", b =>
+                {
+                    b.HasOne("SocklessMail.Api.Accounts.MailAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Rules.MailRule", b =>
+                {
+                    b.HasOne("SocklessMail.Api.Accounts.MailAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Rules.RuleCursor", b =>
                 {
                     b.HasOne("SocklessMail.Api.Accounts.MailAccount", null)
                         .WithMany()

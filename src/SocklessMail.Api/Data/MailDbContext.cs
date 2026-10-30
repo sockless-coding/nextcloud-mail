@@ -7,6 +7,7 @@ using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Bimi;
 using SocklessMail.Api.Mailbox;
 using SocklessMail.Api.OAuth;
+using SocklessMail.Api.Rules;
 using SocklessMail.Api.Senders;
 using SocklessMail.Api.Sync;
 
@@ -48,6 +49,10 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
     public DbSet<ViewSettings> ViewSettings => Set<ViewSettings>();
 
     public DbSet<AccountViewState> AccountViewStates => Set<AccountViewState>();
+
+    public DbSet<MailRule> Rules => Set<MailRule>();
+
+    public DbSet<RuleCursor> RuleCursors => Set<RuleCursor>();
 
     // SQLite cannot order or compare DateTimeOffset natively; store UTC ticks.
     private static readonly ValueConverter<DateTimeOffset, long> UtcTicks =
@@ -212,6 +217,33 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             state.Property(s => s.LastFolderId).HasMaxLength(4000);
             state.Property(s => s.UpdatedAt).HasConversion(UtcTicks);
             state.HasQueryFilter(s => s.OwnerUserId == _userId);
+        });
+
+        model.Entity<MailRule>(rule =>
+        {
+            rule.ToTable("rules");
+            rule.HasKey(r => r.Id);
+            rule.HasIndex(r => new { r.AccountId, r.SortOrder });
+            rule.HasOne<MailAccount>().WithMany().HasForeignKey(r => r.AccountId).OnDelete(DeleteBehavior.Cascade);
+            rule.Property(r => r.OwnerUserId).HasMaxLength(64);
+            rule.Property(r => r.Name).HasMaxLength(RuleStore.MaxNameLength);
+            rule.Property(r => r.Conditions).HasMaxLength(20000);
+            rule.Property(r => r.Actions).HasMaxLength(50000);
+            rule.Property(r => r.LastError).HasMaxLength(2000);
+            rule.Property(r => r.LastErrorAt).HasConversion(UtcTicks);
+            rule.Property(r => r.LastMatchedAt).HasConversion(UtcTicks);
+            rule.Property(r => r.UpdatedAt).HasConversion(UtcTicks);
+            rule.HasQueryFilter(r => r.OwnerUserId == _userId);
+        });
+
+        model.Entity<RuleCursor>(cursor =>
+        {
+            cursor.ToTable("rule_cursors");
+            cursor.HasKey(c => c.AccountId);
+            cursor.HasOne<MailAccount>().WithMany().HasForeignKey(c => c.AccountId).OnDelete(DeleteBehavior.Cascade);
+            cursor.Property(c => c.OwnerUserId).HasMaxLength(64);
+            cursor.Property(c => c.UpdatedAt).HasConversion(UtcTicks);
+            cursor.HasQueryFilter(c => c.OwnerUserId == _userId);
         });
     }
 }

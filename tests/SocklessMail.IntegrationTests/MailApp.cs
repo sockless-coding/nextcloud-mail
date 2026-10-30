@@ -9,6 +9,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SocklessMail.Api.AppApi;
+using SocklessMail.Api.Rules;
 using SocklessMail.Api.Senders;
 using SocklessMail.Api.Sync;
 
@@ -38,6 +39,7 @@ public sealed class MailApp(Action<IServiceCollection>? services = null) : WebAp
         builder.ConfigureTestServices(collection =>
         {
             collection.AddSingleton(new WatcherOptions { MaxWatchers = 0 });
+            collection.AddSingleton(new RuleRunnerOptions { Interval = TimeSpan.Zero });
             // No registry lookups for the test senders' domains.
             collection.AddHttpClient(DomainAges.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new NoRdap());
             services?.Invoke(collection);
