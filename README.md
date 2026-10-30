@@ -5,7 +5,7 @@ service that Nextcloud manages through AppAPI and deploys with the HaRP deploy d
 (Nextcloud 32+). Users reach it only through Nextcloud: a top-menu entry, a page rendered inside
 the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
-> Status: **phase 12c (Nextcloud Calendar)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
+> Status: **phase 13 (suspicious senders)**. Each Nextcloud user manages any number of IMAP/SMTP accounts
 > (credentials encrypted at rest), reads mail (folder tree, paged list, sanitized message view
 > with remote images blocked by default, attachments), works with it (read/unread, flag, move,
 > delete via Trash, folders) and writes it: new messages, reply, reply all, forward, attachments,
@@ -25,7 +25,9 @@ the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with
 > their members), and a sender can be added to an address book from the message view.
 > Invitations show as a card with Accept, Maybe and Decline: the event goes into a Nextcloud
 > calendar and the answer to the organizer goes out from the mail account. Cancellations,
-> attendees' replies and .ics files update the calendar the same way.
+> attendees' replies and .ics files update the calendar the same way. Senders whose domain
+> imitates a known one or was registered only recently get a warning, and links whose text shows
+> another domain than they lead to ask before opening.
 
 ## Layout
 

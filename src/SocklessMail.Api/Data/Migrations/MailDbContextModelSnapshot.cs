@@ -17,6 +17,34 @@ namespace SocklessMail.Api.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.14");
 
+            modelBuilder.Entity("SocklessMail.Api.Accounts.AccountViewState", b =>
+                {
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Expanded")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastFolderId")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("AccountId");
+
+                    b.HasIndex("OwnerUserId");
+
+                    b.ToTable("account_view_states", (string)null);
+                });
+
             modelBuilder.Entity("SocklessMail.Api.Accounts.MailAccount", b =>
                 {
                     b.Property<Guid>("Id")
@@ -96,6 +124,29 @@ namespace SocklessMail.Api.Data.Migrations
                     b.HasIndex("OwnerUserId", "SortOrder");
 
                     b.ToTable("accounts", (string)null);
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Accounts.ViewSettings", b =>
+                {
+                    b.Property<string>("OwnerUserId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastView")
+                        .HasMaxLength(5000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Storage")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("OwnerUserId");
+
+                    b.ToTable("view_settings", (string)null);
                 });
 
             modelBuilder.Entity("SocklessMail.Api.Bimi.BimiLogo", b =>
@@ -397,6 +448,15 @@ namespace SocklessMail.Api.Data.Migrations
                     b.HasIndex("FolderId", "ChangeSeq");
 
                     b.ToTable("removed_messages", (string)null);
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Accounts.AccountViewState", b =>
+                {
+                    b.HasOne("SocklessMail.Api.Accounts.MailAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("SocklessMail.Api.Sync.CachedFolder", b =>

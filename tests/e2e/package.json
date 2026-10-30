@@ -12,7 +12,8 @@
     "files": "node files.mjs",
     "contacts": "node contacts.mjs",
     "calendar": "node calendar.mjs",
-    "senders": "node senders.mjs"
+    "senders": "node senders.mjs",
+    "viewstate": "node viewstate.mjs"
   },
   "dependencies": {
     "playwright-core": "^1.64.1"

@@ -45,6 +45,10 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
     /// <summary>Instance-wide admin settings; not filtered.</summary>
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
 
+    public DbSet<ViewSettings> ViewSettings => Set<ViewSettings>();
+
+    public DbSet<AccountViewState> AccountViewStates => Set<AccountViewState>();
+
     // SQLite cannot order or compare DateTimeOffset natively; store UTC ticks.
     private static readonly ValueConverter<DateTimeOffset, long> UtcTicks =
         new(v => v.UtcTicks, v => new DateTimeOffset(v, TimeSpan.Zero));
@@ -185,6 +189,29 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             setting.Property(s => s.Key).HasMaxLength(64);
             setting.Property(s => s.Value).HasMaxLength(4000);
             setting.Property(s => s.UpdatedAt).HasConversion(UtcTicks);
+        });
+
+        model.Entity<ViewSettings>(settings =>
+        {
+            settings.ToTable("view_settings");
+            settings.HasKey(s => s.OwnerUserId);
+            settings.Property(s => s.OwnerUserId).HasMaxLength(64);
+            settings.Property(s => s.Storage).HasMaxLength(16);
+            settings.Property(s => s.LastView).HasMaxLength(5000);
+            settings.Property(s => s.UpdatedAt).HasConversion(UtcTicks);
+            settings.HasQueryFilter(s => s.OwnerUserId == _userId);
+        });
+
+        model.Entity<AccountViewState>(state =>
+        {
+            state.ToTable("account_view_states");
+            state.HasKey(s => s.AccountId);
+            state.HasIndex(s => s.OwnerUserId);
+            state.HasOne<MailAccount>().WithMany().HasForeignKey(s => s.AccountId).OnDelete(DeleteBehavior.Cascade);
+            state.Property(s => s.OwnerUserId).HasMaxLength(64);
+            state.Property(s => s.LastFolderId).HasMaxLength(4000);
+            state.Property(s => s.UpdatedAt).HasConversion(UtcTicks);
+            state.HasQueryFilter(s => s.OwnerUserId == _userId);
         });
     }
 }

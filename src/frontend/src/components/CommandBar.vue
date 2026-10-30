@@ -113,6 +113,16 @@
 				{{ t('sockless_mail', 'Warn about suspicious senders') }}
 			</NcActionCheckbox>
 			<NcActionSeparator />
+			<NcActionCaption :name="t('sockless_mail', 'Remember open folders')" />
+			<NcActionRadio v-for="option in VIEW_STORAGES"
+				:key="option.value"
+				name="sockless-view-storage"
+				:value="option.value"
+				:model-value="viewState.storage"
+				@update:model-value="setViewStorage(option.value)">
+				{{ option.label }}
+			</NcActionRadio>
+			<NcActionSeparator />
 			<NcActionButton close-after-click @click="dialogs.trustedSenders = true">
 				<template #icon>
 					<NcIconSvgWrapper :path="mdiShieldCheckOutline" />
@@ -148,6 +158,7 @@ import { folderPaneShown, layout, toggleFolderPane, viewport } from '../store/la
 import { mailboxState } from '../store/mailbox.js'
 import { clearQuery, currentScope, runSearch, searchState as search } from '../store/search.js'
 import { commandTargets, selection } from '../store/selection.js'
+import { setViewStorage, viewState } from '../store/viewState.js'
 
 const REPLIES = [
 	{ id: 'reply', icon: mdiReply, label: t('sockless_mail', 'Reply') },
@@ -164,6 +175,11 @@ const PANES = [
 const DENSITIES = [
 	{ value: 'comfortable', label: t('sockless_mail', 'Comfortable') },
 	{ value: 'compact', label: t('sockless_mail', 'Compact') },
+]
+
+const VIEW_STORAGES = [
+	{ value: 'server', label: t('sockless_mail', 'On all devices') },
+	{ value: 'browser', label: t('sockless_mail', 'In this browser only') },
 ]
 
 const open = mailboxState.open

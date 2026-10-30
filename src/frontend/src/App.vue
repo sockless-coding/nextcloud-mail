@@ -137,12 +137,13 @@ import { composeNew, composer } from './store/compose.js'
 import { attachFileIds, takeFileIdsFromUrl } from './store/files.js'
 import { closeDrawer, folderPaneShown, layout, readingPane, viewport } from './store/layout.js'
 import { hasPendingWrites, loadFolders, mailboxState, refreshMessages } from './store/mailbox.js'
-import { accountSaved, loadAllFolders, openUnified, removeAccount, selectAccount } from './store/navigation.js'
+import { accountSaved, loadAllFolders, openStartView, removeAccount } from './store/navigation.js'
 import { loadOAuthState } from './store/oauth.js'
 import { clearSelection, selection } from './store/selection.js'
 import { push, startPush } from './store/push.js'
 import { installShortcuts } from './store/shortcuts.js'
 import { INBOX_ID, inUnifiedView, refreshUnified, viewOf } from './store/unified.js'
+import { loadViewState } from './store/viewState.js'
 
 /**
  * Without push (proxy mode, or the connection is down) new mail is found by polling: the open
@@ -301,15 +302,10 @@ function sendFilesFromUrl() {
 onMounted(async () => {
 	// Not awaited: the mail view does not depend on it.
 	loadOAuthState()
-	await loadAccounts()
+	await Promise.all([loadAccounts(), loadViewState()])
 	// The rail shows every account's unread count; not awaited either.
 	loadAllFolders()
-	// With several accounts, start with all their inboxes together.
-	if (accountsState.accounts.length > 1) {
-		openUnified()
-	} else if (accountsState.accounts.length) {
-		await selectAccount(accountsState.accounts[0])
-	}
+	await openStartView()
 	sendFilesFromUrl()
 	pollTimer = window.setInterval(poll, POLL_INTERVAL_MS)
 	document.addEventListener('visibilitychange', poll)

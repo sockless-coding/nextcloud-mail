@@ -2,7 +2,7 @@
 // Needs: dev/dev.sh up, the app deployed, dev/dev.sh seed-mail. Adds an account for
 // alice@example.test if the user has none for that address.
 import { execFileSync, execSync } from 'node:child_process'
-import { appPage, base, check, mailHost, messageRows, openAccount, start } from './lib.mjs'
+import { appPage, base, check, mailHost, messageRows, openInbox, start } from './lib.mjs'
 
 const { page, step, finish } = await start()
 const dialogs = []
@@ -36,9 +36,7 @@ if (!accounts.some((a) => a.emailAddress === 'alice@example.test')) {
 
 const aliceName = (await (await page.request.get(`${base}${apiBase}/accounts`, { headers })).json())
 	.find((a) => a.emailAddress === 'alice@example.test').displayName
-await openAccount(page, aliceName)
-// With several accounts the app opens on all inboxes; wait for the account's own inbox.
-await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor({ timeout: 30000 })
+await openInbox(page, aliceName)
 
 const items = messageRows(page)
 await items.first().waitFor({ timeout: 30000 })

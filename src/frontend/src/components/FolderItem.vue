@@ -48,11 +48,12 @@ import { t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { USE_ICONS, USE_NAMES } from '../folderUses.js'
 import { askNewFolder, askRenameFolder } from '../store/actions.js'
 import { mailboxState } from '../store/mailbox.js'
 import { openFolder } from '../store/navigation.js'
+import { isExpanded, setExpanded } from '../store/viewState.js'
 
 const props = defineProps({
 	accountId: { type: String, required: true },
@@ -61,7 +62,10 @@ const props = defineProps({
 	depth: { type: Number, default: 0 },
 })
 
-const open = ref(false)
+const open = computed({
+	get: () => isExpanded(props.accountId, props.folder.id),
+	set: (value) => setExpanded(props.accountId, props.folder.id, value),
+})
 const icon = computed(() => USE_ICONS[props.folder.specialUse] ?? mdiFolderOutline)
 // Special folders get their translated name when the server uses the standard English one.
 const displayName = computed(() => (props.folder.specialUse && props.folder.name.toLowerCase() === props.folder.specialUse

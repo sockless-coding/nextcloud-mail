@@ -3,7 +3,7 @@
 // Needs: dev/dev.sh up, the app deployed, and an account "Alice" for alice@example.test (node mail.mjs).
 import { createConnection } from 'node:net'
 import { request } from 'playwright-core'
-import { base, check, folderRow, messageRows, openAccount, start } from './lib.mjs'
+import { base, check, folderRow, messageRows, openInbox, start } from './lib.mjs'
 
 const { page, step, finish } = await start()
 const suffix = Date.now().toString().slice(-6)
@@ -80,7 +80,7 @@ const uid = `e2e-${suffix}`
 
 step('an invitation')
 await sendMail(organizer, imip(`Invitation: Review ${suffix}`, 'REQUEST', ics('REQUEST', uid)))
-await openAccount(page, 'Alice')
+await openInbox(page, 'Alice')
 await openMessage(`Invitation: Review ${suffix}`)
 await card().getByText(`Review ${suffix}`).waitFor()
 check(await card().getByText('Invitation', { exact: true }).count() === 1, 'shown as an invitation')

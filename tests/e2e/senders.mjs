@@ -3,7 +3,7 @@
 // than they lead to (banner reason, marker, confirmation on click).
 // Needs: dev/dev.sh up, the app deployed, and an account for alice@example.test (node mail.mjs creates one).
 import { execSync } from 'node:child_process'
-import { check, messageRows, openAccount, start } from './lib.mjs'
+import { check, messageRows, openInbox, start } from './lib.mjs'
 
 const suffix = Date.now().toString().slice(-6)
 const phish = `Your account is limited ${suffix}`
@@ -49,8 +49,7 @@ async function viewMenu() {
 	await page.getByRole('button', { name: 'View settings' }).click()
 }
 
-await openAccount(page, /^Alice/)
-await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor()
+await openInbox(page, /^Alice/)
 await item(phish).waitFor({ timeout: 20000 })
 await item(ordinary).waitFor()
 
@@ -113,8 +112,7 @@ await dialog.getByRole('button', { name: 'Stop trusting xn--pypal-4ve.com' }).cl
 check(await until(async () => !(await dialog.innerText()).includes('xn--pypal-4ve.com')), 'removing it takes it off the list')
 await page.keyboard.press('Escape')
 await page.reload()
-await openAccount(page, /^Alice/)
-await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor()
+await openInbox(page, /^Alice/)
 await item(phish).waitFor({ timeout: 20000 })
 check(await until(async () => await item(phish).locator('.message-row__warning').count() === 1), 'after a reload the warning is back')
 

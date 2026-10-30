@@ -2,7 +2,7 @@
 // Close, continued from Drafts and removed when sent; plain text is remembered.
 // Sends to alice@example.test herself. Needs: dev/dev.sh up, the app deployed, and an account
 // for alice@example.test (node mail.mjs creates one).
-import { check, folderRow, messageRows, openAccount, start } from './lib.mjs'
+import { check, folderRow, messageRows, openInbox, start } from './lib.mjs'
 
 const suffix = Date.now().toString().slice(-6)
 const subject = `Rich ${suffix}`
@@ -28,8 +28,7 @@ async function openFolder(name) {
 	await page.locator('.message-list__header h2', { hasText: new RegExp(`^${name}$`) }).waitFor()
 }
 
-await openAccount(page, /^Alice/)
-await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor()
+await openInbox(page, /^Alice/)
 
 step('writing with formatting')
 await page.getByRole('button', { name: 'New message' }).click()

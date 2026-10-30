@@ -6,6 +6,7 @@ import { USE_ICONS, USE_NAMES } from '../folderUses.js'
 import { accountsState } from './accounts.js'
 import { closeMessage, hasPendingWrites, mailboxState, writeCounters } from './mailbox.js'
 import { mergeUnifiedChanges } from './search.js'
+import { rememberView } from './viewState.js'
 
 const PAGE_SIZE = 50
 
@@ -135,6 +136,7 @@ export async function showUnified(view = 'inbox') {
 	}
 	const run = ++generation
 	mailboxState.selected = { accountId: null, folderId: null, unified: view }
+	rememberView(mailboxState.selected)
 	closeMessage()
 	Object.assign(unifiedState, { view, list: [], nextBefore: null, total: 0, unread: null, token: null, errors: [], error: null, loading: true })
 	const completedAtStart = writeCounters().completed

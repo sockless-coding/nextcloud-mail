@@ -2,7 +2,7 @@
 // new mail within seconds of its arrival. Needs: dev/dev.sh up and the app deployed through HaRP
 // (dev/dev.sh register-docker). Adds an account for alice@example.test if the user has none.
 import { execSync } from 'node:child_process'
-import { base, check, mailHost, messageRows, openAccount, start } from './lib.mjs'
+import { base, check, mailHost, messageRows, openInbox, start } from './lib.mjs'
 
 const subject = `Pushed ${Date.now().toString().slice(-6)}`
 const send = (to) => execSync(`curl -s --url smtp://127.0.0.1:3025 --mail-from push@example.test --mail-rcpt ${to} --upload-file -`,
@@ -38,7 +38,7 @@ if (!existing.some((a) => a.emailAddress === 'alice@example.test')) {
 const accounts = await (await page.request.get(`${base}${apiBase}/accounts`, { headers })).json()
 
 step('the tab connects to the hub over a WebSocket')
-await openAccount(page, accounts.find((a) => a.emailAddress === 'alice@example.test').displayName)
+await openInbox(page, accounts.find((a) => a.emailAddress === 'alice@example.test').displayName)
 await messageRows(page).first().waitFor({ timeout: 30000 }).catch(() => {})
 await page.waitForTimeout(2000)
 const hub = sockets.find((ws) => ws.url().includes('/exapps/sockless_mail/api/hub'))

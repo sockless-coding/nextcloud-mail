@@ -2,7 +2,7 @@
 // position and density (kept across reloads), the folder pane toggle.
 // Needs: dev/dev.sh up, the app deployed, and an account for alice@example.test (node mail.mjs creates one).
 import { execSync } from 'node:child_process'
-import { check, isUnread, messageRows, openAccount, start } from './lib.mjs'
+import { check, isUnread, messageRows, openInbox, start } from './lib.mjs'
 
 const suffix = Date.now().toString().slice(-6)
 const subjects = ['one', 'two', 'three'].map((n) => `Layout ${n} ${suffix}`)
@@ -32,8 +32,7 @@ async function viewSetting(name) {
 	await page.keyboard.press('Escape')
 }
 
-await openAccount(page, /^Alice/)
-await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor()
+await openInbox(page, /^Alice/)
 await item(subjects[0]).waitFor({ timeout: 20000 })
 step('inbox shown')
 
@@ -61,9 +60,7 @@ await page.reload()
 await page.locator('.message-row').first().waitFor({ timeout: 30000 })
 check(await page.locator('.sm-panes--bottom').count() === 1 && await page.locator('.message-list--compact').count() === 1, 'both are kept after a reload')
 await viewSetting('Off')
-await openAccount(page, /^Alice/)
-// The reload opened all inboxes, which list the same message: wait for the account's own list.
-await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor()
+await openInbox(page, /^Alice/)
 await item(subjects[1]).click()
 await page.locator('.message-view h2', { hasText: subjects[1] }).waitFor()
 check(!(await page.locator('.sm-panes__list').isVisible()), 'reading pane off: the message replaces the list')

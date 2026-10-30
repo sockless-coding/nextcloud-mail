@@ -2,7 +2,7 @@
 // discard, one draft at a time), recipient chips with suggestions, keyboard shortcuts.
 // Needs: dev/dev.sh up, the app deployed, and an account for alice@example.test (node mail.mjs creates one).
 import { execSync } from 'node:child_process'
-import { check, isUnread, messageRows, openAccount, start } from './lib.mjs'
+import { check, isUnread, messageRows, openInbox, start } from './lib.mjs'
 
 const suffix = Date.now().toString().slice(-6)
 const [first, second, withFile] = ['first', 'second', 'file'].map((n) => `Workspace ${n} ${suffix}`)
@@ -34,8 +34,7 @@ async function until(condition, seconds = 10) {
 	return false
 }
 
-await openAccount(page, /^Alice/)
-await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor()
+await openInbox(page, /^Alice/)
 await item(first).waitFor({ timeout: 20000 })
 step('reading')
 

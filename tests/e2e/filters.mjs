@@ -3,7 +3,7 @@
 // Needs: dev/dev.sh up, the app deployed, accounts for alice@example.test and bob@example.test
 // (node unified.mjs adds them).
 import { execFileSync, execSync } from 'node:child_process'
-import { check, messageRows, openAccount, start } from './lib.mjs'
+import { check, messageRows, openInbox, start } from './lib.mjs'
 
 const suffix = Date.now().toString().slice(-6)
 const [unreadSubject, readSubject, flaggedSubject, fileSubject, laterSubject] =
@@ -42,8 +42,7 @@ async function until(condition, seconds = 10) {
 	return false
 }
 
-await openAccount(page, /^Alice/)
-await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor()
+await openInbox(page, /^Alice/)
 await item(unreadSubject).waitFor({ timeout: 20000 })
 step('inbox shown')
 check((await item(unreadSubject).innerText()).includes(`Quarterly numbers ${suffix} are in`), 'the row shows the start of the text')

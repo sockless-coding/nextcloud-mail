@@ -74,6 +74,19 @@ export async function openAccount(page, name) {
 	await page.getByRole('navigation', { name: 'Accounts' }).getByRole('button', { name: pattern }).first().click()
 }
 
+/**
+ * Shows an account's inbox. Opening an account shows the folder last open there, and with several
+ * accounts the start view may be all inboxes (also headed "Inbox"), so the inbox is clicked and
+ * waited for in the account's own folder pane.
+ */
+export async function openInbox(page, name) {
+	await openAccount(page, name)
+	const inbox = page.locator('.folder-pane .folder-row', { has: page.locator('.folder-row__name', { hasText: /^Inbox$/ }) }).first()
+	await inbox.locator('.folder-row__main').click()
+	await page.locator('.folder-pane .folder-row--active', { has: page.locator('.folder-row__name', { hasText: /^Inbox$/ }) }).waitFor({ timeout: 30000 })
+	await page.locator('.message-list__header h2', { hasText: /^Inbox$/ }).waitFor({ timeout: 30000 })
+}
+
 /** Opens an account's action menu (in the folder pane, once the account is shown) and clicks an entry. */
 export async function accountAction(page, name, action) {
 	await openAccount(page, name)

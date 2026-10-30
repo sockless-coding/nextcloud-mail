@@ -6,14 +6,15 @@ import { closeDrawer } from './layout.js'
 import { forgetAccount, loadFolders, mailboxState, selectFolder } from './mailbox.js'
 import { clearSearch } from './search.js'
 import { endSelectionMode } from './selection.js'
-import { showUnified } from './unified.js'
+import { showUnified, viewOf } from './unified.js'
+import { forgetAccountView, lastFolderOf, viewState } from './viewState.js'
 
 /**
  * Moving between accounts and folders, shared by the account rail, the folder pane and the
  * start-up in App.vue.
  */
 
-/** Opens an account and shows its inbox. */
+/** Opens an account and shows the folder last open there, else its inbox. */
 export async function selectAccount(account) {
 	clearSearch()
 	endSelectionMode()
@@ -26,12 +27,32 @@ export async function selectAccount(account) {
 	if (mailboxState.selected.accountId === account.id) {
 		return
 	}
-	const inbox = folders.find((f) => f.specialUse === 'inbox') ?? folders.find((f) => f.selectable)
-	if (inbox) {
-		selectFolder(account.id, inbox.id)
+	const remembered = lastFolderOf(account.id)
+	const folder = folders.find((f) => f.id === remembered && f.selectable)
+		?? folders.find((f) => f.specialUse === 'inbox')
+		?? folders.find((f) => f.selectable)
+	if (folder) {
+		selectFolder(account.id, folder.id)
 	} else {
 		// No folders (e.g. the login failed): still show the account, with its error.
 		mailboxState.selected = { accountId: account.id, folderId: null }
+	}
+}
+
+/**
+ * The start: the view last open (see viewState.js) when it still exists, else all inboxes with
+ * several accounts, or the only account.
+ */
+export async function openStartView() {
+	const { accounts } = accountsState
+	const last = viewState.lastView
+	const account = last?.accountId && accounts.find((a) => a.id === last.accountId)
+	if (account) {
+		await selectAccount(account)
+	} else if (accounts.length > 1) {
+		openUnified(last?.unified && viewOf(last.unified) ? last.unified : 'inbox')
+	} else if (accounts.length) {
+		await selectAccount(accounts[0])
 	}
 }
 
@@ -86,6 +107,7 @@ export async function removeAccount(account) {
 	try {
 		await deleteAccount(account.id)
 		forgetAccount(account.id)
+		forgetAccountView(account.id)
 	} catch (e) {
 		showError(t('sockless_mail', 'Could not delete the account: {error}', { error: e.message }))
 		return

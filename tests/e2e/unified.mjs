@@ -3,7 +3,7 @@
 // Needs: dev/dev.sh up and the app deployed. Adds accounts for alice@example.test and
 // bob@example.test (GreenMail users) if the user has none for those addresses.
 import { execSync } from 'node:child_process'
-import { appPage, base, check, isUnread, mailHost, messageRows, openAccount, rowAction, start } from './lib.mjs'
+import { appPage, base, check, isUnread, mailHost, messageRows, openInbox, rowAction, start } from './lib.mjs'
 
 const suffix = Date.now().toString().slice(-6)
 const [aliceSubject, bobSubject, laterSubject] = ['alice', 'bob', 'later'].map((who) => `Unified ${who} ${suffix}`)
@@ -101,8 +101,7 @@ check(await until(async () => (await item(laterSubject).count()) > 0, 40), 'new 
 check((await items.first().innerText()).includes(laterSubject), 'new mail goes on top')
 
 step('switching views')
-await openAccount(page, bobName)
-await header.filter({ hasText: 'Inbox' }).waitFor()
+await openInbox(page, bobName)
 check(await until(async () => (await item(laterSubject).count()) > 0), 'the account inbox shows its own mail')
 await unifiedEntry.click()
 await unifiedInboxShown()

@@ -2,6 +2,7 @@ import { reactive } from 'vue'
 import { apiBase, apiGet, apiSend } from '../api.js'
 import { dropHits, mergeFolderChanges, searchState } from './search.js'
 import { inUnifiedView, refreshUnified, unifiedState } from './unified.js'
+import { isExpanded, pruneFolders, rememberView, setExpanded } from './viewState.js'
 
 /**
  * Folders, the message list of the selected folder and the open message. Everything is read
@@ -78,6 +79,7 @@ export async function loadFolders(accountId, quiet = false) {
 		if (!quiet || generation === writeGeneration) {
 			entry.list = list
 		}
+		pruneFolders(accountId, list)
 		entry.error = null
 	} catch (e) {
 		if (!quiet) {
@@ -104,6 +106,7 @@ export async function selectFolder(accountId, folderId, reset = false) {
 		return
 	}
 	mailboxState.selected = { accountId, folderId }
+	rememberView(mailboxState.selected)
 	closeMessage()
 	Object.assign(mailboxState.messages, { list: [], nextBefore: null, total: 0, uidValidity: null, token: null, error: null, loading: true })
 	const completedAtStart = writesCompleted
@@ -533,6 +536,10 @@ export async function deleteMessages(where, messageIds, permanent = false) {
  */
 export async function createFolder(accountId, name, parentId = null) {
 	const folder = await send('POST', `/accounts/${accountId}/folders`, { name, parentId })
+	if (parentId) {
+		// Show the new subfolder.
+		setExpanded(accountId, parentId, true)
+	}
 	await loadFolders(accountId, true)
 	return folder
 }
@@ -545,11 +552,31 @@ export async function createFolder(accountId, name, parentId = null) {
  * @param {string} folderId folder to rename
  * @param {string} name new name
  */
+/**
+ * A rename gives the folder and everything below it new ids (the id is the full name): expand the
+ * renamed ones that were expanded before, matching subfolders by name.
+ */
+function keepExpanded(accountId, oldList, oldId, oldExpanded, newId) {
+	const newList = mailboxState.folders[accountId]?.list ?? []
+	if (oldExpanded.has(oldId)) {
+		setExpanded(accountId, newId, true)
+	}
+	for (const child of oldList.filter((f) => f.parentId === oldId)) {
+		const renamed = newList.find((f) => f.parentId === newId && f.name === child.name)
+		if (renamed) {
+			keepExpanded(accountId, oldList, child.id, oldExpanded, renamed.id)
+		}
+	}
+}
+
 export async function renameFolder(accountId, folderId, name) {
 	const folder = await send('PUT', `/accounts/${accountId}/folders/${folderId}`, { name })
 	const wasSelected = isSelected(accountId, folderId)
-	const oldFullName = mailboxState.folders[accountId]?.list.find((f) => f.id === folderId)?.fullName
+	const oldList = mailboxState.folders[accountId]?.list ?? []
+	const oldFullName = oldList.find((f) => f.id === folderId)?.fullName
+	const oldExpanded = oldList.filter((f) => isExpanded(accountId, f.id)).map((f) => f.id)
 	await loadFolders(accountId, true)
+	keepExpanded(accountId, oldList, folderId, new Set(oldExpanded), folder.id)
 	if (wasSelected) {
 		await selectFolder(accountId, folder.id, true)
 	} else if (oldFullName && mailboxState.selected.accountId === accountId) {
