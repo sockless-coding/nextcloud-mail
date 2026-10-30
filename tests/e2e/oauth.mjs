@@ -25,8 +25,8 @@ const admin = await start()
 const { page, step } = admin
 
 step('admin settings')
-await page.getByRole('button', { name: 'Sign-in providers' }).click()
-const settings = page.getByRole('dialog', { name: 'Sign-in providers' })
+await page.getByRole('button', { name: 'Administration' }).click()
+const settings = page.getByRole('dialog', { name: 'Administration' })
 await settings.waitFor()
 check(await settings.getByLabel('Callback URL to register').inputValue() === callback, `the dialog shows the callback URL (${callback})`)
 const google = settings.locator('form').filter({ hasText: 'Google' })
@@ -66,7 +66,7 @@ execSync('docker compose -f dev/docker-compose.yml exec -T -e OC_PASS=e2e-bob-pa
 process.env.NC_USER = 'e2ebob'
 process.env.NC_PASSWORD = 'e2e-bob-password'
 const bob = await start()
-check(await bob.page.getByRole('button', { name: 'Sign-in providers' }).count() === 0, 'a non-admin user has no admin settings')
+check(await bob.page.getByRole('button', { name: 'Administration' }).count() === 0, 'a non-admin user has no admin settings')
 const forbidden = (await bob.page.request.get(`${base}/exapps/sockless_mail/api/admin/oauth`, { headers: { 'X-Sockless-Request': '1' } })).status()
 check(forbidden === 403, `the admin API refuses them (${forbidden})`)
 await bob.page.getByRole('button', { name: 'Add account' }).first().click()

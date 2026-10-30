@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging;
 using SocklessMail.Api.AppApi;
 using SocklessMail.Api.Data;
 using SocklessMail.Api.OAuth;
+using SocklessMail.Api.Senders;
 using SocklessMail.Api.Sync;
 
 namespace SocklessMail.Tests;
@@ -49,6 +50,9 @@ public sealed class TestApp(string? storageDirectory = null, IReadOnlyDictionary
     /// <summary>Every OAuth2 provider's token endpoint.</summary>
     public FakeTokenEndpoint TokenEndpoint { get; } = new();
 
+    /// <summary>IANA's RDAP bootstrap file and the registries: no domain is known unless a test adds it.</summary>
+    public FakeRdap Rdap { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -68,6 +72,7 @@ public sealed class TestApp(string? storageDirectory = null, IReadOnlyDictionary
         {
             services.AddHttpClient<NextcloudClient>().ConfigurePrimaryHttpMessageHandler(() => Nextcloud);
             services.AddHttpClient(OAuthTokens.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => TokenEndpoint);
+            services.AddHttpClient(DomainAges.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => Rdap);
             // Test accounts point at made-up servers; no background IMAP connections.
             services.AddSingleton(new WatcherOptions { MaxWatchers = 0 });
             _configureServices?.Invoke(services);
@@ -215,5 +220,49 @@ public sealed class FakeTokenEndpoint : HttpMessageHandler
         Requests.Enqueue((request.RequestUri!, form));
         var (status, body) = Respond(form);
         return new HttpResponseMessage(status) { Content = JsonContent.Create(body) };
+    }
+}
+
+/// <summary>
+/// RDAP for the tests: a bootstrap file sending ".com", ".net" and ".example" to one registry, which knows
+/// the domains in <see cref="Registered"/> (others are 404).
+/// </summary>
+public sealed class FakeRdap : HttpMessageHandler
+{
+    public const string Server = "https://rdap.registry.test/v1/";
+
+    public ConcurrentDictionary<string, DateTimeOffset> Registered { get; } = new();
+    public ConcurrentQueue<string> Requests { get; } = new();
+
+    /// <summary>Answers instead, when set (e.g. 429 or 500 for a failing registry).</summary>
+    public HttpStatusCode? Status { get; set; }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        var url = request.RequestUri!.ToString();
+        Requests.Enqueue(url);
+        if (Status is { } status)
+        {
+            return Task.FromResult(new HttpResponseMessage(status));
+        }
+
+        object? body = null;
+        if (url == DomainAges.BootstrapUrl)
+        {
+            body = new { version = "1.0", services = new object[] { new object[] { new[] { "com", "net", "example" }, new[] { Server } } } };
+        }
+        else if (url.StartsWith($"{Server}domain/", StringComparison.Ordinal)
+                 && Registered.TryGetValue(url[($"{Server}domain/".Length)..], out var registered))
+        {
+            body = new
+            {
+                objectClassName = "domain",
+                events = new[] { new { eventAction = "last changed", eventDate = "2026-10-01T00:00:00Z" }, new { eventAction = "registration", eventDate = registered.ToString("O") } },
+            };
+        }
+
+        return Task.FromResult(body is null
+            ? new HttpResponseMessage(HttpStatusCode.NotFound)
+            : new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(body) });
     }
 }

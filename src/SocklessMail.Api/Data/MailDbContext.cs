@@ -39,6 +39,12 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
 
     public DbSet<TrustedSender> TrustedSenders => Set<TrustedSender>();
 
+    /// <summary>When sender domains were registered (RDAP): public registry data shared by all users, so not filtered.</summary>
+    public DbSet<DomainAge> DomainAges => Set<DomainAge>();
+
+    /// <summary>Instance-wide admin settings; not filtered.</summary>
+    public DbSet<AppSetting> AppSettings => Set<AppSetting>();
+
     // SQLite cannot order or compare DateTimeOffset natively; store UTC ticks.
     private static readonly ValueConverter<DateTimeOffset, long> UtcTicks =
         new(v => v.UtcTicks, v => new DateTimeOffset(v, TimeSpan.Zero));
@@ -158,6 +164,27 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             trusted.Property(t => t.Domain).HasMaxLength(253);
             trusted.Property(t => t.CreatedAt).HasConversion(UtcTicks);
             trusted.HasQueryFilter(t => t.OwnerUserId == _userId);
+        });
+
+        model.Entity<DomainAge>(age =>
+        {
+            age.ToTable("domain_ages");
+            age.HasKey(a => a.Domain);
+            age.HasIndex(a => a.ExpiresAt);
+            age.Property(a => a.Domain).HasMaxLength(253);
+            age.Property(a => a.Outcome).HasConversion<string>().HasMaxLength(16);
+            age.Property(a => a.RegisteredAt).HasConversion(UtcTicks);
+            age.Property(a => a.CheckedAt).HasConversion(UtcTicks);
+            age.Property(a => a.ExpiresAt).HasConversion(UtcTicks);
+        });
+
+        model.Entity<AppSetting>(setting =>
+        {
+            setting.ToTable("app_settings");
+            setting.HasKey(s => s.Key);
+            setting.Property(s => s.Key).HasMaxLength(64);
+            setting.Property(s => s.Value).HasMaxLength(4000);
+            setting.Property(s => s.UpdatedAt).HasConversion(UtcTicks);
         });
     }
 }

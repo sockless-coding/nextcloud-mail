@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace SocklessMail.Api.Senders;
@@ -13,6 +14,7 @@ namespace SocklessMail.Api.Senders;
 /// <item>nameShowsDomain: the sender's name shows <see cref="LooksLike"/>, the address is from <see cref="Domain"/>.</item>
 /// <item>dmarcFail: the receiving mail server could not verify the message comes from <see cref="Domain"/>.</item>
 /// <item>replyTo: replies go to <see cref="Domain"/>, another domain than the sender's.</item>
+/// <item>newDomain: <see cref="Domain"/> (the registered domain) was registered <see cref="Detail"/> days ago.</item>
 /// </list>
 /// <see cref="Field"/> is "from", or "replyTo" for a look-alike Reply-To address.
 /// </summary>
@@ -20,7 +22,7 @@ public sealed record SenderReason(string Code, string Domain, string? LooksLike 
 
 /// <summary>
 /// Why a sender looks suspicious. <see cref="Level"/> is "danger" for a domain built to deceive (look-alike
-/// characters) or a failed DMARC check, otherwise "warning". <see cref="Domain"/> is how the sender's
+/// characters), a failed DMARC check or a domain registered days ago, otherwise "warning". <see cref="Domain"/> is how the sender's
 /// domain reads; <see cref="AsciiDomain"/> how it is spelled for DNS, when that differs;
 /// <see cref="Registered"/> what "Trust this domain" would trust (with its subdomains).
 /// </summary>
@@ -35,16 +37,24 @@ public static partial class SenderChecker
         "com", "net", "org", "info", "biz", "io", "app", "dev", "xyz", "online", "site", "top", "shop", "store", "email", "support", "help", "live",
     ];
 
-    /// <summary>Checks a sender as the message list shows it; null when nothing is suspicious (or the domain is trusted).</summary>
-    public static SenderWarning? Check(SenderIndex index, string? name, string address) =>
-        Check(index, name, address, null, false);
+    /// <summary>A domain younger than this many days is mentioned; younger than <see cref="VeryNewDomainDays"/>, it is dangerous.</summary>
+    public const int NewDomainDays = 30;
+
+    public const int VeryNewDomainDays = 7;
+
+    /// <summary>
+    /// Checks a sender as the message list shows it; null when nothing is suspicious (or the domain is trusted).
+    /// <paramref name="domainAgeDays"/> is how old the sender's registered domain is, when known.
+    /// </summary>
+    public static SenderWarning? Check(SenderIndex index, string? name, string address, int? domainAgeDays = null) =>
+        Check(index, name, address, null, false, domainAgeDays);
 
     /// <summary>
     /// Checks the open message: also its Reply-To address and whether the receiving server failed its DMARC check
     /// (<see cref="Bimi.BimiSenders.FailedDmarc"/>). A Reply-To that merely differs is no reason by itself; it is
     /// mentioned along with others.
     /// </summary>
-    public static SenderWarning? Check(SenderIndex index, string? name, string address, string? replyTo, bool dmarcFailed)
+    public static SenderWarning? Check(SenderIndex index, string? name, string address, string? replyTo, bool dmarcFailed, int? domainAgeDays = null)
     {
         if (SenderDomain.OfAddress(address) is not { } sender || index.IsTrusted(sender))
         {
@@ -71,6 +81,12 @@ public static partial class SenderChecker
             reasons.Add(new SenderReason("dmarcFail", sender.Unicode));
         }
 
+        // Known domains are old acquaintances whatever their age (and are not looked up).
+        if (domainAgeDays is < NewDomainDays and >= 0 && !index.IsKnown(sender))
+        {
+            reasons.Add(new SenderReason("newDomain", SenderDomain.ToUnicode(sender.Registered), Detail: domainAgeDays.Value.ToString(CultureInfo.InvariantCulture)));
+        }
+
         var replyToReason = false;
         if (replyTo is not null && SenderDomain.OfAddress(replyTo) is { } reply && reply.Registered != sender.Registered && !index.IsTrusted(reply))
         {
@@ -90,7 +106,8 @@ public static partial class SenderChecker
             return null;
         }
 
-        var danger = reasons.Any(r => r.Code == "dmarcFail" || r is { Code: "lookalike", Detail: "alphabet" or "characters" });
+        var danger = reasons.Any(r => r.Code == "dmarcFail" || r is { Code: "lookalike", Detail: "alphabet" or "characters" })
+                     || domainAgeDays < VeryNewDomainDays && reasons.Any(r => r.Code == "newDomain");
         var unicode = sender.Unicode;
         return new SenderWarning(unicode, unicode == sender.Name ? null : sender.Name, sender.Registered, danger ? "danger" : "warning", reasons);
     }

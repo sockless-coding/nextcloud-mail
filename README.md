@@ -47,7 +47,7 @@ src/SocklessMail.Api/       ASP.NET Core minimal APIs
   Files/                    Nextcloud Files over WebDAV as the user: attach, share links, save attachments
   Contacts/                 Nextcloud address books over CardDAV: suggestions, groups, adding senders
   Calendar/                 invitations (iMIP) and .ics files against Nextcloud calendars over CalDAV
-  Senders/                  suspicious-sender checks: look-alike domains (Unicode confusables), brand list, trust
+  Senders/                  suspicious-sender checks: look-alike domains (Unicode confusables), brand list, trust, RDAP domain age
   Sync/                     header cache, folder sync (QRESYNC/CONDSTORE/plain), IDLE watchers
   Security/                 Data Protection key ring wrapping
 src/frontend/               Vue 3 + @nextcloud/vue 9, built into wwwroot/js and wwwroot/css
@@ -220,8 +220,9 @@ Data lives in `APP_PERSISTENT_STORAGE` (the Docker volume `nc_app_sockless_mail_
 ### Signing in with Google and Microsoft (OAuth2)
 
 Users can add Gmail/Google Workspace and Outlook/Microsoft 365 accounts by signing in instead of
-creating app passwords. A Nextcloud admin enables this once, in the app: **Sign-in providers** at
-the bottom of the account rail (shown to members of the `admin` group only). The dialog shows the
+creating app passwords. A Nextcloud admin enables this once, in the app: **Administration** at
+the bottom of the account rail (shown to members of the `admin` group only), section **Sign-in
+providers**. The dialog shows the
 callback URL to register, e.g. `https://cloud.example.com/exapps/sockless_mail/oauth/callback`
 under HaRP (`…/index.php/apps/app_api/proxy/sockless_mail/oauth/callback` without it).
 
@@ -710,9 +711,10 @@ Users can turn logos off in the view menu ("Sender logos").
 
 ### Suspicious senders
 
-Senders whose domain imitates one the user knows get a shield icon in the message list. The
-open message shows a banner that explains why. The checks run in the app (`Senders/`) and send
-nothing anywhere. A domain is compared with:
+Senders whose domain imitates one the user knows, or was registered only days ago, get a shield
+icon in the message list. The open message shows a banner that explains why. The look-alike
+checks run in the app (`Senders/`) and send nothing anywhere; only the domain age is asked of
+the domain's registry (see below). A domain is compared with:
 
 - a bundled list of the brands phishing imitates most (`Senders/Data/brands.txt`: banks,
   payment services, carriers, authorities, mail and cloud providers, with Nordic ones first);
@@ -732,6 +734,8 @@ These are the checks:
 | The sender's name shows another domain | `"service@paypal.com" <x@example.net>` | warning |
 | Your mail server says the message failed DMARC (open message only) | `dmarc=fail` | danger |
 | Replies go to a look-alike (open message only) | Reply-To `billing@paypa1.com` | warning |
+| The domain was registered less than 30 days ago | (RDAP registration date) | warning |
+| … less than 7 days ago | | danger |
 
 A different Reply-To domain is mentioned only along with another reason, because newsletters
 and ticket systems use one all the time. A domain the user knows, or any of its subdomains,
@@ -747,6 +751,20 @@ trusted domains ("Trusted domains") and turns warnings off ("Warn about suspicio
 Each user's known domains are kept in memory for 5 minutes (30 seconds when the address
 books could not be read). The list asks `POST /api/sender-checks` once per sender for each
 session.
+
+**Domain age.** For a sender whose registered domain is none of the known or trusted ones, the app
+asks the domain's registry over RDAP when it was registered. The registry is found through IANA's
+bootstrap file (`https://data.iana.org/rdap/dns.json`, fetched once a week). Lookups run in the
+background, at most 4 at a time and 500 queued, so a check never waits for a registry. The answer
+of `POST /api/sender-checks` lists the senders whose age is still being looked up under `pending`,
+and the browser asks about those again after 3, 10 and 30 seconds. The open message uses what is
+known when it is opened. Answers are shared by all users in the `domain_ages` table: a date for
+30 days, "unknown" (no RDAP server for the ending, domain not found, no registration date) for a
+day, a failure (including HTTP 429) for an hour. An unknown age never causes a warning. The
+registries see which sender domains the instance receives mail from (not who receives it). An
+admin can turn the lookups off under **Administration** → **Suspicious senders** ("Warn about
+newly registered sender domains", on by default; `GET`/`PUT /api/admin/settings`). Requests go
+through the same address policy as BIMI and image proxy fetches.
 
 ### Connections to mail servers
 

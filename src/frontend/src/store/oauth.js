@@ -132,3 +132,23 @@ export async function saveOAuthClient(provider, input) {
 		throw errorOf(e)
 	}
 }
+
+/** Instance-wide settings ({ domainAgeChecks }). */
+export async function loadAdminSettings() {
+	try {
+		return await apiGet('/admin/settings')
+	} catch (e) {
+		throw errorOf(e)
+	}
+}
+
+/**
+ * @param {{domainAgeChecks?: boolean}} input the settings to change
+ */
+export async function saveAdminSettings(input) {
+	try {
+		return await apiSend('PUT', '/admin/settings', input)
+	} catch (e) {
+		throw errorOf(e)
+	}
+}

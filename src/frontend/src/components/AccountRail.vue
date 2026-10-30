@@ -31,8 +31,8 @@
 		<span class="account-rail__spacer" />
 		<button v-if="oauthState.isAdmin"
 			class="account-rail__button account-rail__tool"
-			:aria-label="t('sockless_mail', 'Sign-in providers')"
-			:title="t('sockless_mail', 'Sign-in providers')"
+			:aria-label="t('sockless_mail', 'Administration')"
+			:title="t('sockless_mail', 'Administration')"
 			@click="dialogs.oauthSettings = true">
 			<NcIconSvgWrapper :path="mdiShieldAccountOutline" />
 		</button>

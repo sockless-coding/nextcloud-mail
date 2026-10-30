@@ -9,6 +9,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SocklessMail.Api.AppApi;
+using SocklessMail.Api.Senders;
 using SocklessMail.Api.Sync;
 
 namespace SocklessMail.IntegrationTests;
@@ -37,6 +38,8 @@ public sealed class MailApp(Action<IServiceCollection>? services = null) : WebAp
         builder.ConfigureTestServices(collection =>
         {
             collection.AddSingleton(new WatcherOptions { MaxWatchers = 0 });
+            // No registry lookups for the test senders' domains.
+            collection.AddHttpClient(DomainAges.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new NoRdap());
             services?.Invoke(collection);
         });
     }
@@ -130,4 +133,10 @@ public sealed class MailApp(Action<IServiceCollection>? services = null) : WebAp
         {
         }
     }
+}
+
+internal sealed class NoRdap : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+        Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
 }

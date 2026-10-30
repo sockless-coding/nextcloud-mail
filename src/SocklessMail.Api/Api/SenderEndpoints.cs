@@ -22,7 +22,8 @@ public static class SenderEndpoints
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["senders"] = [$"At most {SenderChecks.MaxSenders} senders."] });
             }
 
-            return Results.Ok(new { warnings = await checks.CheckAsync(user.GetNextcloudUserId(), senders, ct) });
+            var result = await checks.CheckAsync(user.GetNextcloudUserId(), senders, ct);
+            return Results.Ok(new { warnings = result.Warnings, pending = result.Pending });
         });
 
         var trusted = api.MapGroup("/trusted-senders");

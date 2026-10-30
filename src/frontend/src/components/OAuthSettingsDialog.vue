@@ -1,12 +1,24 @@
 <template>
-	<!-- For Nextcloud admins: the app's registration with each OAuth2 provider. The server checks
-	     admin rights again; this dialog is only offered to admins. -->
-	<NcDialog :name="t('sockless_mail', 'Sign-in providers')"
+	<!-- For Nextcloud admins: instance-wide settings and the app's registration with each OAuth2
+	     provider. The server checks admin rights again; this dialog is only offered to admins. -->
+	<NcDialog :name="t('sockless_mail', 'Administration')"
 		size="normal"
 		:buttons="[{ label: t('sockless_mail', 'Close') }]"
 		:open="true"
 		@update:open="(open) => !open && emit('close')">
 		<div class="oauth-settings">
+			<h2>{{ t('sockless_mail', 'Suspicious senders') }}</h2>
+			<NcCheckboxRadioSwitch v-if="settings"
+				:model-value="settings.domainAgeChecks"
+				:loading="savingSettings"
+				type="switch"
+				@update:model-value="saveDomainAgeChecks">
+				{{ t('sockless_mail', 'Warn about newly registered sender domains') }}
+			</NcCheckboxRadioSwitch>
+			<p class="oauth-settings__hint">
+				{{ t('sockless_mail', 'Asks the domain registry (RDAP) when an unfamiliar sender’s domain was registered. The registries learn which domains your users receive mail from, not who receives it.') }}
+			</p>
+			<h2>{{ t('sockless_mail', 'Sign-in providers') }}</h2>
 			<p>
 				{{ t('sockless_mail', 'Let users add Google and Microsoft accounts by signing in, instead of typing app passwords. Register Sockless Mail as a web application with the provider, allow this callback URL, and enter the client id and secret here.') }}
 			</p>
@@ -66,13 +78,14 @@
 import { showError, showSuccess } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcPasswordField from '@nextcloud/vue/components/NcPasswordField'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { onMounted, reactive, ref } from 'vue'
-import { callbackUrl, loadOAuthClients, saveOAuthClient } from '../store/oauth.js'
+import { callbackUrl, loadAdminSettings, loadOAuthClients, saveAdminSettings, saveOAuthClient } from '../store/oauth.js'
 
 const emit = defineEmits(['close'])
 
@@ -84,6 +97,20 @@ const fieldErrors = reactive({})
 const loading = ref(true)
 const loadError = ref('')
 const saving = ref(null)
+/** { domainAgeChecks }; null until loaded */
+const settings = ref(null)
+const savingSettings = ref(false)
+
+async function saveDomainAgeChecks(value) {
+	savingSettings.value = true
+	try {
+		settings.value = await saveAdminSettings({ domainAgeChecks: value })
+	} catch (e) {
+		showError(t('sockless_mail', 'Could not save: {error}', { error: e.message }))
+	} finally {
+		savingSettings.value = false
+	}
+}
 
 function setClients(list) {
 	clients.value = list
@@ -124,6 +151,7 @@ async function save(client) {
 }
 
 onMounted(async () => {
+	loadAdminSettings().then((loaded) => { settings.value = loaded }).catch((e) => { loadError.value = e.message })
 	try {
 		setClients(await loadOAuthClients())
 	} catch (e) {
@@ -140,6 +168,19 @@ onMounted(async () => {
 	flex-direction: column;
 	gap: 8px;
 	padding-bottom: 8px;
+}
+
+.oauth-settings h2 {
+	margin: 12px 0 0;
+	font-size: 1.2em;
+}
+
+.oauth-settings h2:first-child {
+	margin-top: 0;
+}
+
+.oauth-settings__hint {
+	color: var(--color-text-maxcontrast);
 }
 
 .oauth-settings__center {

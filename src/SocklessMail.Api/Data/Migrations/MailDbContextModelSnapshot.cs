@@ -147,6 +147,25 @@ namespace SocklessMail.Api.Data.Migrations
                     b.ToTable("bimi_lookups", (string)null);
                 });
 
+            modelBuilder.Entity("SocklessMail.Api.Data.AppSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("app_settings", (string)null);
+                });
+
             modelBuilder.Entity("SocklessMail.Api.OAuth.OAuthClient", b =>
                 {
                     b.Property<string>("ProviderId")
@@ -177,6 +196,33 @@ namespace SocklessMail.Api.Data.Migrations
                     b.HasKey("ProviderId");
 
                     b.ToTable("oauth_clients", (string)null);
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Senders.DomainAge", b =>
+                {
+                    b.Property<string>("Domain")
+                        .HasMaxLength(253)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CheckedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("RegisteredAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Domain");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.ToTable("domain_ages", (string)null);
                 });
 
             modelBuilder.Entity("SocklessMail.Api.Senders.TrustedSender", b =>

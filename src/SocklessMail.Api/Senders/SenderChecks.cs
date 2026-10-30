@@ -93,11 +93,12 @@ public sealed class SenderIndexCache(TimeProvider clock)
 /// <summary>
 /// Suspicious-sender warnings (<see cref="SenderChecker"/>) with what the user knows: their accounts,
 /// address books, the people they wrote to or answered (as far as the cache holds them) and the
-/// domains they trust, on top of the bundled brand list.
+/// domains they trust, on top of the bundled brand list; and how old the sender's domain is
+/// (<see cref="DomainAges"/>), for domains that are none of these.
 /// </summary>
 public sealed class SenderChecks(
     MailDbContext db, SenderIndexCache cache, ContactDirectory directory, NextcloudContacts dav, FolderRoles roles,
-    TimeProvider clock, ILogger<SenderChecks> logger)
+    DomainAges domainAges, TimeProvider clock, ILogger<SenderChecks> logger)
 {
     public const int MaxSenders = 200;
 
@@ -106,8 +107,13 @@ public sealed class SenderChecks(
 
     public sealed record Sender(string? Name, string? Address);
 
-    /// <summary>One verdict per sender, in order; null for those that look fine.</summary>
-    public async Task<IReadOnlyList<SenderWarning?>> CheckAsync(string userId, IReadOnlyList<Sender> senders, CancellationToken ct)
+    /// <summary>
+    /// One verdict per sender, in order (null for those that look fine), and which of them may change shortly:
+    /// <see cref="Pending"/> lists the senders whose domain age is being looked up; ask again in a few seconds.
+    /// </summary>
+    public sealed record Result(IReadOnlyList<SenderWarning?> Warnings, IReadOnlyList<int> Pending);
+
+    public async Task<Result> CheckAsync(string userId, IReadOnlyList<Sender> senders, CancellationToken ct)
     {
         var entry = await cache.GetAsync(userId, () => BuildAsync(userId, ct), ct);
         var index = entry.Index!;
@@ -116,10 +122,45 @@ public sealed class SenderChecks(
             entry.Verdicts.Clear();
         }
 
-        return senders.Select(s => s.Address is not { Length: > 0 and <= 320 } address
-                ? null
-                : entry.Verdicts.GetOrAdd($"{s.Name}\n{address.ToLowerInvariant()}", _ => SenderChecker.Check(index, s.Name, address)))
-            .ToList();
+        var warnings = new SenderWarning?[senders.Count];
+        var undecided = new List<(int Position, string Key, string Address, string? AgeDomain)>();
+        for (var i = 0; i < senders.Count; i++)
+        {
+            if (senders[i].Address is not { Length: > 0 and <= 320 } address)
+            {
+                continue;
+            }
+
+            var key = $"{senders[i].Name}\n{address.ToLowerInvariant()}";
+            if (entry.Verdicts.TryGetValue(key, out var verdict))
+            {
+                warnings[i] = verdict;
+            }
+            else
+            {
+                undecided.Add((i, key, address, AgeDomain(index, address)));
+            }
+        }
+
+        var ages = await domainAges.FindAsync(undecided.Select(u => u.AgeDomain).OfType<string>().ToHashSet(), ct);
+        var pending = new List<int>();
+        foreach (var (position, key, address, ageDomain) in undecided)
+        {
+            DomainAge? age = null;
+            var waiting = ageDomain is not null && ages is not null && !ages.TryGetValue(ageDomain, out age);
+            var verdict = SenderChecker.Check(index, senders[position].Name, address, domainAges.DaysOld(age));
+            warnings[position] = verdict;
+            if (waiting)
+            {
+                pending.Add(position);
+            }
+            else
+            {
+                entry.Verdicts[key] = verdict;
+            }
+        }
+
+        return new Result(warnings, pending);
     }
 
     /// <summary>The open message's verdict, Reply-To and DMARC result included (not remembered).</summary>
@@ -131,8 +172,20 @@ public sealed class SenderChecks(
         }
 
         var entry = await cache.GetAsync(userId, () => BuildAsync(userId, ct), ct);
-        return SenderChecker.Check(entry.Index!, author.Name, author.Address, replyTo.FirstOrDefault()?.Address, dmarcFailed);
+        var index = entry.Index!;
+        // Not waited for: the list usually asked moments before the message was opened.
+        DomainAge? age = null;
+        if (AgeDomain(index, author.Address) is { } domain)
+        {
+            (await domainAges.FindAsync([domain], ct))?.TryGetValue(domain, out age);
+        }
+
+        return SenderChecker.Check(index, author.Name, author.Address, replyTo.FirstOrDefault()?.Address, dmarcFailed, domainAges.DaysOld(age));
     }
+
+    /// <summary>The registered domain whose age matters: not for known or trusted senders (nor asked about them).</summary>
+    private static string? AgeDomain(SenderIndex index, string address) =>
+        SenderDomain.OfAddress(address) is { } domain && !index.IsKnown(domain) && !index.IsTrusted(domain) ? domain.Registered : null;
 
     public async Task<IReadOnlyList<string>> ListTrustedAsync(CancellationToken ct) =>
         await db.TrustedSenders.OrderBy(t => t.Domain).Select(t => t.Domain).ToListAsync(ct);

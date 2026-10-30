@@ -88,6 +88,40 @@ public sealed class SenderDomainTests
     }
 }
 
+public sealed class RdapTests
+{
+    [Fact]
+    public void The_bootstrap_file_maps_endings_to_https_servers()
+    {
+        var servers = DomainAges.ParseBootstrap(JsonDocument.Parse("""
+            {"services": [
+              [["com", "NET"], ["http://rdap.example/com/", "https://rdap.verisign.example/com/v1"]],
+              [["se"], ["http://only-plain.example/"]],
+              "garbage",
+              [["xn--p1ai"], ["https://rdap.ru.example/"]]
+            ]}
+            """).RootElement);
+
+        Assert.Equal("https://rdap.verisign.example/com/v1/", servers["com"].ToString());
+        Assert.Equal("https://rdap.verisign.example/com/v1/", servers["net"].ToString());
+        Assert.False(servers.ContainsKey("se"));
+        Assert.Equal("https://rdap.ru.example/", servers["xn--p1ai"].ToString());
+    }
+
+    [Fact]
+    public void The_registration_event_dates_a_domain()
+    {
+        Assert.Equal(new DateTimeOffset(1997, 9, 15, 4, 0, 0, TimeSpan.Zero), DomainAges.RdapRegistration(JsonDocument.Parse("""
+            {"events": [
+              {"eventAction": "expiration", "eventDate": "2028-09-14T04:00:00Z"},
+              {"eventAction": "registration", "eventDate": "1997-09-15T04:00:00Z"}
+            ]}
+            """).RootElement));
+        Assert.Null(DomainAges.RdapRegistration(JsonDocument.Parse("""{"events": [{"eventAction": "last changed", "eventDate": "2020-01-01T00:00:00Z"}]}""").RootElement));
+        Assert.Null(DomainAges.RdapRegistration(JsonDocument.Parse("""{"errorCode": 404}""").RootElement));
+    }
+}
+
 public sealed class SenderCheckerTests
 {
     private static readonly SenderIndex Index = new(
@@ -211,6 +245,36 @@ public sealed class SenderCheckerTests
         Assert.Equal(["lookalike", "replyTo"], warning.Reasons.Select(r => r.Code));
     }
 
+    [Theory]
+    [InlineData(20, "warning")]
+    [InlineData(6, "danger")]
+    [InlineData(0, "danger")]
+    public void Newly_registered_domains(int days, string level)
+    {
+        var warning = SenderChecker.Check(Index, null, "x@mail.fresh-shop.com", days)!;
+        Assert.Equal(level, warning.Level);
+        var reason = Assert.Single(warning.Reasons);
+        Assert.Equal(("newDomain", "fresh-shop.com", days.ToString()), (reason.Code, reason.Domain, reason.Detail));
+    }
+
+    [Theory]
+    [InlineData("x@fresh-shop.com", 30)]
+    [InlineData("x@fresh-shop.com", null)]
+    [InlineData("x@sockless.se", 2)] // the user's own domain, however new
+    [InlineData("x@trusted-partner.com", 2)]
+    public void Old_unknown_known_and_trusted_domains_are_not(string address, int? days)
+    {
+        Assert.Null(SenderChecker.Check(Index, null, address, days));
+    }
+
+    [Fact]
+    public void A_new_domain_adds_to_other_reasons()
+    {
+        var warning = SenderChecker.Check(Index, null, "x@micorsoft.com", 12)!;
+        Assert.Equal(["lookalike", "newDomain"], warning.Reasons.Select(r => r.Code));
+        Assert.Equal("warning", warning.Level);
+    }
+
     [Fact]
     public void Trusted_domains_are_never_flagged_and_their_look_alikes_are()
     {
@@ -282,6 +346,90 @@ public sealed class SenderEndpointTests : IDisposable
 
         Assert.Equal(HttpStatusCode.NoContent, (await _alice.DeleteAsync("/api/trusted-senders/micorsoft.com", Ct)).StatusCode);
         Assert.NotEqual(JsonValueKind.Null, (await CheckAsync(_alice, new { address = "x@micorsoft.com" }))[0].ValueKind);
+    }
+
+    private async Task<JsonElement> CheckWithPendingAsync(params object[] senders)
+    {
+        var response = await _alice.PostAsJsonAsync("/api/sender-checks", new { senders }, Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct)).RootElement;
+    }
+
+    /// <summary>Asks until no lookup is pending, as the browser does.</summary>
+    private async Task<JsonElement> CheckUntilSettledAsync(params object[] senders)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            var result = await CheckWithPendingAsync(senders);
+            if (result.GetProperty("pending").GetArrayLength() == 0 || attempt == 50)
+            {
+                return result;
+            }
+
+            await Task.Delay(100, Ct);
+        }
+    }
+
+    [Fact]
+    public async Task Domain_ages_are_looked_up_in_the_background()
+    {
+        _app.Rdap.Registered["fresh-shop.com"] = DateTimeOffset.UtcNow.AddDays(-3);
+        _app.Rdap.Registered["old-shop.com"] = new DateTimeOffset(2001, 5, 1, 0, 0, 0, TimeSpan.Zero);
+        object[] senders =
+        [
+            new { address = "sales@fresh-shop.com" },
+            new { address = "sales@old-shop.com" },
+            new { address = "x@nowhere.example" },
+            new { name = "Petra", address = "petra@probe-industries.example" },
+        ];
+
+        // Nothing waits for a registry: the first answer comes at once and says what may change.
+        var first = await CheckWithPendingAsync(senders);
+        Assert.Equal([0, 1, 2], first.GetProperty("pending").EnumerateArray().Select(p => p.GetInt32()));
+        Assert.Equal(JsonValueKind.Null, first.GetProperty("warnings")[0].ValueKind);
+
+        var settled = await CheckUntilSettledAsync(senders);
+        Assert.Equal(0, settled.GetProperty("pending").GetArrayLength());
+        var warnings = settled.GetProperty("warnings");
+        var reason = warnings[0].GetProperty("reasons")[0];
+        Assert.Equal(("newDomain", "3", "danger"), (reason.GetProperty("code").GetString(), reason.GetProperty("detail").GetString(), warnings[0].GetProperty("level").GetString()));
+        Assert.Equal(JsonValueKind.Null, warnings[1].ValueKind);
+        Assert.Equal(JsonValueKind.Null, warnings[2].ValueKind);
+        Assert.Equal(JsonValueKind.Null, warnings[3].ValueKind);
+
+        // Contacts' domains are never asked about; the bootstrap file is fetched once.
+        Assert.DoesNotContain(_app.Rdap.Requests, url => url.Contains("probe-industries"));
+        Assert.Single(_app.Rdap.Requests, url => url == DomainAges.BootstrapUrl);
+        Assert.Single(_app.Rdap.Requests, url => url.EndsWith("/domain/fresh-shop.com", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_failing_registry_never_flags_a_sender()
+    {
+        _app.Rdap.Registered["fresh-shop.com"] = DateTimeOffset.UtcNow.AddDays(-3);
+        _app.Rdap.Status = HttpStatusCode.TooManyRequests;
+        var settled = await CheckUntilSettledAsync(new { address = "sales@fresh-shop.com" });
+        Assert.Equal(0, settled.GetProperty("pending").GetArrayLength());
+        Assert.Equal(JsonValueKind.Null, settled.GetProperty("warnings")[0].ValueKind);
+    }
+
+    [Fact]
+    public async Task Admins_can_turn_the_lookups_off()
+    {
+        Assert.Equal(HttpStatusCode.Forbidden, (await _alice.PutAsJsonAsync("/api/admin/settings", new { domainAgeChecks = false }, Ct)).StatusCode);
+
+        _app.Nextcloud.Responses["cloud/user"] = (HttpStatusCode.OK, """{"ocs":{"meta":{"status":"ok"},"data":{"id":"root","groups":["admin","users"]}}}""");
+        var root = _app.ClientAs("root");
+        Assert.True((await root.GetFromJsonAsync<JsonElement>("/api/admin/settings", Ct)).GetProperty("domainAgeChecks").GetBoolean());
+        var saved = await root.PutAsJsonAsync("/api/admin/settings", new { domainAgeChecks = false }, Ct);
+        Assert.False((await saved.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("domainAgeChecks").GetBoolean());
+        Assert.False((await root.GetFromJsonAsync<JsonElement>("/api/admin/settings", Ct)).GetProperty("domainAgeChecks").GetBoolean());
+
+        _app.Rdap.Registered["fresh-shop.com"] = DateTimeOffset.UtcNow.AddDays(-3);
+        var result = await CheckWithPendingAsync(new { address = "sales@fresh-shop.com" });
+        Assert.Equal(0, result.GetProperty("pending").GetArrayLength());
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("warnings")[0].ValueKind);
+        Assert.Empty(_app.Rdap.Requests);
     }
 
     [Fact]
