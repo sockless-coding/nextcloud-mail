@@ -111,6 +111,13 @@ namespace SocklessMail.Api.Data.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("TagStorage")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Unknown");
+
                     b.Property<long>("UpdatedAt")
                         .HasColumnType("INTEGER");
 
@@ -471,6 +478,10 @@ namespace SocklessMail.Api.Data.Migrations
                     b.Property<bool>("HasAttachments")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Keywords")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("OwnerUserId")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -538,6 +549,170 @@ namespace SocklessMail.Api.Data.Migrations
                     b.ToTable("removed_messages", (string)null);
                 });
 
+            modelBuilder.Entity("SocklessMail.Api.Tags.MailTag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(7)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Keyword")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "Keyword")
+                        .IsUnique();
+
+                    b.ToTable("tags", (string)null);
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Tags.TagScanState", b =>
+                {
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FolderName")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("HighestModSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("KeywordSet")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ScannedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<uint>("UidValidity")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("AccountId", "FolderName");
+
+                    b.ToTable("tag_scan_states", (string)null);
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Tags.TaggedMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Answered")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BimiDomain")
+                        .HasMaxLength(253)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BimiSelector")
+                        .HasMaxLength(63)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Date")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Flagged")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FolderName")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("From")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("HasAttachments")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Keywords")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MessageIdHeader")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Preview")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Seen")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("To")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<uint>("Uid")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<uint>("UidValidity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId", "MessageIdHeader");
+
+                    b.HasIndex("OwnerUserId", "Date");
+
+                    b.HasIndex("AccountId", "FolderName", "UidValidity", "Uid");
+
+                    b.ToTable("tagged_messages", (string)null);
+                });
+
             modelBuilder.Entity("SocklessMail.Api.Accounts.AccountViewState", b =>
                 {
                     b.HasOne("SocklessMail.Api.Accounts.MailAccount", null)
@@ -588,6 +763,24 @@ namespace SocklessMail.Api.Data.Migrations
                     b.HasOne("SocklessMail.Api.Sync.CachedFolder", null)
                         .WithMany()
                         .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Tags.TagScanState", b =>
+                {
+                    b.HasOne("SocklessMail.Api.Accounts.MailAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Tags.TaggedMessage", b =>
+                {
+                    b.HasOne("SocklessMail.Api.Accounts.MailAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

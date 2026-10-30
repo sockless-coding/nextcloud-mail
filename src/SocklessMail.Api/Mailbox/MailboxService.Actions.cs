@@ -1,6 +1,7 @@
 using MailKit;
 using MailKit.Net.Imap;
 using SocklessMail.Api.Accounts;
+using SocklessMail.Api.Sync;
 
 namespace SocklessMail.Api.Mailbox;
 
@@ -46,7 +47,7 @@ public sealed partial class MailboxService
 
     public async Task<int> MoveAsync(MailAccount account, string folderId, MoveInput input, CancellationToken ct)
     {
-        var (uidValidity, uids) = await Run(account, async (client, token) =>
+        var (uidValidity, uids, map) = await Run(account, async (client, token) =>
         {
             if (string.IsNullOrEmpty(input.TargetFolderId) || input.TargetFolderId == folderId)
             {
@@ -62,25 +63,40 @@ public sealed partial class MailboxService
             var folder = await OpenFolderAsync(client, folderId, token, FolderAccess.ReadWrite);
             var uids = ParseMessageIds(folder, input.MessageIds);
             // MOVE where supported; MailKit falls back to COPY + \Deleted + (UID) EXPUNGE.
-            await folder.MoveToAsync(uids, target, token);
-            return (folder.UidValidity, uids);
+            var map = await folder.MoveToAsync(uids, target, token);
+            return (folder.UidValidity, uids, (Target: FolderCache.Key(target.FullName), Map: map));
         }, ct, retry: false);
 
-        await RemoveFromCacheAsync(account, folderId, uidValidity, uids);
+        await RemoveFromCacheAsync(account, folderId, uidValidity, uids, map);
         return uids.Count;
     }
 
-    /// <summary>The target folder's cache needs nothing: its next sync finds the new UIDs.</summary>
-    private Task RemoveFromCacheAsync(MailAccount account, string folderId, uint uidValidity, List<UniqueId> uids)
+    /// <summary>
+    /// The target folder's cache needs nothing: its next sync finds the new UIDs. The tag index
+    /// follows moved messages first, so the removal leaves their rows alone.
+    /// </summary>
+    private Task RemoveFromCacheAsync(MailAccount account, string folderId, uint uidValidity, List<UniqueId> uids, (string Target, UniqueIdMap Map)? moved)
     {
         var fullName = FullNameOf(folderId);
-        return UpdateCacheAsync(account, fullName, () =>
-            cache.RemoveAsync(account.Id, fullName, uidValidity, uids.Select(u => u.Id).ToList(), CancellationToken.None));
+        var ids = uids.Select(u => u.Id).ToList();
+        return UpdateCacheAsync(account, fullName, async () =>
+        {
+            if (moved is { } m)
+            {
+                await tagIndex.MoveAsync(account.Id, fullName, uidValidity, ids, m.Target, m.Map, CancellationToken.None);
+            }
+            else
+            {
+                await tagIndex.ForgetAsync(account.Id, fullName, uidValidity, ids, CancellationToken.None);
+            }
+
+            await cache.RemoveAsync(account.Id, fullName, uidValidity, ids, CancellationToken.None);
+        });
     }
 
     public async Task<DeleteResult> DeleteAsync(MailAccount account, string folderId, DeleteInput input, CancellationToken ct)
     {
-        var (result, uidValidity, uids) = await Run(account, async (client, token) =>
+        var (result, uidValidity, uids, moved) = await Run(account, async (client, token) =>
         {
             var trash = await FindSpecialFolderAsync(client, "trash", token);
             var inTrash = trash is not null && MailboxIds.FolderId(trash.FullName) == folderId;
@@ -105,14 +121,14 @@ public sealed partial class MailboxService
                     await folder.ExpungeAsync(token);
                 }
 
-                return (new DeleteResult(false, null), folder.UidValidity, uids);
+                return (new DeleteResult(false, null), folder.UidValidity, uids, ((string, UniqueIdMap)?)null);
             }
 
-            await folder.MoveToAsync(uids, trash!, token);
-            return (new DeleteResult(true, MailboxIds.FolderId(trash!.FullName)), folder.UidValidity, uids);
+            var map = await folder.MoveToAsync(uids, trash!, token);
+            return (new DeleteResult(true, MailboxIds.FolderId(trash!.FullName)), folder.UidValidity, uids, (FolderCache.Key(trash!.FullName), map));
         }, ct, retry: false);
 
-        await RemoveFromCacheAsync(account, folderId, uidValidity, uids);
+        await RemoveFromCacheAsync(account, folderId, uidValidity, uids, moved);
         return result;
     }
 

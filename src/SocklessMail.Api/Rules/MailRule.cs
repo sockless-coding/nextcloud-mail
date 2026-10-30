@@ -62,7 +62,8 @@ public sealed record RuleCondition(string Field, string? Header, string Op, stri
 
 /// <param name="Type">One of <see cref="RuleActionTypes"/>.</param>
 /// <param name="FolderId">The target of <see cref="RuleActionTypes.Move"/> and <see cref="RuleActionTypes.Copy"/>.</param>
-public sealed record RuleAction(string Type, string? FolderId);
+/// <param name="TagId">The tag <see cref="RuleActionTypes.Tag"/> adds (one of the user's, see <see cref="Tags.MailTag"/>).</param>
+public sealed record RuleAction(string Type, string? FolderId, Guid? TagId = null);
 
 public static class RuleFields
 {
@@ -109,8 +110,9 @@ public static class RuleActionTypes
     public const string MarkRead = "markRead";
     public const string Flag = "flag";
     public const string Trash = "trash";
+    public const string Tag = "tag";
 
-    public static readonly string[] All = [Move, Copy, MarkRead, Flag, Trash];
+    public static readonly string[] All = [Move, Copy, MarkRead, Flag, Trash, Tag];
 }
 
 public sealed record RuleDto(

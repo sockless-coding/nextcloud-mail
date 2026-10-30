@@ -43,6 +43,12 @@
 				</template>
 				{{ t('sockless_mail', 'Move…') }}
 			</NcActionButton>
+			<NcActionButton close-after-click @click="askTags(rows)">
+				<template #icon>
+					<NcIconSvgWrapper :path="mdiTagOutline" />
+				</template>
+				{{ t('sockless_mail', 'Tags…') }}
+			</NcActionButton>
 			<NcActionButton close-after-click @click="removeRows(rows)">
 				<template #icon>
 					<NcIconSvgWrapper :path="mdiDeleteOutline" />
@@ -86,7 +92,7 @@
 </template>
 
 <script setup>
-import { mdiAccountPlusOutline, mdiClipboardCheckOutline, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFilterPlusOutline, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiReply, mdiReplyAll, mdiShare } from '@mdi/js'
+import { mdiAccountPlusOutline, mdiClipboardCheckOutline, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFilterPlusOutline, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiReply, mdiReplyAll, mdiShare, mdiTagOutline } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -95,7 +101,7 @@ import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { computed } from 'vue'
-import { askMoveRows, canMoveRows, createRuleFrom, dialogs, removeRows, setFlaggedRows, setSeenRows } from '../store/actions.js'
+import { askMoveRows, askTags, canMoveRows, createRuleFrom, dialogs, removeRows, setFlaggedRows, setSeenRows } from '../store/actions.js'
 import { composeReply } from '../store/compose.js'
 import { emlUrl, mailboxState, openMessage } from '../store/mailbox.js'
 import { tasksState } from '../store/tasks.js'

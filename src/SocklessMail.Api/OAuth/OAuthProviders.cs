@@ -7,6 +7,12 @@ namespace SocklessMail.Api.OAuth;
 /// A mail provider that signs in with OAuth2 (authorization code with PKCE) and accepts the
 /// access token over IMAP and SMTP with XOAUTH2. Endpoint URLs may contain "{tenant}", replaced
 /// by the tenant the admin configured (Microsoft); <see cref="DefaultTenant"/> otherwise.
+/// <para>
+/// <see cref="GraphScope"/> (Microsoft): Microsoft Graph permissions the user consents to at
+/// sign-in as well, for tags as Outlook categories. A token is for one resource only, so the
+/// sign-in's tokens stay IMAP/SMTP ones (<see cref="Scope"/>) and Graph tokens are redeemed from
+/// the same refresh token separately (see <see cref="MailLogins.GraphTokenAsync"/>).
+/// </para>
 /// </summary>
 public sealed record OAuthProvider(
     string Id,
@@ -17,9 +23,13 @@ public sealed record OAuthProvider(
     IReadOnlyDictionary<string, string> AuthorizeParameters,
     ServerSettings Imap,
     ServerSettings Smtp,
-    string? DefaultTenant = null)
+    string? DefaultTenant = null,
+    string? GraphScope = null)
 {
     public bool UsesTenant => DefaultTenant is not null;
+
+    /// <summary>What the user is asked to consent to: the mail scopes and any Graph ones.</summary>
+    public string ConsentScope => GraphScope is null ? Scope : $"{Scope} {GraphScope}";
 
     public Uri AuthorizeEndpoint(string? tenant) => new(WithTenant(AuthorizeUrl, tenant));
 
@@ -57,7 +67,8 @@ public sealed class OAuthProviderCatalog(IReadOnlyList<OAuthProvider> providers)
             new Dictionary<string, string> { ["prompt"] = "select_account" },
             new ServerSettings("outlook.office365.com", 993, MailSecurity.SslTls),
             new ServerSettings("smtp.office365.com", 587, MailSecurity.StartTls),
-            DefaultTenant: "common"),
+            DefaultTenant: "common",
+            GraphScope: "https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/MailboxSettings.ReadWrite"),
     ]);
 
     public IReadOnlyList<OAuthProvider> All { get; } = providers;

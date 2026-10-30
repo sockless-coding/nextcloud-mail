@@ -1,5 +1,6 @@
 using MimeKit;
 using SocklessMail.Api.Mail;
+using SocklessMail.Api.Tags;
 
 namespace SocklessMail.Api.Accounts;
 
@@ -42,13 +43,15 @@ public sealed record AccountDto(
     MailAuthMethod AuthMethod,
     ServerSettings Imap,
     ServerSettings Smtp,
-    int SortOrder)
+    int SortOrder,
+    TagStorage TagStorage)
 {
     public static AccountDto From(MailAccount a) => new(
         a.Id, a.DisplayName, a.SenderName, a.EmailAddress, a.Username, a.AuthMethod,
         new ServerSettings(a.ImapHost, a.ImapPort, a.ImapSecurity),
         new ServerSettings(a.SmtpHost, a.SmtpPort, a.SmtpSecurity),
-        a.SortOrder);
+        a.SortOrder,
+        a.TagStorage);
 }
 
 public static class AccountValidation

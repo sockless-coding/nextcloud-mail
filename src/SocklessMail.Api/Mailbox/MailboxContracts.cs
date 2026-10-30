@@ -35,7 +35,8 @@ public sealed record MessageSummaryDto(
     bool HasAttachments,
     long Size,
     string? Preview,
-    BimiDto? Bimi);
+    BimiDto? Bimi,
+    string[] Keywords);
 
 /// <summary>
 /// Newest first. <see cref="NextBefore"/> is the cursor for the next (older) page; null at the end.
@@ -66,7 +67,8 @@ public sealed record MessageDto(
     AttachmentDto[] Attachments,
     BimiDto? Bimi,
     CalendarPartDto[] CalendarParts,
-    SenderWarning? SenderWarning);
+    SenderWarning? SenderWarning,
+    string[] Keywords);
 
 /// <summary>The message's header block exactly as the server has it, folded lines and encoded words included.</summary>
 public sealed record MessageHeadersDto(string Headers);

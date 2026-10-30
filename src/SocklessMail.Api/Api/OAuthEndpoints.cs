@@ -4,6 +4,7 @@ using SocklessMail.Api.Accounts;
 using SocklessMail.Api.AppApi;
 using SocklessMail.Api.Mailbox;
 using SocklessMail.Api.OAuth;
+using SocklessMail.Api.Tags;
 
 namespace SocklessMail.Api.Api;
 
@@ -125,7 +126,7 @@ public static class OAuthEndpoints
         });
 
         api.MapPost("/accounts/{id:guid}/oauth", async (
-            Guid id, OAuthGrantInput input, ClaimsPrincipal user, OAuthFlows flows, AccountService accounts, CancellationToken ct) =>
+            Guid id, OAuthGrantInput input, ClaimsPrincipal user, OAuthFlows flows, AccountService accounts, TagScanner scanner, CancellationToken ct) =>
         {
             var userId = user.GetNextcloudUserId();
             if (await accounts.GetAsync(userId, id, ct) is not { } account)
@@ -154,6 +155,8 @@ public static class OAuthEndpoints
             }
 
             var updated = await accounts.ReplaceGrantAsync(userId, id, new OAuthCredential(flow.ProviderId, flow.RefreshToken!), ct);
+            // A new sign-in may bring the Graph consent: the scan moves app-kept tags to Outlook.
+            scanner.Request(userId);
             return updated is null ? MailboxEndpoints.NotFound() : Results.Ok(AccountDto.From(updated));
         });
 

@@ -60,8 +60,15 @@ public sealed class CachedMessage
     public bool HasAttachments { get; init; }
     public long Size { get; init; }
 
-    /// <summary>System flags only (\Seen, \Flagged, \Answered, \Deleted, \Draft); keywords are not kept.</summary>
+    /// <summary>System flags only (\Seen, \Flagged, \Answered, \Deleted, \Draft); keywords are in <see cref="Keywords"/>.</summary>
     public MessageFlags Flags { get; set; }
+
+    /// <summary>
+    /// The message's keywords (<see cref="Tags.Keywords.Format"/>): the server's, or for an account
+    /// whose server keeps none, the tag index's. Null for rows cached before keywords were, which
+    /// syncs fill in.
+    /// </summary>
+    public string? Keywords { get; set; }
 
     public long ChangeSeq { get; set; }
 

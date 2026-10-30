@@ -2,9 +2,9 @@
 	<nav class="account-rail" :aria-label="t('sockless_mail', 'Accounts')">
 		<button v-if="accountsState.accounts.length > 1"
 			class="account-rail__button account-rail__button--unified"
-			:class="{ 'account-rail__button--active': mailboxState.selected.unified }"
+			:class="{ 'account-rail__button--active': unifiedPaneShown() }"
 			:aria-label="t('sockless_mail', 'All accounts')"
-			:aria-current="mailboxState.selected.unified ? 'page' : undefined"
+			:aria-current="unifiedPaneShown() ? 'page' : undefined"
 			:title="t('sockless_mail', 'All accounts')"
 			@click="openUnified()">
 			<NcIconSvgWrapper :path="mdiInboxMultipleOutline" />
@@ -48,10 +48,10 @@ import { dialogs } from '../store/actions.js'
 import { mailboxState } from '../store/mailbox.js'
 import { inboxUnread, openUnified, selectAccount } from '../store/navigation.js'
 import { oauthState } from '../store/oauth.js'
-import { viewUnread } from '../store/unified.js'
+import { unifiedPaneShown, viewUnread } from '../store/unified.js'
 
 function isCurrent(account) {
-	return !mailboxState.selected.unified && mailboxState.selected.accountId === account.id
+	return mailboxState.selected.accountId === account.id
 }
 
 function badge(count) {

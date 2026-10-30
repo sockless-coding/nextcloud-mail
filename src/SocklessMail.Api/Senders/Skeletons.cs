@@ -71,6 +71,21 @@ public static class Skeletons
         return scripts > 1;
     }
 
+    /// <summary>The text with its letters decomposed and combining marks dropped ("Räksmörgås" → "Raksmorgas").</summary>
+    public static string WithoutMarks(string text)
+    {
+        var stripped = new StringBuilder(text.Length);
+        foreach (var rune in text.EnumerateRunes())
+        {
+            foreach (var part in Decompose(rune.Value))
+            {
+                Append(stripped, part);
+            }
+        }
+
+        return stripped.ToString();
+    }
+
     public static Script ScriptOf(int c) => c switch
     {
         < 0x80 => char.IsAsciiLetter((char)c) ? Script.Latin : Script.Common,

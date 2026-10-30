@@ -1,4 +1,4 @@
-import { mdiEmailMarkAsUnread, mdiFlagOutline } from '@mdi/js'
+import { mdiEmailMarkAsUnread, mdiFlagOutline, mdiTagOutline } from '@mdi/js'
 import { t } from '@nextcloud/l10n'
 import { reactive } from 'vue'
 import { apiGet } from '../api.js'
@@ -6,6 +6,7 @@ import { USE_ICONS, USE_NAMES } from '../folderUses.js'
 import { accountsState } from './accounts.js'
 import { closeMessage, hasPendingWrites, mailboxState, writeCounters } from './mailbox.js'
 import { mergeUnifiedChanges } from './search.js'
+import { tagsState, tagUnread } from './tags.js'
 import { rememberView } from './viewState.js'
 
 const PAGE_SIZE = 50
@@ -23,7 +24,27 @@ export const UNIFIED_VIEWS = [
 	{ id: 'flagged', roles: ['inbox', 'archive', 'sent'], filter: 'flagged', name: t('sockless_mail', 'Flagged'), icon: mdiFlagOutline },
 ]
 
+/** The most a tag folder reloads at once when polled (the server's page limit). */
+const TAG_RELOAD_MAX = 500
+
+/**
+ * A tag folder as a view: "tag:{tagId}" across all accounts, "tag:{tagId}@{accountId}" in one
+ * account (shown with that account's folders). Read from the server's tag index.
+ */
+export function tagViewId(tagId, accountId = null) {
+	return accountId ? `tag:${tagId}@${accountId}` : `tag:${tagId}`
+}
+
+function tagView(id) {
+	const [tagId, accountId = null] = id.slice(4).split('@')
+	const tag = tagsState.list.find((t) => t.id === tagId)
+	return tag ? { id, roles: [], filter: 'tag', tagId, accountId, tag, name: tag.name, icon: mdiTagOutline } : null
+}
+
 export function viewOf(id) {
+	if (typeof id === 'string' && id.startsWith('tag:')) {
+		return tagView(id)
+	}
 	return UNIFIED_VIEWS.find((v) => v.id === id) ?? null
 }
 
@@ -36,7 +57,16 @@ export function folderOfUse(accountId, use) {
 /** Whether a folder is part of the unified view shown (false when none is). */
 export function inUnifiedView(accountId, folderId) {
 	const view = viewOf(mailboxState.selected.unified)
+	if (view?.tagId) {
+		// A tag folder may hold any folder's mail.
+		return !view.accountId || view.accountId === accountId
+	}
 	return !!view && view.roles.some((use) => folderOfUse(accountId, use) === folderId)
+}
+
+/** Whether the folder pane shows all accounts (a unified view, or a tag folder across accounts). */
+export function unifiedPaneShown() {
+	return !!mailboxState.selected.unified && !mailboxState.selected.accountId
 }
 
 /** Unified folders some account has, then the smart folders. */
@@ -50,6 +80,9 @@ export function availableViews() {
  */
 export function viewUnread(id) {
 	const view = viewOf(id)
+	if (view?.tagId) {
+		return tagUnread(view.tagId, view.accountId)
+	}
 	if (!view || view.filter === 'flagged') {
 		return 0
 	}
@@ -108,9 +141,13 @@ function passes(view, message) {
 	return { unread: !message.seen, flagged: message.flagged }[view.filter] ?? true
 }
 
-function messagesPath(before) {
+function messagesPath(before, limit = PAGE_SIZE) {
 	const query = before ? `&before=${encodeURIComponent(before)}` : ''
-	return `/unified/${unifiedState.view}/messages?limit=${PAGE_SIZE}${query}`
+	const tag = viewOf(unifiedState.view)
+	if (tag?.tagId) {
+		return `/tags/${tag.tagId}/messages?limit=${limit}${query}${tag.accountId ? `&accountId=${tag.accountId}` : ''}`
+	}
+	return `/unified/${unifiedState.view}/messages?limit=${limit}${query}`
 }
 
 function applyPage(page) {
@@ -119,8 +156,9 @@ function applyPage(page) {
 		nextBefore: page.nextBefore,
 		total: page.total,
 		unread: page.unread,
-		token: page.token,
-		errors: page.errors,
+		// Tag folders come from the app's own index and are simply read again (see refreshUnified).
+		token: page.token ?? 'tags',
+		errors: page.errors ?? [],
 	})
 }
 
@@ -135,7 +173,8 @@ export async function showUnified(view = 'inbox') {
 		return
 	}
 	const run = ++generation
-	mailboxState.selected = { accountId: null, folderId: null, unified: view }
+	// An account's tag folder keeps that account's folders in the pane.
+	mailboxState.selected = { accountId: viewOf(view)?.accountId ?? null, folderId: null, unified: view }
 	rememberView(mailboxState.selected)
 	closeMessage()
 	Object.assign(unifiedState, { view, list: [], nextBefore: null, total: 0, unread: null, token: null, errors: [], error: null, loading: true })
@@ -197,6 +236,10 @@ export async function refreshUnified() {
 	}
 	const view = viewOf(state.view)
 	const writes = writeCounters().generation
+	if (view?.tagId) {
+		await reloadTagView(run, writes)
+		return
+	}
 	try {
 		const changes = await apiGet(`/unified/${state.view}/changes?since=${encodeURIComponent(state.token)}`)
 		// A change made while this was loading is not in the snapshot; the next refresh catches up.
@@ -248,5 +291,22 @@ export async function refreshUnified() {
 		mergeUnifiedChanges(changes.messages, changes.removed)
 	} catch {
 		// Polling failures stay silent; the next explicit action shows errors.
+	}
+}
+
+/**
+ * Polling a tag folder: it comes from the app's own index, so it is read again, as many entries
+ * as are loaded (up to the server's page limit), and replaces the list.
+ */
+async function reloadTagView(run, writes) {
+	try {
+		const page = await apiGet(messagesPath(null, Math.min(TAG_RELOAD_MAX, Math.max(PAGE_SIZE, unifiedState.list.length))))
+		if (!isShown(run) || writes !== writeCounters().generation) {
+			return
+		}
+		// A message that left the tag folder stays open, as one read in Unread does.
+		applyPage(page)
+	} catch {
+		// Polling failures stay silent.
 	}
 }

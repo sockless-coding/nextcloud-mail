@@ -6,6 +6,7 @@ using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Bimi;
 using SocklessMail.Api.Data;
 using SocklessMail.Api.Mailbox;
+using SocklessMail.Api.Tags;
 
 namespace SocklessMail.Api.Sync;
 
@@ -32,7 +33,7 @@ public sealed record FolderChanges(
 /// Callers hold the folder's <see cref="SyncLocks"/> lock around every method that writes. Every
 /// write that a client's list or counts would show is pushed to the owner's open tabs.
 /// </summary>
-public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush push, BimiSenders bimi, ILogger<FolderCache> logger)
+public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush push, BimiSenders bimi, TagIndex tags, ILogger<FolderCache> logger)
 {
     /// <summary>More new messages than this since the last sync: rebuild the window from the newest page instead.</summary>
     public const int MaxNewMessages = 500;
@@ -44,6 +45,9 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
 
     /// <summary>Cached rows without a preview (from before previews were cached) filled in per sync.</summary>
     public const int PreviewBackfill = 100;
+
+    /// <summary>Cached rows without keywords (from before keywords were cached) filled in per sync.</summary>
+    public const int KeywordBackfill = 500;
 
     /// <summary>Cached rows without a BIMI verdict (from before BIMI was cached) filled in per sync.</summary>
     public const int BimiBackfill = 200;
@@ -73,6 +77,12 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
 
         public readonly List<IMessageSummary> Inserts = [];
         public readonly Dictionary<uint, MessageFlags> Flags = [];
+
+        /// <summary>Changed keywords (<see cref="Tags.Keywords.Format"/>); only for servers that keep them.</summary>
+        public readonly Dictionary<uint, string> Keywords = [];
+
+        /// <summary>Keywords for rows cached without them; only those with keywords are changes clients need to hear about.</summary>
+        public readonly Dictionary<uint, string> KeywordFill = [];
         public readonly HashSet<uint> Removals = [];
         public readonly Dictionary<uint, string> Previews = [];
 
@@ -82,8 +92,12 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         public uint? WindowStart;
         public uint? LastUid;
 
+        /// <summary>The folder's UIDVALIDITY as the sync found it, which may be new.</summary>
+        public uint? UidValidity;
+
         public bool ChangesRows =>
-            Wipe || Inserts.Count > 0 || Flags.Count > 0 || Removals.Count > 0 || Previews.Count > 0 || Bimi.Values.Any(b => b is not null);
+            Wipe || Inserts.Count > 0 || Flags.Count > 0 || Keywords.Count > 0 || Removals.Count > 0 || Previews.Count > 0
+            || Bimi.Values.Any(b => b is not null) || KeywordFill.Values.Any(k => k != "");
     }
 
     /// <summary>The cache key of a folder: its full name, with any spelling of INBOX as "INBOX".</summary>
@@ -102,7 +116,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         var modSeq = client.Capabilities.HasFlag(ImapCapabilities.CondStore) ? folder.HighestModSeq : 0;
         var uidNext = folder.UidNext?.Id;
         var count = folder.Count;
-        var plan = new SyncPlan();
+        var plan = new SyncPlan { UidValidity = folder.UidValidity };
 
         if (state?.WindowStart is null || state.UidValidity != folder.UidValidity)
         {
@@ -111,10 +125,12 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         }
         else
         {
-            await SyncWindowAsync(client, folder, state, modSeq, count, uidNext, plan, ct);
+            var serverKeywords = !(await tags.StorageAsync(account.Id, ct)).IsAppKept();
+            await SyncWindowAsync(client, folder, state, modSeq, count, uidNext, serverKeywords, plan, ct);
             await FetchNewAsync(folder, state, count, uidNext, initialWindow, plan, ct);
             await FillPreviewsAsync(folder, state, plan, ct);
             await FillBimiAsync(folder, state, plan, ct);
+            await FillKeywordsAsync(folder, state, serverKeywords, plan, ct);
         }
 
         // UNSEEN covers the whole folder, not just the window. Without mod-sequences there is no
@@ -289,6 +305,37 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             }
         }
 
+        await tags.ApplyFlagsAsync(accountId, fullName, uidValidity, uids, seen, flagged, ct);
+        if (changed > 0)
+        {
+            state.ChangeSeq = seq;
+            await db.SaveChangesAsync(ct);
+            await push.FolderChangedAsync(state.OwnerUserId, accountId, fullName);
+        }
+    }
+
+    /// <summary>Applies a tag change the app itself just made: the messages' keywords as they are now.</summary>
+    public async Task ApplyKeywordsAsync(Guid accountId, string fullName, uint uidValidity, IReadOnlyDictionary<uint, string> keywords, CancellationToken ct)
+    {
+        var state = await db.Folders.SingleOrDefaultAsync(f => f.AccountId == accountId && f.FullName == fullName, ct);
+        if (state is null || state.UidValidity != uidValidity)
+        {
+            return;
+        }
+
+        var seq = state.ChangeSeq + 1;
+        var changed = 0;
+        foreach (var chunk in keywords.Keys.Chunk(Chunk))
+        {
+            var rows = await db.Messages.Where(m => m.FolderId == state.Id && chunk.Contains(m.Uid)).ToListAsync(ct);
+            foreach (var row in rows.Where(r => r.Keywords != keywords[r.Uid]))
+            {
+                row.Keywords = keywords[row.Uid];
+                row.ChangeSeq = seq;
+                changed++;
+            }
+        }
+
         if (changed > 0)
         {
             state.ChangeSeq = seq;
@@ -333,16 +380,24 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
     {
         var names = existing.ToHashSet(StringComparer.Ordinal);
         var cached = await db.Folders.Where(f => f.AccountId == accountId).Select(f => new { f.Id, f.FullName }).ToListAsync(ct);
-        var stale = cached.Where(f => !names.Contains(f.FullName)).Select(f => f.Id).ToList();
+        var stale = cached.Where(f => !names.Contains(f.FullName)).ToList();
         if (stale.Count > 0)
         {
-            await db.Folders.Where(f => stale.Contains(f.Id)).ExecuteDeleteAsync(ct);
+            var ids = stale.Select(f => f.Id).ToList();
+            await db.Folders.Where(f => ids.Contains(f.Id)).ExecuteDeleteAsync(ct);
+            foreach (var folder in stale)
+            {
+                await tags.LoseFolderAsync(accountId, folder.FullName, ct);
+            }
         }
     }
 
-    /// <summary>Drops the cache of a folder the app itself just deleted.</summary>
-    public Task ForgetFolderAsync(Guid accountId, string fullName, CancellationToken ct) =>
-        db.Folders.Where(f => f.AccountId == accountId && f.FullName == fullName).ExecuteDeleteAsync(ct);
+    /// <summary>Drops the cache (and tag index) of a folder the app itself just deleted, with everything in it.</summary>
+    public async Task ForgetFolderAsync(Guid accountId, string fullName, CancellationToken ct)
+    {
+        await db.Folders.Where(f => f.AccountId == accountId && f.FullName == fullName).ExecuteDeleteAsync(ct);
+        await db.TaggedMessages.Where(m => m.AccountId == accountId && m.FolderName == fullName).ExecuteDeleteAsync(ct);
+    }
 
     /// <summary>
     /// Deletes removal records older than <see cref="RemovedRetention"/>, for every user. The
@@ -379,7 +434,8 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         m.HasAttachments,
         m.Size,
         m.Preview,
-        string.IsNullOrEmpty(m.BimiDomain) ? null : new BimiDto(m.BimiDomain, m.BimiSelector));
+        string.IsNullOrEmpty(m.BimiDomain) ? null : new BimiDto(m.BimiDomain, m.BimiSelector),
+        Keywords.ForClient(m.Keywords));
 
     private static async Task LoadNewestAsync(IMailFolder folder, int count, uint? uidNext, int window, SyncPlan plan, CancellationToken ct)
     {
@@ -391,13 +447,14 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
     }
 
     /// <summary>Flag changes and removals inside the cached window.</summary>
+    /// <param name="serverKeywords">Compare keywords too; not for accounts whose tags the app keeps itself.</param>
     private async Task SyncWindowAsync(ImapClient client, IMailFolder folder, CachedFolder state, ulong modSeq, int count, uint? uidNext,
-        SyncPlan plan, CancellationToken ct)
+        bool serverKeywords, SyncPlan plan, CancellationToken ct)
     {
         var cached = await db.Messages.AsNoTracking()
             .Where(m => m.FolderId == state.Id)
-            .Select(m => new { m.Uid, m.Flags })
-            .ToDictionaryAsync(m => m.Uid, m => m.Flags, ct);
+            .Select(m => new { m.Uid, m.Flags, m.Keywords })
+            .ToDictionaryAsync(m => m.Uid, m => (m.Flags, m.Keywords), ct);
         if (cached.Count == 0)
         {
             return;
@@ -444,9 +501,19 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
 
         foreach (var summary in changed)
         {
-            if (summary.Flags is { } flags && cached.TryGetValue(summary.UniqueId.Id, out var old) && (flags & SystemFlags) != old)
+            if (summary.Flags is not { } flags || !cached.TryGetValue(summary.UniqueId.Id, out var old))
+            {
+                continue;
+            }
+
+            if ((flags & SystemFlags) != old.Flags)
             {
                 plan.Flags[summary.UniqueId.Id] = flags & SystemFlags;
+            }
+
+            if (serverKeywords && old.Keywords is not null && Keywords.Format(summary.Keywords) is var keywords && keywords != old.Keywords)
+            {
+                plan.Keywords[summary.UniqueId.Id] = keywords;
             }
         }
 
@@ -456,6 +523,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             {
                 plan.Removals.Add(uid.Id);
                 plan.Flags.Remove(uid.Id);
+                plan.Keywords.Remove(uid.Id);
             }
         }
 
@@ -465,6 +533,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             {
                 plan.Removals.Add(uid);
                 plan.Flags.Remove(uid);
+                plan.Keywords.Remove(uid);
             }
         }
     }
@@ -486,6 +555,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             logger.LogInformation("{Count} new messages in a cached folder; rebuilding its window", fresh.Count);
             plan.Wipe = true;
             plan.Flags.Clear();
+            plan.Keywords.Clear();
             plan.Removals.Clear();
             await LoadNewestAsync(folder, count, uidNext, window, plan, ct);
             return;
@@ -557,6 +627,41 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         }
     }
 
+    /// <summary>Keywords for rows cached without them, newest first, <see cref="KeywordBackfill"/> per sync.</summary>
+    private async Task FillKeywordsAsync(IMailFolder folder, CachedFolder state, bool serverKeywords, SyncPlan plan, CancellationToken ct)
+    {
+        if (plan.Wipe)
+        {
+            return;
+        }
+
+        var missing = await db.Messages.AsNoTracking()
+            .Where(m => m.FolderId == state.Id && m.Keywords == null)
+            .OrderByDescending(m => m.Uid)
+            .Select(m => m.Uid)
+            .Take(KeywordBackfill)
+            .ToListAsync(ct);
+        missing.RemoveAll(plan.Removals.Contains);
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        if (!serverKeywords)
+        {
+            // Rows cached before the account's tags were kept by the app: they have none yet.
+            missing.ForEach(uid => plan.KeywordFill[uid] = "");
+            return;
+        }
+
+        var summaries = await folder.FetchAsync(
+            missing.Select(u => new UniqueId(state.UidValidity, u)).ToList(), MessageSummaryItems.UniqueId | MessageSummaryItems.Flags, ct);
+        foreach (var summary in summaries)
+        {
+            plan.KeywordFill[summary.UniqueId.Id] = Keywords.Format(summary.Keywords);
+        }
+    }
+
     private static FetchRequest ChangedSince(ulong modSeq) =>
         new(MessageSummaryItems.UniqueId | MessageSummaryItems.Flags | MessageSummaryItems.ModSeq) { ChangedSince = modSeq };
 
@@ -603,6 +708,27 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             }
         }
 
+        foreach (var group in plan.Keywords.GroupBy(k => k.Value, k => k.Key))
+        {
+            foreach (var chunk in group.Chunk(Chunk))
+            {
+                await db.Messages
+                    .Where(m => m.FolderId == state.Id && chunk.Contains(m.Uid))
+                    .ExecuteUpdateAsync(s => s.SetProperty(m => m.Keywords, group.Key).SetProperty(m => m.ChangeSeq, seq), ct);
+            }
+        }
+
+        foreach (var group in plan.KeywordFill.GroupBy(k => k.Value, k => k.Key))
+        {
+            foreach (var chunk in group.Chunk(Chunk))
+            {
+                var rows = db.Messages.Where(m => m.FolderId == state.Id && chunk.Contains(m.Uid));
+                await (group.Key == ""
+                    ? rows.ExecuteUpdateAsync(s => s.SetProperty(m => m.Keywords, ""), ct)
+                    : rows.ExecuteUpdateAsync(s => s.SetProperty(m => m.Keywords, group.Key).SetProperty(m => m.ChangeSeq, seq), ct));
+            }
+        }
+
         foreach (var (uid, preview) in plan.Previews)
         {
             await db.Messages
@@ -627,7 +753,8 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             await db.Messages.Where(m => m.FolderId == state.Id && chunk.Contains(m.Uid)).ExecuteDeleteAsync(ct);
         }
 
-        db.Messages.AddRange(inserts.Select(s => ToCachedMessage(state, s, bimi.Find(s), seq)));
+        var localKeywords = await tags.ClaimAsync(account.Id, fullName, plan.UidValidity ?? state.UidValidity, inserts, ct);
+        db.Messages.AddRange(inserts.Select(s => ToCachedMessage(state, s, bimi.Find(s), localKeywords.GetValueOrDefault(s.UniqueId.Id), seq)));
 
         if (plan.WindowStart is { } windowStart)
         {
@@ -645,6 +772,12 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             state.ChangeSeq = seq;
         }
 
+        if (plan.Wipe)
+        {
+            // A new UIDVALIDITY renumbered the folder: the index's places in it are gone.
+            await tags.LoseAsync(account.Id, fullName, state.UidValidity, null, ct);
+        }
+
         try
         {
             await db.SaveChangesAsync(ct);
@@ -660,6 +793,9 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             throw new MailboxNotFoundException("The account");
         }
 
+        await tags.FollowCacheAsync(account.Id, state,
+            inserts.Select(s => s.UniqueId.Id).Concat(plan.Flags.Keys).Concat(plan.Keywords.Keys).Concat(plan.Previews.Keys)
+                .Concat(plan.KeywordFill.Where(k => k.Value != "").Select(k => k.Key)).ToList(), ct);
         await transaction.CommitAsync(ct);
         // Rows added by paging further back change no client's list.
         if (!plan.Quiet && (plan.ChangesRows || state.Total != total || state.Unread != unread))
@@ -695,10 +831,12 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             removed.AddRange(rows);
         }
 
+        await tags.LoseAsync(state.AccountId, state.FullName, state.UidValidity, uids, ct);
         return removed;
     }
 
-    private static CachedMessage ToCachedMessage(CachedFolder state, IMessageSummary s, BimiDto? sender, long seq)
+    /// <param name="localKeywords">The tag index's keywords, for an account whose server keeps none; null takes the server's.</param>
+    private static CachedMessage ToCachedMessage(CachedFolder state, IMessageSummary s, BimiDto? sender, string? localKeywords, long seq)
     {
         var subject = s.Envelope?.Subject ?? "";
         var from = AddressDto.From(s.Envelope?.From);
@@ -719,6 +857,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             BimiDomain = sender?.Domain ?? "",
             BimiSelector = sender?.Selector,
             Flags = (s.Flags ?? MessageFlags.None) & SystemFlags,
+            Keywords = localKeywords ?? Keywords.Format(s.Keywords),
             ChangeSeq = seq,
         };
     }

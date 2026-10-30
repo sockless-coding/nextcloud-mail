@@ -77,6 +77,7 @@ public sealed class TestApp(string? storageDirectory = null, IReadOnlyDictionary
             // Test accounts point at made-up servers; no background IMAP connections.
             services.AddSingleton(new WatcherOptions { MaxWatchers = 0 });
             services.AddSingleton(new RuleRunnerOptions { Interval = TimeSpan.Zero });
+            services.AddSingleton(new SocklessMail.Api.Tags.TagScannerOptions { Interval = TimeSpan.Zero });
             _configureServices?.Invoke(services);
         });
     }

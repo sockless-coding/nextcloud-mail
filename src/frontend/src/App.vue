@@ -79,6 +79,12 @@
 
 		<TrustedSendersDialog v-if="dialogs.trustedSenders" @close="dialogs.trustedSenders = false" />
 
+		<TagPickerDialog v-if="dialogs.tagPicker"
+			:request="dialogs.tagPicker"
+			@close="dialogs.tagPicker = null" />
+
+		<TagsDialog v-if="dialogs.tags" @close="dialogs.tags = false" />
+
 		<RulesDialog v-if="dialogs.rules"
 			:account="dialogs.rules.account"
 			:draft="dialogs.rules.draft"
@@ -147,6 +153,8 @@ import MoveDialog from './components/MoveDialog.vue'
 import OAuthSettingsDialog from './components/OAuthSettingsDialog.vue'
 import RulesDialog from './components/RulesDialog.vue'
 import ShortcutsDialog from './components/ShortcutsDialog.vue'
+import TagPickerDialog from './components/TagPickerDialog.vue'
+import TagsDialog from './components/TagsDialog.vue'
 import TaskDialog from './components/TaskDialog.vue'
 import TrustedSendersDialog from './components/TrustedSendersDialog.vue'
 import { accountsState, loadAccounts } from './store/accounts.js'
@@ -161,6 +169,7 @@ import { clearSelection, selection } from './store/selection.js'
 import { push, startPush } from './store/push.js'
 import { installShortcuts } from './store/shortcuts.js'
 import { INBOX_ID, inUnifiedView, refreshUnified, viewOf } from './store/unified.js'
+import { loadTagCounts, loadTags } from './store/tags.js'
 import { loadTasks } from './store/tasks.js'
 import { loadViewState } from './store/viewState.js'
 
@@ -306,6 +315,7 @@ async function poll(event) {
 	await Promise.all([
 		...(withList ? [refreshList()] : []),
 		...(withFolders ? Object.keys(mailboxState.folders).map((id) => loadFolders(id, true)) : []),
+		...(withFolders ? [loadTagCounts()] : []),
 	])
 }
 
@@ -323,6 +333,7 @@ function folderChanged({ accountId, folderId }) {
 		folderReloads.set(accountId, window.setTimeout(() => {
 			folderReloads.delete(accountId)
 			loadFolders(accountId, true)
+			loadTagCounts()
 		}, FOLDER_RELOAD_DELAY_MS))
 	}
 }
@@ -346,6 +357,8 @@ onMounted(async () => {
 	loadOAuthState()
 	// Whether to offer "Create task"; nothing waits for it.
 	loadTasks()
+	// Lists show tags once these arrive; nothing waits for them.
+	loadTags().then(loadTagCounts)
 	await Promise.all([loadAccounts(), loadViewState()])
 	// The rail shows every account's unread count; not awaited either.
 	loadAllFolders()

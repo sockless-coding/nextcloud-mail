@@ -40,6 +40,7 @@ public sealed class MailApp(Action<IServiceCollection>? services = null) : WebAp
         {
             collection.AddSingleton(new WatcherOptions { MaxWatchers = 0 });
             collection.AddSingleton(new RuleRunnerOptions { Interval = TimeSpan.Zero });
+            collection.AddSingleton(new SocklessMail.Api.Tags.TagScannerOptions { Interval = TimeSpan.Zero });
             // No registry lookups for the test senders' domains.
             collection.AddHttpClient(DomainAges.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new NoRdap());
             services?.Invoke(collection);

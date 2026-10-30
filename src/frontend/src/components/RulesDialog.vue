@@ -220,6 +220,24 @@
 							{{ folder.path }}
 						</option>
 					</select>
+					<select v-if="action.type === 'tag' && tagsState.list.length"
+						v-model="action.tagId"
+						class="rule-editor__folder"
+						:class="{ 'rule-editor__invalid': errors[`actions[${i}].tagId`] }"
+						:aria-label="t('sockless_mail', 'Tag')">
+						<option value="" disabled>
+							{{ t('sockless_mail', 'Choose a tag') }}
+						</option>
+						<option v-if="action.tagId && !tagsState.list.some((tag) => tag.id === action.tagId)" :value="action.tagId">
+							{{ t('sockless_mail', '(deleted tag)') }}
+						</option>
+						<option v-for="tag in tagsState.list" :key="tag.id" :value="tag.id">
+							{{ tag.name }}
+						</option>
+					</select>
+					<NcButton v-else-if="action.type === 'tag'" variant="secondary" @click="dialogs.tags = true">
+						{{ t('sockless_mail', 'Create a tag…') }}
+					</NcButton>
 					<NcButton variant="tertiary"
 						:disabled="draft.actions.length === 1"
 						:aria-label="t('sockless_mail', 'Remove action')"
@@ -236,7 +254,7 @@
 				<p v-if="errors.actions" class="rule-editor__error">
 					{{ errors.actions }}
 				</p>
-				<NcButton variant="tertiary" @click="draft.actions.push({ type: 'flag', folderId: '' })">
+				<NcButton variant="tertiary" @click="draft.actions.push({ type: 'flag', folderId: '', tagId: '' })">
 					<template #icon>
 						<NcIconSvgWrapper :path="mdiPlus" :size="18" />
 					</template>
@@ -293,9 +311,10 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { computed, onMounted, ref } from 'vue'
-import { moveTargets } from '../store/actions.js'
+import { dialogs, moveTargets } from '../store/actions.js'
 import { ActionError, loadFolders, mailboxState, refreshMessages } from '../store/mailbox.js'
 import { ACTIONS, describeRule, FIELDS, loadRules, newCondition, newRule, opsFor, previewRun as loadPreview, runRule, saveRules, testRule } from '../store/rules.js'
+import { tagsState } from '../store/tags.js'
 
 const INBOX = 'SU5CT1g'
 
@@ -410,7 +429,7 @@ function edit(index, template = null) {
 	draft.value = {
 		...source,
 		conditions: source.conditions.map((c) => ({ ...c, header: c.header ?? '', value: c.value ?? '' })),
-		actions: source.actions.map((a) => ({ ...a, folderId: a.folderId ?? '' })),
+		actions: source.actions.map((a) => ({ ...a, folderId: a.folderId ?? '', tagId: a.tagId ?? '' })),
 	}
 	errors.value = {}
 	saveError.value = ''

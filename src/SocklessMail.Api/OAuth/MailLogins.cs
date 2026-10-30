@@ -24,6 +24,7 @@ public sealed class MailLogins(
     private sealed record CachedToken(string ProtectedCredential, string AccessToken, DateTimeOffset ExpiresAt);
 
     private readonly ConcurrentDictionary<Guid, CachedToken> _tokens = new();
+    private readonly ConcurrentDictionary<Guid, CachedToken> _graphTokens = new();
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _refreshLocks = new();
 
     /// <exception cref="CredentialUnavailableException">The stored credential cannot be decrypted.</exception>
@@ -59,8 +60,78 @@ public sealed class MailLogins(
         }
     }
 
-    /// <summary>Drops the cached access token (account changed, signed in again, or deleted).</summary>
-    public void Forget(Guid accountId) => _tokens.TryRemove(accountId, out _);
+    /// <summary>
+    /// A Microsoft Graph access token for an account signed in with a provider that has Graph
+    /// scopes (<see cref="OAuthProvider.GraphScope"/>); null for any other account. Redeemed from
+    /// the account's refresh token, cached like the mail token.
+    /// </summary>
+    /// <exception cref="GraphConsentRequiredException">The sign-in predates the Graph consent (or it was refused).</exception>
+    /// <exception cref="MailConnectionException">As for <see cref="ForConnectionAsync"/>.</exception>
+    public async Task<string?> GraphTokenAsync(MailAccount account, CancellationToken ct)
+    {
+        if (credentials.Unprotect(account.Id, account.ProtectedCredential) is not OAuthCredential grant)
+        {
+            return null;
+        }
+
+        if (_graphTokens.TryGetValue(account.Id, out var cached) && cached.ProtectedCredential == account.ProtectedCredential
+            && cached.ExpiresAt - Margin > clock.GetUtcNow())
+        {
+            return cached.AccessToken;
+        }
+
+        var gate = _refreshLocks.GetOrAdd(account.Id, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            var client = await scope.ServiceProvider.GetRequiredService<OAuthClientStore>().GetAsync(grant.Provider, ct);
+            if (client?.Provider.GraphScope is not { } graphScope)
+            {
+                return null;
+            }
+
+            OAuthTokenResponse response;
+            try
+            {
+                response = await tokens.RefreshAsync(client, grant.RefreshToken, ct, $"{graphScope} offline_access");
+            }
+            catch (OAuthConsentRequiredException)
+            {
+                throw new GraphConsentRequiredException();
+            }
+            catch (OAuthGrantRevokedException)
+            {
+                throw new MailConnectionException("oauth_signin_required",
+                    $"The sign-in with {client.Provider.Name} has expired or was revoked. Sign in again in the account settings.");
+            }
+            catch (OAuthUnavailableException e)
+            {
+                throw new MailConnectionException("oauth_unavailable", e.Message, e);
+            }
+
+            var stored = account.ProtectedCredential;
+            if (response.RefreshToken is { Length: > 0 } rotated && rotated != grant.RefreshToken)
+            {
+                stored = credentials.Protect(account.Id, grant with { RefreshToken = rotated });
+                await SaveRotatedAsync(scope.ServiceProvider.GetRequiredService<MailDbContext>(), account, stored, ct);
+            }
+
+            _graphTokens[account.Id] = new CachedToken(stored, response.AccessToken, clock.GetUtcNow() + response.ExpiresIn);
+            return response.AccessToken;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>Drops the cached access tokens (account changed, signed in again, or deleted).</summary>
+    public void Forget(Guid accountId)
+    {
+        _tokens.TryRemove(accountId, out _);
+        _graphTokens.TryRemove(accountId, out _);
+    }
 
     private string? Current(MailAccount account) =>
         _tokens.TryGetValue(account.Id, out var cached)
@@ -119,3 +190,6 @@ public sealed class MailLogins(
         }
     }
 }
+
+/// <summary>The account's sign-in lacks the consent to Microsoft Graph: signing in again asks for it.</summary>
+public sealed class GraphConsentRequiredException() : Exception("Sign in again to allow tags as Outlook categories.");

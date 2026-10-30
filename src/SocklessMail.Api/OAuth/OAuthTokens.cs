@@ -17,6 +17,9 @@ public sealed record OAuthIdentity(string Email, string? Name);
 /// <summary>The provider refused the grant (revoked, expired, password changed): the user has to sign in again.</summary>
 public sealed class OAuthGrantRevokedException(string error) : Exception($"The provider rejected the grant ({error}).");
 
+/// <summary>The user has not consented to the scopes asked for (Microsoft: AADSTS65001); signing in again asks.</summary>
+public sealed class OAuthConsentRequiredException(string error) : Exception($"The provider wants consent first ({error}).");
+
 /// <summary>The token endpoint could not be reached or answered something unusable.</summary>
 public sealed class OAuthUnavailableException(string message, Exception? inner = null) : Exception(message, inner);
 
@@ -25,21 +28,31 @@ public sealed class OAuthTokens(IHttpClientFactory http, ILogger<OAuthTokens> lo
 {
     public const string HttpClientName = "oauth";
 
-    public Task<OAuthTokenResponse> ExchangeCodeAsync(OAuthClientSettings client, string code, string codeVerifier, CancellationToken ct) =>
-        RequestAsync(client, new Dictionary<string, string>
+    public Task<OAuthTokenResponse> ExchangeCodeAsync(OAuthClientSettings client, string code, string codeVerifier, CancellationToken ct)
+    {
+        var form = new Dictionary<string, string>
         {
             ["grant_type"] = "authorization_code",
             ["code"] = code,
             ["redirect_uri"] = client.RedirectUri,
             ["code_verifier"] = codeVerifier,
-        }, ct);
+        };
+        if (client.Provider.GraphScope is not null)
+        {
+            // Consent covered two resources; the code's token is for the mail one.
+            form["scope"] = client.Provider.Scope;
+        }
 
-    public Task<OAuthTokenResponse> RefreshAsync(OAuthClientSettings client, string refreshToken, CancellationToken ct) =>
+        return RequestAsync(client, form, ct);
+    }
+
+    /// <param name="scope">The scopes of the token; the mail scopes when null.</param>
+    public Task<OAuthTokenResponse> RefreshAsync(OAuthClientSettings client, string refreshToken, CancellationToken ct, string? scope = null) =>
         RequestAsync(client, new Dictionary<string, string>
         {
             ["grant_type"] = "refresh_token",
             ["refresh_token"] = refreshToken,
-            ["scope"] = client.Provider.Scope,
+            ["scope"] = scope ?? client.Provider.Scope,
         }, ct);
 
     /// <summary>
@@ -103,6 +116,13 @@ public sealed class OAuthTokens(IHttpClientFactory http, ILogger<OAuthTokens> lo
                 return new OAuthTokenResponse(accessToken, body.RefreshToken, TimeSpan.FromSeconds(Math.Clamp(body.ExpiresIn ?? 3600, 60, 86400)), body.IdToken);
             }
 
+            // Microsoft: no consent to (some of) the scopes yet, or the app registration lacks them.
+            if (body?.Error == "invalid_scope" || body?.Suberror == "consent_required"
+                || (body?.Error == "invalid_grant" && body.ErrorDescription?.Contains("AADSTS65001", StringComparison.Ordinal) == true))
+            {
+                throw new OAuthConsentRequiredException(body.Error!);
+            }
+
             // invalid_grant: the refresh token or code is no longer valid. Anything else is our or the provider's fault.
             if (body?.Error == "invalid_grant")
             {
@@ -123,7 +143,9 @@ public sealed class OAuthTokens(IHttpClientFactory http, ILogger<OAuthTokens> lo
         [property: JsonPropertyName("refresh_token")] string? RefreshToken,
         [property: JsonPropertyName("expires_in")] int? ExpiresIn,
         [property: JsonPropertyName("id_token")] string? IdToken,
-        [property: JsonPropertyName("error")] string? Error);
+        [property: JsonPropertyName("error")] string? Error,
+        [property: JsonPropertyName("error_description")] string? ErrorDescription = null,
+        [property: JsonPropertyName("suberror")] string? Suberror = null);
 
     /// <summary>The URL the user's browser goes to, with PKCE and the flow's state.</summary>
     public static string AuthorizeUrl(OAuthClientSettings client, OAuthFlow flow)
@@ -133,7 +155,7 @@ public sealed class OAuthTokens(IHttpClientFactory http, ILogger<OAuthTokens> lo
             ["response_type"] = "code",
             ["client_id"] = client.ClientId,
             ["redirect_uri"] = flow.RedirectUri,
-            ["scope"] = client.Provider.Scope,
+            ["scope"] = client.Provider.ConsentScope,
             ["state"] = flow.State,
             ["code_challenge"] = OAuthFlows.Challenge(flow),
             ["code_challenge_method"] = "S256",

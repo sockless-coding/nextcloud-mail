@@ -10,6 +10,7 @@ using SocklessMail.Api.OAuth;
 using SocklessMail.Api.Rules;
 using SocklessMail.Api.Senders;
 using SocklessMail.Api.Sync;
+using SocklessMail.Api.Tags;
 
 namespace SocklessMail.Api.Data;
 
@@ -54,6 +55,12 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
 
     public DbSet<RuleCursor> RuleCursors => Set<RuleCursor>();
 
+    public DbSet<MailTag> Tags => Set<MailTag>();
+
+    public DbSet<TaggedMessage> TaggedMessages => Set<TaggedMessage>();
+
+    public DbSet<TagScanState> TagScanStates => Set<TagScanState>();
+
     // SQLite cannot order or compare DateTimeOffset natively; store UTC ticks.
     private static readonly ValueConverter<DateTimeOffset, long> UtcTicks =
         new(v => v.UtcTicks, v => new DateTimeOffset(v, TimeSpan.Zero));
@@ -81,6 +88,7 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             account.Property(a => a.ImapSecurity).HasConversion<string>().HasMaxLength(16);
             account.Property(a => a.SmtpSecurity).HasConversion<string>().HasMaxLength(16);
             account.Property(a => a.AuthMethod).HasConversion<string>().HasMaxLength(16);
+            account.Property(a => a.TagStorage).HasConversion<string>().HasMaxLength(16).HasDefaultValue(TagStorage.Unknown).HasSentinel(TagStorage.Unknown);
             account.Property(a => a.CreatedAt).HasConversion(UtcTicks);
             account.Property(a => a.UpdatedAt).HasConversion(UtcTicks);
             account.HasQueryFilter(a => a.OwnerUserId == _userId);
@@ -114,6 +122,7 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             message.Property(m => m.To).HasConversion(Addresses, AddressComparer);
             message.Property(m => m.Date).HasConversion(UtcTicks);
             message.Property(m => m.Flags).HasConversion<int>();
+            message.Property(m => m.Keywords).HasMaxLength(Keywords.MaxStoredLength);
             message.Property(m => m.SearchText).HasMaxLength(4000);
             message.Property(m => m.Preview).HasMaxLength(MessagePreview.MaxLength);
             message.Property(m => m.BimiDomain).HasMaxLength(253);
@@ -244,6 +253,56 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             cursor.Property(c => c.OwnerUserId).HasMaxLength(64);
             cursor.Property(c => c.UpdatedAt).HasConversion(UtcTicks);
             cursor.HasQueryFilter(c => c.OwnerUserId == _userId);
+        });
+
+        model.Entity<MailTag>(tag =>
+        {
+            tag.ToTable("tags");
+            tag.HasKey(t => t.Id);
+            tag.HasIndex(t => new { t.OwnerUserId, t.Keyword }).IsUnique();
+            tag.Property(t => t.OwnerUserId).HasMaxLength(64);
+            tag.Property(t => t.Name).HasMaxLength(TagStore.MaxNameLength);
+            tag.Property(t => t.Color).HasMaxLength(7);
+            tag.Property(t => t.Keyword).HasMaxLength(Keywords.MaxKeywordLength);
+            tag.Property(t => t.CreatedAt).HasConversion(UtcTicks);
+            tag.HasQueryFilter(t => t.OwnerUserId == _userId);
+        });
+
+        model.Entity<TaggedMessage>(tagged =>
+        {
+            tagged.ToTable("tagged_messages");
+            tagged.HasKey(m => m.Id);
+            tagged.HasIndex(m => new { m.AccountId, m.FolderName, m.UidValidity, m.Uid });
+            tagged.HasIndex(m => new { m.AccountId, m.MessageIdHeader });
+            tagged.HasIndex(m => new { m.OwnerUserId, m.Date });
+            // Deleting an account drops its index with it.
+            tagged.HasOne<MailAccount>().WithMany().HasForeignKey(m => m.AccountId).OnDelete(DeleteBehavior.Cascade);
+            tagged.Property(m => m.OwnerUserId).HasMaxLength(64);
+            tagged.Property(m => m.FolderName).HasMaxLength(1000);
+            tagged.Property(m => m.MessageIdHeader).HasMaxLength(1000);
+            tagged.Property(m => m.Keywords).HasMaxLength(Keywords.MaxStoredLength);
+            tagged.Property(m => m.Subject).HasMaxLength(2000);
+            tagged.Property(m => m.From).HasConversion(Addresses, AddressComparer);
+            tagged.Property(m => m.To).HasConversion(Addresses, AddressComparer);
+            tagged.Property(m => m.Date).HasConversion(UtcTicks);
+            tagged.Property(m => m.Preview).HasMaxLength(MessagePreview.MaxLength);
+            tagged.Property(m => m.BimiDomain).HasMaxLength(253);
+            tagged.Property(m => m.BimiSelector).HasMaxLength(63);
+            tagged.Property(m => m.UpdatedAt).HasConversion(UtcTicks);
+            tagged.HasQueryFilter(m => m.OwnerUserId == _userId);
+        });
+
+        model.Entity<TagScanState>(scan =>
+        {
+            scan.ToTable("tag_scan_states");
+            scan.HasKey(s => new { s.AccountId, s.FolderName });
+            scan.HasOne<MailAccount>().WithMany().HasForeignKey(s => s.AccountId).OnDelete(DeleteBehavior.Cascade);
+            scan.Property(s => s.OwnerUserId).HasMaxLength(64);
+            scan.Property(s => s.FolderName).HasMaxLength(1000);
+            scan.Property(s => s.HighestModSeq).HasConversion<long>();
+            scan.Property(s => s.KeywordSet).HasMaxLength(20000);
+            scan.Property(s => s.ScannedAt).HasConversion(UtcTicks);
+            scan.HasQueryFilter(s => s.OwnerUserId == _userId);
         });
     }
 }

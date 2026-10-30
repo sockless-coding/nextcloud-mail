@@ -2,7 +2,7 @@ import { showError, showSuccess } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import { reactive } from 'vue'
 import { accountsState } from './accounts.js'
-import { createFolder, deleteFolder, deleteMessages, loadFolders, loadRawMessage, mailboxState, moveMessages, renameFolder, setFlags } from './mailbox.js'
+import { createFolder, deleteFolder, deleteMessages, loadFolders, loadRawMessage, mailboxState, moveMessages, renameFolder, setFlags, setTags } from './mailbox.js'
 import { ruleFromMessage } from './rules.js'
 
 /**
@@ -34,6 +34,10 @@ export const dialogs = reactive({
 	rules: null,
 	/** A folder waiting for confirmation to be deleted: { accountId, folder }. */
 	folderToDelete: null,
+	/** Messages to tag: { rows } (rows as in selection.js). */
+	tagPicker: null,
+	/** The tag manager. */
+	tags: false,
 })
 
 function fail(what, e) {
@@ -85,6 +89,21 @@ export async function setFlaggedRows(rows, flagged) {
 		await Promise.all(byFolder(rows).map(({ where, ids }) => setFlags(where, ids, { flagged })))
 	} catch (e) {
 		fail(t('sockless_mail', 'Flagging'), e)
+	}
+}
+
+/** Puts a tag on the rows, or takes it off; rows of several folders get a request each. */
+export async function setTagOnRows(rows, tag, on) {
+	try {
+		await Promise.all(byFolder(rows).map(({ where, ids }) => setTags(where, ids, on ? { add: [tag] } : { remove: [tag] })))
+	} catch (e) {
+		fail(on ? t('sockless_mail', 'Tagging') : t('sockless_mail', 'Removing the tag'), e)
+	}
+}
+
+export function askTags(rows) {
+	if (rows.length) {
+		dialogs.tagPicker = { rows }
 	}
 }
 

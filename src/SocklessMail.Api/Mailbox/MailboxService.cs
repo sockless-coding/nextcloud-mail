@@ -11,6 +11,7 @@ using SocklessMail.Api.Sync;
 using SocklessMail.Api.OAuth;
 using SocklessMail.Api.Rules;
 using SocklessMail.Api.Senders;
+using SocklessMail.Api.Tags;
 
 namespace SocklessMail.Api.Mailbox;
 
@@ -28,7 +29,8 @@ public sealed record PartContent(string FileName, string ContentType, Func<Strea
 public sealed partial class MailboxService(
     ImapConnections imap, MailLogins logins, ImageProxyTokens proxyTokens,
     MailServerConnector connector, AttachmentUploads uploads, FolderCache cache, SyncLocks syncLocks,
-    MailboxWatchers watchers, RuleEngine rules, BimiSenders bimi, FolderRoles roles, SenderChecks senderChecks, TimeProvider clock, ILogger<MailboxService> logger)
+    MailboxWatchers watchers, RuleEngine rules, BimiSenders bimi, FolderRoles roles, SenderChecks senderChecks, TagIndex tagIndex, TagStore tagStore, OutlookCategories outlook,
+    TimeProvider clock, ILogger<MailboxService> logger)
 {
     public const int DefaultPageSize = 50;
     public const int MaxPageSize = 100;
@@ -99,7 +101,25 @@ public sealed partial class MailboxService(
     /// headers and body) and matching <paramref name="filter"/>; either may be left out, not both.
     /// Not cached: matches may lie anywhere in the folder.
     /// </summary>
-    public Task<SearchPage> SearchFolderAsync(
+    public async Task<SearchPage> SearchFolderAsync(
+        MailAccount account, string folderId, string? query, MessageFilter filter, uint? before, int limit, CancellationToken ct)
+    {
+        var page = await SearchServerAsync(account, folderId, query, filter, before, limit, ct);
+        if (page.Messages.Count == 0 || !(await tagIndex.StorageAsync(account.Id, ct)).IsAppKept())
+        {
+            return page;
+        }
+
+        // The server keeps no keywords for this account: the tags come from the index.
+        var uids = page.Messages.Select(m => MailboxIds.TryParseMessageId(m.Id, out _, out var uid) ? uid : 0).ToList();
+        var local = await tagIndex.KeywordsAsync(account.Id, FullNameOf(folderId), page.UidValidity, uids, ct);
+        return page with
+        {
+            Messages = page.Messages.Zip(uids, (m, uid) => m with { Keywords = Tags.Keywords.ForClient(local.GetValueOrDefault(uid)) }).ToList(),
+        };
+    }
+
+    private Task<SearchPage> SearchServerAsync(
         MailAccount account, string folderId, string? query, MessageFilter filter, uint? before, int limit, CancellationToken ct)
     {
         var terms = filter == MessageFilter.None || !string.IsNullOrWhiteSpace(query) ? SearchTerms.Parse(query) : [];
@@ -282,8 +302,16 @@ public sealed partial class MailboxService(
                 LeafParts(summary.Body).Where(IsCalendarPart)
                     .Select(p => new CalendarPartDto(MailboxIds.PartId(p.PartSpecifier), p.ContentType.Parameters["method"]?.Trim().ToUpperInvariant()))
                     .ToArray(),
-                null), bimi.FailedDmarc(envelope.From, summary.Headers), sanitized.LinkMismatches);
+                null,
+                Tags.Keywords.ForClient(summary.Keywords)), bimi.FailedDmarc(envelope.From, summary.Headers), sanitized.LinkMismatches);
         }, ct);
+
+        if ((await tagIndex.StorageAsync(account.Id, ct)).IsAppKept()
+            && MailboxIds.TryParseMessageId(messageId, out var uidValidity, out var uid))
+        {
+            var local = await tagIndex.KeywordsAsync(account.Id, FullNameOf(folderId), uidValidity, [uid], ct);
+            message = message with { Keywords = Tags.Keywords.ForClient(local.GetValueOrDefault(uid)) };
+        }
 
         return message with { SenderWarning = await senderChecks.CheckMessageAsync(account.OwnerUserId, message.From, message.ReplyTo, dmarcFailed, links, ct) };
     }
@@ -495,7 +523,8 @@ public sealed partial class MailboxService(
         s.Attachments.Any(),
         (long)(s.Size ?? 0),
         MessagePreview.Normalize(s.PreviewText),
-        bimi.Find(s));
+        bimi.Find(s),
+        Tags.Keywords.ForClient(s.Keywords));
 
     private static FolderDto ToDto(IMailFolder f)
     {

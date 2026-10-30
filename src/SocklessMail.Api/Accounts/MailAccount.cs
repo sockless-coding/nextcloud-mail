@@ -1,3 +1,5 @@
+using SocklessMail.Api.Tags;
+
 namespace SocklessMail.Api.Accounts;
 
 public enum MailSecurity
@@ -46,6 +48,9 @@ public sealed class MailAccount
 
     /// <summary>A <see cref="MailCredential"/>, encrypted by <see cref="CredentialProtector"/>.</summary>
     public required string ProtectedCredential { get; set; }
+
+    /// <summary>Where the account's tags are kept; learnt from the server when a message is first tagged.</summary>
+    public TagStorage TagStorage { get; set; }
 
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset UpdatedAt { get; set; }

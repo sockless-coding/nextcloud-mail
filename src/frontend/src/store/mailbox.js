@@ -440,6 +440,42 @@ export async function setFlags(where, messageIds, { seen, flagged }) {
 	}
 }
 
+/**
+ * Adds and removes tags. Optimistic like setFlags: every copy of the messages shows the change at
+ * once, takes the server's keywords when it answers, and goes back if it refuses.
+ *
+ * @param {{accountId: string, folderId: string}} where the messages' folder
+ * @param {string[]} messageIds messages of that folder
+ * @param {{add?: object[], remove?: object[]}} change tags ({ id, keyword }) to add and remove
+ */
+export async function setTags(where, messageIds, { add = [], remove = [] }) {
+	const targets = messagesById(where, messageIds)
+	const before = targets.map((m) => ({ m, keywords: m.keywords }))
+	const removed = new Set(remove.map((t) => t.keyword.toLowerCase()))
+	for (const m of targets) {
+		const kept = (m.keywords ?? []).filter((k) => !removed.has(k.toLowerCase()))
+		const known = new Set(kept.map((k) => k.toLowerCase()))
+		m.keywords = [...kept, ...add.map((t) => t.keyword).filter((k) => !known.has(k.toLowerCase()))]
+	}
+	try {
+		const result = await send('PUT', `${folderBase(where)}/messages/tags`, {
+			messageIds,
+			add: add.map((t) => t.id),
+			remove: remove.map((t) => t.id),
+		})
+		for (const m of targets) {
+			if (result.keywords[m.id]) {
+				m.keywords = result.keywords[m.id]
+			}
+		}
+	} catch (e) {
+		for (const { m, keywords } of before) {
+			m.keywords = keywords
+		}
+		throw e
+	}
+}
+
 /** Takes messages out of every list (and closes the view if one of them is open); returns an undo. */
 function removeFromList(where, messageIds) {
 	const { accountId, folderId } = where

@@ -17,6 +17,7 @@
 						<NcIconSvgWrapper :path="mdiArrowLeft" :size="20" />
 					</button>
 					<h2>{{ message.subject || t('sockless_mail', '(no subject)') }}</h2>
+					<TagChips :tags="tagsOf(message)" />
 					<span v-if="location" class="message-view__location">
 						<span class="message-view__location-dot" :style="{ background: location.color }" aria-hidden="true" />
 						{{ location.label }}
@@ -64,6 +65,12 @@
 								:title="mode.label"
 								@click="reply(mode.id)">
 								<NcIconSvgWrapper :path="mode.icon" :size="20" />
+							</button>
+							<button class="message-view__icon-button"
+								:aria-label="t('sockless_mail', 'Tags')"
+								:title="t('sockless_mail', 'Tags')"
+								@click="askTags([{ ...where, message }])">
+								<NcIconSvgWrapper :path="mdiTagOutline" :size="20" />
 							</button>
 							<!-- In a dark theme the mail is recoloured; its original white page is one click away. -->
 							<button v-if="darkTheme"
@@ -259,7 +266,7 @@
 </template>
 
 <script setup>
-import { mdiAccountPlusOutline, mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiClipboardCheckOutline, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFilterPlusOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldAlertOutline, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
+import { mdiAccountPlusOutline, mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiClipboardCheckOutline, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFilterPlusOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldAlertOutline, mdiTagOutline, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -275,11 +282,12 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { computed, ref, watch } from 'vue'
 import { bimiUrl } from '../bimi.js'
 import { accountColor, accountsState } from '../store/accounts.js'
-import { askMove, createRuleFrom, dialogs, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
+import { askMove, askTags, createRuleFrom, dialogs, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { composeEdit, composeReply } from '../store/compose.js'
 import { primaryCalendarPart } from '../store/calendar.js'
 import { saveAttachmentsToFiles } from '../store/files.js'
 import { readingPane } from '../store/layout.js'
+import { tagsOf } from '../store/tags.js'
 import { tasksState } from '../store/tasks.js'
 import { formatFileSize } from '../fileSize.js'
 import { messageWarning, reasonText, trustDomain, warningTitle } from '../store/senders.js'
@@ -289,6 +297,7 @@ import DeceptiveLinkDialog from './DeceptiveLinkDialog.vue'
 import InvitationCard from './InvitationCard.vue'
 import MessageBody from './MessageBody.vue'
 import MessageSourceDialog from './MessageSourceDialog.vue'
+import TagChips from './TagChips.vue'
 
 const REPLIES = [
 	{ id: 'reply', icon: mdiReply, label: t('sockless_mail', 'Reply') },

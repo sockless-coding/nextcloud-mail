@@ -1,6 +1,6 @@
 import { showError } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
-import { dialogs, removeRows, setFlaggedRows, setSeenRows } from './actions.js'
+import { askTags, dialogs, removeRows, setFlaggedRows, setSeenRows } from './actions.js'
 import { composeNew, composeReply } from './compose.js'
 import { readingPane } from './layout.js'
 import { closeMessage, mailboxState } from './mailbox.js'
@@ -20,6 +20,7 @@ export const SHORTCUTS = [
 	{ keys: ['Ctrl+Q'], label: t('sockless_mail', 'Mark as read'), run: () => withTargets((rows) => setSeenRows(rows, true)) },
 	{ keys: ['Ctrl+U'], label: t('sockless_mail', 'Mark as unread'), run: () => withTargets((rows) => setSeenRows(rows, false)) },
 	{ keys: ['Insert'], label: t('sockless_mail', 'Flag or remove the flag'), run: () => withTargets((rows) => setFlaggedRows(rows, rows.some((r) => !r.message.flagged))) },
+	{ keys: ['T'], label: t('sockless_mail', 'Tag'), run: () => withTargets(askTags) },
 	{ keys: ['/', 'Alt+Q'], label: t('sockless_mail', 'Search'), run: focusSearch },
 	{ keys: ['Esc'], label: t('sockless_mail', 'Clear the selection, or close the message'), run: escape },
 	{ keys: ['?'], label: t('sockless_mail', 'Show keyboard shortcuts'), run: () => { dialogs.shortcuts = true } },

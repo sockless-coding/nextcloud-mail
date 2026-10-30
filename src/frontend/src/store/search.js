@@ -1,6 +1,8 @@
 import { reactive } from 'vue'
 import { apiGet } from '../api.js'
 import { mailboxState } from './mailbox.js'
+import { hasTag, tagsState } from './tags.js'
+import { viewOf } from './unified.js'
 
 const PAGE_SIZE = 50
 
@@ -12,13 +14,15 @@ const PAGE_SIZE = 50
  * - cache: words across every account and folder, from the app's header cache (subject, names,
  *   addresses of messages already synced), with the filter applied there too;
  * - unified: the filter alone over the unified folder shown (every account's inbox, sent, …),
- *   asked of each mail server.
+ *   asked of each mail server;
+ * - tag: a tag filter ("tag:{id}"), with or without words, read from the app's tag index for the
+ *   folder or unified folder shown.
  * With only a filter, polling keeps the results current (mergeFolderChanges, mergeUnifiedChanges).
  */
 export const searchState = reactive({
 	query: '',
 	scope: 'folder',
-	/** '', 'unread', 'flagged' or 'attachments' */
+	/** '', 'unread', 'flagged', 'attachments' or 'tag:{tagId}' */
 	filter: '',
 	active: false,
 	/** folder | cache | unified: where the shown results came from. */
@@ -58,6 +62,17 @@ function unifiedPath(before) {
 	return `/unified/${mailboxState.selected.unified}/filter?${params({ filter: searchState.filter, limit: PAGE_SIZE, before })}`
 }
 
+/** The tag of a tag filter, or null. */
+export function filterTag() {
+	return searchState.filter.startsWith('tag:') ? tagsState.list.find((t) => t.id === searchState.filter.slice(4)) ?? null : null
+}
+
+function tagPath(before) {
+	const { accountId, folderId, unified } = mailboxState.selected
+	const scope = unified ? { role: viewOf(unified)?.roles[0] } : { accountId, folderId }
+	return `/tags/${searchState.filter.slice(4)}/messages?${params({ ...scope, q: searchState.query.trim(), limit: PAGE_SIZE, before })}`
+}
+
 function folderHits(page) {
 	const { accountId, folderId } = mailboxState.selected
 	return page.messages.map((message) => ({ accountId, folderId, folderFullName: null, message }))
@@ -70,6 +85,10 @@ export function currentScope() {
 
 /** Whether a message passes the filter, for merging polled changes. */
 function passes(message) {
+	const tag = filterTag()
+	if (tag) {
+		return hasTag(message, tag)
+	}
 	return {
 		unread: !message.seen,
 		flagged: message.flagged,
@@ -84,7 +103,9 @@ export async function runSearch() {
 		return
 	}
 	const run = ++generation
-	const source = query && currentScope() === 'all' ? 'cache' : mailboxState.selected.unified ? 'unified' : 'folder'
+	const source = searchState.filter.startsWith('tag:')
+		? 'tag'
+		: query && currentScope() === 'all' ? 'cache' : mailboxState.selected.unified ? 'unified' : 'folder'
 	Object.assign(searchState, { active: true, source, loading: true, error: null, hits: [], total: 0, nextBefore: null, more: false })
 	try {
 		if (source === 'folder') {
@@ -92,8 +113,8 @@ export async function runSearch() {
 			if (run === generation) {
 				Object.assign(searchState, { hits: folderHits(page), total: page.total, nextBefore: page.nextBefore })
 			}
-		} else if (source === 'unified') {
-			const page = await apiGet(unifiedPath())
+		} else if (source === 'unified' || source === 'tag') {
+			const page = await apiGet(source === 'tag' ? tagPath() : unifiedPath())
 			if (run === generation) {
 				Object.assign(searchState, { hits: page.messages, total: page.total, nextBefore: page.nextBefore })
 			}
@@ -122,8 +143,8 @@ export async function searchMore() {
 	const run = generation
 	searchState.loadingMore = true
 	try {
-		if (searchState.source === 'unified') {
-			const page = await apiGet(unifiedPath(searchState.nextBefore))
+		if (searchState.source === 'unified' || searchState.source === 'tag') {
+			const page = await apiGet(searchState.source === 'tag' ? tagPath(searchState.nextBefore) : unifiedPath(searchState.nextBefore))
 			if (run === generation) {
 				searchState.hits.push(...page.messages)
 				searchState.nextBefore = page.nextBefore

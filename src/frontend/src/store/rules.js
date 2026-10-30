@@ -1,5 +1,6 @@
 import { t } from '@nextcloud/l10n'
 import { apiGet, apiSend } from '../api.js'
+import { tagsState } from './tags.js'
 
 /**
  * Mail rules, which the server runs on new INBOX mail (also while nobody has the app open).
@@ -94,9 +95,10 @@ function toInput(rule) {
 			op,
 			value: field === 'attachment' ? null : value,
 		})),
-		actions: rule.actions.map(({ type, folderId }) => ({
+		actions: rule.actions.map(({ type, folderId, tagId }) => ({
 			type,
 			folderId: type === 'move' || type === 'copy' ? folderId : null,
+			tagId: type === 'tag' ? tagId || null : null,
 		})),
 	}
 }
@@ -138,6 +140,7 @@ export const ACTIONS = [
 	{ id: 'markRead', label: t('sockless_mail', 'Mark as read') },
 	{ id: 'flag', label: t('sockless_mail', 'Flag') },
 	{ id: 'trash', label: t('sockless_mail', 'Move to Trash') },
+	{ id: 'tag', label: t('sockless_mail', 'Add tag') },
 ]
 
 /** The operators that fit a field. */
@@ -157,7 +160,7 @@ export function newRule() {
 		matchAll: true,
 		stop: false,
 		conditions: [newCondition()],
-		actions: [{ type: 'move', folderId: '' }],
+		actions: [{ type: 'move', folderId: '', tagId: '' }],
 	}
 }
 
@@ -179,6 +182,9 @@ export function describeRule(rule, folderName) {
 	}
 	const action = (a) => {
 		const label = ACTIONS.find((x) => x.id === a.type)?.label ?? a.type
+		if (a.type === 'tag') {
+			return `${label} ${tagsState.list.find((tag) => tag.id === a.tagId)?.name ?? t('sockless_mail', '(deleted tag)')}`
+		}
 		return a.folderId ? `${label} ${folderName(a.folderId)}` : label
 	}
 	const joiner = rule.matchAll ? t('sockless_mail', ' and ') : t('sockless_mail', ' or ')

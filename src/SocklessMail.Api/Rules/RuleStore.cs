@@ -44,6 +44,7 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
         var now = clock.GetUtcNow();
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var existing = await db.Rules.Where(r => r.AccountId == account.Id).ToDictionaryAsync(r => r.Id, ct);
+        await CheckTagsAsync(account, validated.Select(v => v.Actions).ToList(), existing.Values, ct);
         db.Rules.RemoveRange(existing.Values);
         await db.SaveChangesAsync(ct);
 
@@ -93,6 +94,28 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         return (await GetAsync(account, ct), cursor is { UidValidity: 0 } && anyEnabled);
+    }
+
+    /// <summary>
+    /// Tag actions must name one of the user's tags. A tag deleted after a rule was saved stays
+    /// accepted there (the rule reports it when it runs), so the list can still be reordered.
+    /// </summary>
+    private async Task CheckTagsAsync(MailAccount account, List<List<RuleAction>> actions, IEnumerable<MailRule> saved, CancellationToken ct)
+    {
+        var wanted = actions.SelectMany((list, i) => list.Select((a, j) => (a.TagId, Path: $"rules[{i}].actions[{j}].tagId")))
+            .Where(x => x.TagId is not null)
+            .ToList();
+        if (wanted.Count == 0)
+        {
+            return;
+        }
+
+        var known = (await db.Tags.Where(t => t.OwnerUserId == account.OwnerUserId).Select(t => t.Id).ToListAsync(ct)).ToHashSet();
+        known.UnionWith(saved.SelectMany(r => Compile(r).Actions).Select(a => a.TagId).OfType<Guid>());
+        if (wanted.FirstOrDefault(x => !known.Contains(x.TagId!.Value)) is { Path: not null } unknown)
+        {
+            throw new RuleValidationException(unknown.Path, "Choose a tag.");
+        }
     }
 
     /// <summary>The account's enabled rules in order, tracked (so errors can be recorded on them).</summary>
@@ -297,13 +320,21 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
                 }
             }
 
-            var duplicate = result.Any(a => a.Type == action.Type && (action.Type != RuleActionTypes.Copy || a.FolderId == folderId));
+            Guid? tagId = null;
+            if (action.Type == RuleActionTypes.Tag)
+            {
+                tagId = action.TagId ?? throw new RuleValidationException($"{at}.tagId", "Choose a tag.");
+            }
+
+            var duplicate = result.Any(a => a.Type == action.Type
+                                            && (action.Type != RuleActionTypes.Copy || a.FolderId == folderId)
+                                            && (action.Type != RuleActionTypes.Tag || a.TagId == tagId));
             if (duplicate)
             {
                 throw new RuleValidationException(at, "This action is already in the rule.");
             }
 
-            result.Add(new RuleAction(action.Type, folderId));
+            result.Add(new RuleAction(action.Type, folderId, tagId));
         }
 
         if (result.Count(a => a.Type is RuleActionTypes.Move or RuleActionTypes.Trash) > 1)

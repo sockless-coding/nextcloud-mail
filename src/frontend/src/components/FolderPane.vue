@@ -1,7 +1,7 @@
 <template>
 	<aside class="folder-pane" :aria-label="t('sockless_mail', 'Folders')">
 		<!-- All accounts: each special-use folder of every account as one, then the smart folders. -->
-		<template v-if="mailboxState.selected.unified">
+		<template v-if="unifiedPaneShown()">
 			<header class="folder-pane__account">
 				<NcIconSvgWrapper :path="mdiInboxMultipleOutline" :size="20" class="folder-pane__all-icon" />
 				<div class="folder-pane__account-text">
@@ -27,6 +27,11 @@
 							<span v-if="viewUnread(view.id)" class="folder-pane__count">{{ viewUnread(view.id) }}</span>
 						</button>
 					</div>
+				</li>
+			</ul>
+			<ul v-if="tagsState.list.length" class="folder-pane__group folder-pane__group--smart" :aria-label="t('sockless_mail', 'Tags')">
+				<li v-for="tag in tagsState.list" :key="tag.id">
+					<TagFolderRow :tag="tag" />
 				</li>
 			</ul>
 		</template>
@@ -99,6 +104,11 @@
 					:account-id="account.id"
 					:folder="folder" />
 			</ul>
+			<ul v-if="tagsState.list.length" class="folder-pane__group folder-pane__group--smart" :aria-label="t('sockless_mail', 'Tags')">
+				<li v-for="tag in tagsState.list" :key="tag.id">
+					<TagFolderRow :tag="tag" :account-id="account.id" />
+				</li>
+			</ul>
 		</template>
 	</aside>
 </template>
@@ -115,8 +125,10 @@ import { accountColor, accountsState } from '../store/accounts.js'
 import { dialogs } from '../store/actions.js'
 import { loadFolders, mailboxState } from '../store/mailbox.js'
 import { currentAccount, moveAccountBy, newFolder, openUnified } from '../store/navigation.js'
-import { availableViews, viewUnread } from '../store/unified.js'
+import { tagsState } from '../store/tags.js'
+import { availableViews, unifiedPaneShown, viewUnread } from '../store/unified.js'
 import FolderItem from './FolderItem.vue'
+import TagFolderRow from './TagFolderRow.vue'
 
 const EMPTY_FOLDERS = { list: [], loading: false, error: null }
 

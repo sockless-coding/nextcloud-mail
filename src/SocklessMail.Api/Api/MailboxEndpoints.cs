@@ -6,7 +6,9 @@ using SocklessMail.Api.Accounts;
 using SocklessMail.Api.AppApi;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Mailbox;
+using SocklessMail.Api.OAuth;
 using SocklessMail.Api.Sync;
+using SocklessMail.Api.Tags;
 
 namespace SocklessMail.Api.Api;
 
@@ -119,6 +121,13 @@ public static class MailboxEndpoints
                 ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
             await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
                 ? Results.Ok(new { updated = await mailbox.SetFlagsAsync(a, folderId, input, ct) })
+                : NotFound());
+
+        account.MapPut("/folders/{folderId}/messages/tags", async (
+                Guid accountId, string folderId, TagChangeInput input,
+                ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
+            await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
+                ? Results.Ok(await mailbox.SetTagsAsync(a, folderId, input, ct))
                 : NotFound());
 
         account.MapPost("/folders/{folderId}/messages/move", async (
@@ -253,6 +262,14 @@ public static class MailboxEndpoints
             catch (MailConnectionException e)
             {
                 return Results.Json(new { error = e.Code, message = e.Message }, statusCode: StatusCodes.Status502BadGateway);
+            }
+            catch (GraphConsentRequiredException e)
+            {
+                return Results.Json(new { error = "graph_consent_required", message = e.Message }, statusCode: StatusCodes.Status409Conflict);
+            }
+            catch (GraphUnavailableException e)
+            {
+                return Results.Json(new { error = "graph_unavailable", message = e.Message }, statusCode: StatusCodes.Status502BadGateway);
             }
             catch (Exception e) when (e is ImapCommandException or FolderNotFoundException or MessageNotFoundException)
             {

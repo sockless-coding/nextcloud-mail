@@ -23,6 +23,26 @@
 				@click="setFilter(option.value)">
 				{{ option.label }}
 			</button>
+			<NcActions v-if="tagsState.list.length"
+				class="message-list__tag-filter"
+				:class="{ 'message-list__tag-filter--active': filterTag() }"
+				:aria-label="t('sockless_mail', 'Show messages with a tag')"
+				:menu-name="filterTag()?.name ?? t('sockless_mail', 'Tag')"
+				variant="tertiary">
+				<template #icon>
+					<span v-if="filterTag()" class="message-list__tag-dot" :style="{ background: filterTag().color }" />
+					<NcIconSvgWrapper v-else :path="mdiTagOutline" :size="16" />
+				</template>
+				<NcActionButton v-for="tag in tagsState.list"
+					:key="tag.id"
+					close-after-click
+					@click="setFilter(`tag:${tag.id}`)">
+					<template #icon>
+						<span class="message-list__tag-dot" :style="{ background: tag.color }" />
+					</template>
+					{{ tag.name }}
+				</NcActionButton>
+			</NcActions>
 		</div>
 		<div v-if="selection.mode || selection.rows.length" class="message-list__selection">
 			<span class="message-list__selection-count" aria-live="polite">
@@ -114,6 +134,7 @@
 							<NcIconSvgWrapper v-if="row.message.answered" :path="mdiReply" :size="16" :name="t('sockless_mail', 'Answered')" />
 							<NcIconSvgWrapper v-if="row.message.hasAttachments" :path="mdiPaperclip" :size="16" :name="t('sockless_mail', 'Has attachments')" />
 							<span class="message-row__subject-text">{{ subjectOf(row.message) }}</span>
+							<TagChips :tags="tagsOf(row.message)" :max="3" small />
 						</span>
 						<span v-if="row.location || row.message.preview" class="message-row__preview">
 							<span v-if="row.location" class="message-row__location">{{ row.location }}</span>
@@ -168,8 +189,10 @@
 </template>
 
 <script setup>
-import { mdiCheck, mdiCheckboxMultipleMarkedCircleOutline, mdiDeleteOutline, mdiDotsHorizontal, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiMagnify, mdiPaperclip, mdiReply, mdiShieldAlertOutline } from '@mdi/js'
+import { mdiCheck, mdiCheckboxMultipleMarkedCircleOutline, mdiDeleteOutline, mdiDotsHorizontal, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiMagnify, mdiPaperclip, mdiReply, mdiShieldAlertOutline, mdiTagOutline } from '@mdi/js'
 import { getCanonicalLocale, getFirstDay, n, t } from '@nextcloud/l10n'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActions from '@nextcloud/vue/components/NcActions'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
@@ -182,11 +205,13 @@ import { accountColor, accountsState } from '../store/accounts.js'
 import { remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { layout, readingPane } from '../store/layout.js'
 import { loadMore, mailboxState, openMessage } from '../store/mailbox.js'
-import { searchMore, searchState as search, setFilter } from '../store/search.js'
+import { filterTag, searchMore, searchState as search, setFilter } from '../store/search.js'
 import { checkSenders, listWarning, reasonText, warningTitle } from '../store/senders.js'
 import { clearSelection, endSelectionMode, extendSelection, isSelected, pruneSelection, selectRange, selection, toggleRow } from '../store/selection.js'
+import { tagsOf, tagsState } from '../store/tags.js'
 import { loadMoreUnified, unifiedState as unified, viewOf } from '../store/unified.js'
 import MessageMenu from './MessageMenu.vue'
+import TagChips from './TagChips.vue'
 
 const FILTERS = [
 	{ value: '', label: t('sockless_mail', 'All') },
@@ -230,8 +255,8 @@ const rows = computed(() => {
 		}))
 	}
 	if (unifiedShown.value) {
-		// Flagged spans several folders of each account: say which.
-		const where = unifiedView.value?.roles.length > 1 ? location : (h) => accountName(h.accountId)
+		// Flagged and tag folders span several folders of each account: say which.
+		const where = unifiedView.value?.roles.length > 1 || unifiedView.value?.tagId ? location : (h) => accountName(h.accountId)
 		return unified.list.map((h) => ({ ...h, key: hitKey(h), location: where(h) }))
 	}
 	const { accountId, folderId } = mailboxState.selected
@@ -277,11 +302,17 @@ const emptyText = computed(() => {
 		return t('sockless_mail', 'No messages found')
 	}
 	if (search.active) {
+		if (filterTag()) {
+			return t('sockless_mail', 'No messages tagged {tag}', { tag: filterTag().name })
+		}
 		return {
 			unread: t('sockless_mail', 'No unread messages'),
 			flagged: t('sockless_mail', 'No flagged messages'),
 			attachments: t('sockless_mail', 'No messages with attachments'),
 		}[search.filter]
+	}
+	if (unifiedView.value?.tagId) {
+		return t('sockless_mail', 'No messages tagged {tag}', { tag: unifiedView.value.name })
 	}
 	if (unifiedShown.value) {
 		return {
@@ -730,6 +761,32 @@ onBeforeUnmount(() => observer?.disconnect())
 	background: var(--color-primary-element-light);
 	color: var(--color-primary-element-light-text);
 	font-weight: 600;
+}
+
+/* The tag menu's trigger as one more chip. */
+.message-list__tag-filter :deep(.button-vue) {
+	min-height: 0;
+	height: 26px;
+	padding: 0 10px 0 4px;
+	border: 1px solid var(--color-border-dark, var(--color-border));
+	border-radius: 13px;
+	color: var(--color-text-maxcontrast);
+	font-size: 13px;
+	font-weight: normal;
+}
+
+.message-list__tag-filter--active :deep(.button-vue) {
+	border-color: transparent;
+	background: var(--color-primary-element-light);
+	color: var(--color-primary-element-light-text);
+	font-weight: 600;
+}
+
+.message-list__tag-dot {
+	display: inline-block;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
 }
 
 .message-list__hint {

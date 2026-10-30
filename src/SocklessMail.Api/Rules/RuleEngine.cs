@@ -4,11 +4,13 @@ using MailKit.Search;
 using Microsoft.EntityFrameworkCore;
 using MimeKit;
 using SocklessMail.Api.Accounts;
+using SocklessMail.Api.Bimi;
 using SocklessMail.Api.Data;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Mailbox;
 using SocklessMail.Api.OAuth;
 using SocklessMail.Api.Sync;
+using SocklessMail.Api.Tags;
 
 namespace SocklessMail.Api.Rules;
 
@@ -20,7 +22,7 @@ namespace SocklessMail.Api.Rules;
 /// connections, on the other hand, propagate and leave the cursor where it was.
 /// </summary>
 public sealed class RuleEngine(
-    MailDbContext db, RuleStore store, FolderCache cache, MailPush push, ImapConnections imap, MailLogins logins,
+    MailDbContext db, RuleStore store, FolderCache cache, TagIndex tags, OutlookCategories outlook, MailPush push, ImapConnections imap, MailLogins logins,
     SyncLocks syncLocks, TimeProvider clock, ILogger<RuleEngine> logger)
 {
     /// <summary>New messages handled per run; the rest wait for the next one.</summary>
@@ -111,7 +113,7 @@ public sealed class RuleEngine(
             }
         }
 
-        var changed = await ExecuteAsync(client, inbox, plan, ct);
+        var changed = await ExecuteAsync(client, account, inbox, plan, ct);
         cursor.LastUid = fresh[^1].Id;
         cursor.UpdatedAt = clock.GetUtcNow();
         await db.SaveChangesAsync(ct);
@@ -215,7 +217,7 @@ public sealed class RuleEngine(
                     }
                 }
 
-                await ExecuteAsync(client, folder, plan, token);
+                await ExecuteAsync(client, account, folder, plan, token);
                 return folder.UidValidity;
             }, ct, retry: false);
 
@@ -231,6 +233,11 @@ public sealed class RuleEngine(
                 if (plan.Flagged.Count > 0)
                 {
                     await cache.ApplyFlagsAsync(account.Id, fullName, uidValidity, plan.Flagged, null, true, CancellationToken.None);
+                }
+
+                if (plan.Keywords.Count > 0)
+                {
+                    await cache.ApplyKeywordsAsync(account.Id, fullName, uidValidity, plan.Keywords, CancellationToken.None);
                 }
 
                 if (plan.Moved.Count > 0)
@@ -358,6 +365,7 @@ public sealed class RuleEngine(
             foreach (var action in rule.Actions)
             {
                 plan.Add(rule, action, summary.UniqueId);
+                plan.Summaries[summary.UniqueId.Id] = summary;
             }
 
             if (rule.Rule.Stop || rule.Actions.Any(a => a.Type is RuleActionTypes.Move or RuleActionTypes.Trash))
@@ -373,21 +381,26 @@ public sealed class RuleEngine(
     }
 
     /// <summary>
-    /// Flags first (so moved messages carry them), then copies, then moves. Moving or copying a
-    /// message into its own folder (a rule run on that folder) does nothing.
+    /// Flags and tags first (so moved messages carry them), then copies, then moves. Moving or
+    /// copying a message into its own folder (a rule run on that folder) does nothing. The tag
+    /// index follows moved messages, as after the user's own moves.
     /// </summary>
-    private async Task<bool> ExecuteAsync(ImapClient client, IMailFolder source, Plan plan, CancellationToken ct)
+    private async Task<bool> ExecuteAsync(ImapClient client, MailAccount account, IMailFolder source, Plan plan, CancellationToken ct)
     {
         var changed = false;
         var folders = new Dictionary<string, IMailFolder?>();
+        var sourceKey = FolderCache.Key(source.FullName);
+        var keywords = plan.Steps.Keys.Any(k => k.Type == RuleActionTypes.Tag)
+            ? await db.Tags.Where(t => t.OwnerUserId == account.OwnerUserId).ToDictionaryAsync(t => t.Id, t => t.Keyword, ct)
+            : [];
         foreach (var step in plan.Steps.OrderBy(s => s.Key.Type switch
                  {
-                     RuleActionTypes.MarkRead or RuleActionTypes.Flag => 0,
+                     RuleActionTypes.MarkRead or RuleActionTypes.Flag or RuleActionTypes.Tag => 0,
                      RuleActionTypes.Copy => 1,
                      _ => 2,
                  }))
         {
-            var (rule, type, folderId) = step.Key;
+            var (rule, type, folderId, tagId) = step.Key;
             var uids = step.Value;
             try
             {
@@ -398,6 +411,11 @@ public sealed class RuleEngine(
                         var flag = type == RuleActionTypes.MarkRead ? MessageFlags.Seen : MessageFlags.Flagged;
                         await source.StoreAsync(uids, new StoreFlagsRequest(StoreAction.Add, flag) { Silent = true }, ct);
                         (flag == MessageFlags.Seen ? plan.Seen : plan.Flagged).UnionWith(uids.Select(u => u.Id));
+                        break;
+                    case RuleActionTypes.Tag:
+                        var keyword = keywords.GetValueOrDefault(tagId ?? Guid.Empty)
+                                      ?? throw new RuleActionException("The rule's tag was deleted. Choose another tag.");
+                        await TagAsync(account, source, uids, keyword, plan, ct);
                         break;
                     case RuleActionTypes.Copy:
                         var copyTarget = await TargetAsync(client, folders, folderId!, ct);
@@ -420,7 +438,9 @@ public sealed class RuleEngine(
                         }
 
                         // MOVE where supported; MailKit falls back to COPY + \Deleted + (UID) EXPUNGE.
-                        await source.MoveToAsync(uids, moveTarget, ct);
+                        var map = await source.MoveToAsync(uids, moveTarget, ct);
+                        await tags.MoveAsync(account.Id, sourceKey, source.UidValidity, uids.Select(u => u.Id).ToList(),
+                            FolderCache.Key(moveTarget.FullName), map, ct);
                         plan.Moved.UnionWith(uids.Select(u => u.Id));
                         plan.Targets.Add(FolderCache.Key(moveTarget.FullName));
                         break;
@@ -439,7 +459,105 @@ public sealed class RuleEngine(
             }
         }
 
+        await RecordTagsAsync(account, source, plan, ct);
         return changed;
+    }
+
+    /// <summary>
+    /// Adds a tag's keyword: as an Outlook category (and in the tag index) for Microsoft accounts
+    /// with Graph, on the server where it keeps keywords (the account's first tag decides, as for
+    /// the user's own tagging), in the tag index otherwise.
+    /// </summary>
+    private async Task TagAsync(MailAccount account, IMailFolder source, IList<UniqueId> uids, string keyword, Plan plan, CancellationToken ct)
+    {
+        TagStorage storage;
+        try
+        {
+            storage = await outlook.DecideAsync(account, ct);
+        }
+        catch (Exception e) when (e is GraphUnavailableException or GraphConsentRequiredException)
+        {
+            throw new RuleActionException(e.Message);
+        }
+
+        var onServer = !storage.IsAppKept() && MailboxService.AcceptsKeywords(source, [keyword]);
+        if (!onServer && storage == TagStorage.Keywords)
+        {
+            throw new RuleActionException("This folder cannot keep tags.");
+        }
+
+        if (storage == TagStorage.Unknown)
+        {
+            await tags.SetStorageAsync(account.Id, onServer ? TagStorage.Keywords : TagStorage.Local, ct);
+        }
+
+        if (onServer)
+        {
+            await source.StoreAsync(uids, new StoreFlagsRequest(StoreAction.Add, [keyword]) { Silent = true }, ct);
+        }
+        else
+        {
+            // Recorded before any move, so the index row follows the message.
+            var key = FolderCache.Key(source.FullName);
+            var current = await tags.KeywordsAsync(account.Id, key, source.UidValidity, uids.Select(u => u.Id).ToList(), ct);
+            if (storage == TagStorage.Graph)
+            {
+                try
+                {
+                    await outlook.ApplyAsync(account,
+                        uids.Select(u => TagIndex.MessageIdOf(plan.Summaries[u.Id].Envelope?.MessageId)).OfType<string>(), [keyword], [], ct);
+                }
+                catch (Exception e) when (e is GraphUnavailableException or GraphConsentRequiredException)
+                {
+                    throw new RuleActionException(e.Message);
+                }
+            }
+
+            await tags.RecordAsync(account, key, source.UidValidity,
+                uids.Select(u => (plan.Summaries[u.Id], Keywords.Change(current.GetValueOrDefault(u.Id), [keyword], []), (BimiDto?)null)), ct);
+        }
+
+        plan.Tagged.UnionWith(uids.Select(u => u.Id));
+    }
+
+    /// <summary>
+    /// The keywords of tagged messages still in the folder, for its cache (<see cref="Plan.Keywords"/>)
+    /// and, where the server keeps them, the tag index. Mail that moved is found there by the
+    /// target folder's sync.
+    /// </summary>
+    private async Task RecordTagsAsync(MailAccount account, IMailFolder source, Plan plan, CancellationToken ct)
+    {
+        var stayed = plan.Tagged.Where(u => !plan.Moved.Contains(u)).Select(u => new UniqueId(source.UidValidity, u)).ToList();
+        if (stayed.Count == 0)
+        {
+            return;
+        }
+
+        var key = FolderCache.Key(source.FullName);
+        try
+        {
+            if ((await tags.StorageAsync(account.Id, ct)).IsAppKept())
+            {
+                foreach (var (uid, keywords) in await tags.KeywordsAsync(account.Id, key, source.UidValidity, stayed.Select(u => u.Id).ToList(), ct))
+                {
+                    plan.Keywords[uid] = keywords;
+                }
+
+                return;
+            }
+
+            var summaries = await source.FetchAsync(stayed, FolderCache.ListRequest(), ct);
+            await tags.RecordAsync(account, key, source.UidValidity, summaries.Select(s => (s, Keywords.Format(s.Keywords), (BimiDto?)null)), ct);
+            foreach (var summary in summaries)
+            {
+                plan.Keywords[summary.UniqueId.Id] = Keywords.Format(summary.Keywords);
+            }
+        }
+        catch (Exception e) when (e is ImapCommandException or DbUpdateException)
+        {
+            // The tags are set; the next sync or scan brings the cache and index up to date.
+            logger.LogInformation("Recording rule tags of account {AccountId} failed ({ExceptionType})", account.Id, e.GetType().Name);
+        }
     }
 
     private static async Task<IMailFolder> TargetAsync(
@@ -466,7 +584,15 @@ public sealed class RuleEngine(
 
     private sealed class Plan
     {
-        public readonly Dictionary<(CompiledRule Rule, string Type, string? FolderId), List<UniqueId>> Steps = [];
+        public readonly Dictionary<(CompiledRule Rule, string Type, string? FolderId, Guid? TagId), List<UniqueId>> Steps = [];
+
+        /// <summary>The fetched messages the steps act on, by UID (tags kept by the app need their envelope).</summary>
+        public readonly Dictionary<uint, IMessageSummary> Summaries = [];
+
+        public readonly HashSet<uint> Tagged = [];
+
+        /// <summary>Keywords of tagged messages that stayed, for the source folder's cache.</summary>
+        public readonly Dictionary<uint, string> Keywords = [];
 
         /// <summary>Folders (cache keys) that received messages, for nudging open tabs.</summary>
         public readonly HashSet<string> Targets = [];
@@ -482,7 +608,7 @@ public sealed class RuleEngine(
 
         public void Add(CompiledRule rule, RuleAction action, UniqueId uid)
         {
-            var key = (rule, action.Type, action.FolderId);
+            var key = (rule, action.Type, action.FolderId, action.TagId);
             if (!Steps.TryGetValue(key, out var uids))
             {
                 Steps[key] = uids = [];

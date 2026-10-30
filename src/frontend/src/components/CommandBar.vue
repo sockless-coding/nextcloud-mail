@@ -48,6 +48,10 @@
 				<NcIconSvgWrapper :path="flag ? mdiFlagOutline : mdiFlag" :size="20" />
 				<span class="command__label">{{ t('sockless_mail', 'Flag') }}</span>
 			</button>
+			<button class="command" :disabled="!targets.length" @click="askTags(targets)">
+				<NcIconSvgWrapper :path="mdiTagOutline" :size="20" />
+				<span class="command__label">{{ t('sockless_mail', 'Tag') }}</span>
+			</button>
 		</div>
 
 		<form class="command-bar__search" role="search" @submit.prevent="runSearch">
@@ -123,6 +127,12 @@
 				{{ option.label }}
 			</NcActionRadio>
 			<NcActionSeparator />
+			<NcActionButton close-after-click @click="dialogs.tags = true">
+				<template #icon>
+					<NcIconSvgWrapper :path="mdiTagMultipleOutline" />
+				</template>
+				{{ t('sockless_mail', 'Tags') }}
+			</NcActionButton>
 			<NcActionButton close-after-click @click="dialogs.trustedSenders = true">
 				<template #icon>
 					<NcIconSvgWrapper :path="mdiShieldCheckOutline" />
@@ -140,7 +150,7 @@
 </template>
 
 <script setup>
-import { mdiArchiveArrowDownOutline, mdiClose, mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFolderMoveOutline, mdiKeyboardOutline, mdiMagnify, mdiMenu, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldCheckOutline, mdiViewSplitVertical } from '@mdi/js'
+import { mdiArchiveArrowDownOutline, mdiClose, mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFolderMoveOutline, mdiKeyboardOutline, mdiMagnify, mdiMenu, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldCheckOutline, mdiTagMultipleOutline, mdiTagOutline, mdiViewSplitVertical } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -152,7 +162,7 @@ import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { computed } from 'vue'
 import { accountsState } from '../store/accounts.js'
-import { askMoveRows, canMoveRows, dialogs, moveTo, removeRows, setFlaggedRows, setSeenRows } from '../store/actions.js'
+import { askMoveRows, askTags, canMoveRows, dialogs, moveTo, removeRows, setFlaggedRows, setSeenRows } from '../store/actions.js'
 import { composeNew, composeReply } from '../store/compose.js'
 import { folderPaneShown, layout, toggleFolderPane, viewport } from '../store/layout.js'
 import { mailboxState } from '../store/mailbox.js'

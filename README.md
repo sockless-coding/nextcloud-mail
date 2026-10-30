@@ -27,7 +27,9 @@ the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with
 > calendar and the answer to the organizer goes out from the mail account. Cancellations,
 > attendees' replies and .ics files update the calendar the same way. Senders whose domain
 > imitates a known one or was registered only recently get a warning, and links whose text shows
-> another domain than they lead to ask before opening.
+> another domain than they lead to ask before opening. Colored tags work across all accounts:
+> as IMAP keywords where the server keeps them, as Outlook categories for Microsoft accounts,
+> with a tag folder per tag (all accounts or one), a tag filter and a "Tag" action in rules.
 
 ## Layout
 
@@ -238,6 +240,17 @@ under HaRP (`…/index.php/apps/app_api/proxy/sockless_mail/oauth/callback` with
   and `SMTP.Send` (Office 365 Exchange Online) plus `offline_access`, `openid`, `email`,
   `profile`. Tenant: `common` (work and personal accounts), `organizations`, `consumers`, or your
   tenant id. SMTP AUTH must be enabled for the mailboxes in Exchange.
+
+  **Required for Microsoft accounts: Microsoft Graph.** Also add the delegated **Microsoft Graph**
+  permissions `Mail.ReadWrite` and `MailboxSettings.ReadWrite`. Exchange keeps no IMAP keywords,
+  so tags on Microsoft accounts are Outlook categories, set and read through Graph
+  (`Mail.ReadWrite` for the categories of messages, `MailboxSettings.ReadWrite` for the category
+  list and its colors). The sign-in asks the user to consent to them together with the mail
+  permissions; where the tenant does not let users consent, grant admin consent for the
+  organization in the app registration. If consent is refused, the sign-in fails, mail
+  included. Accounts signed in before these permissions were asked for keep working, with their
+  tags kept in Sockless Mail only, until the user signs in again in the account settings; their
+  tags are then copied to Outlook.
 
 Enter the client id and secret and save. Saving an empty client id turns the provider off;
 existing accounts then fail with `oauth_not_configured` until it is set up again.
@@ -481,6 +494,28 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
     the message's own account (delete in the unified Trash deletes for good, as in an account's
     Trash); reply and forward send from it, and a draft opens in the composer. Search in these
     views covers all accounts and folders.
+- **Tags** (`Tags/`) are the user's, shared by all accounts: a name, a color and the IMAP keyword
+  they are stored as (`$` and the name, kept when the tag is renamed, so tagged messages stay
+  tagged). Where an account keeps its tags is decided when it is first tagged:
+  - IMAP keywords on the server (most servers: PERMANENTFLAGS allows `\*`), which Thunderbird,
+    Nextcloud Mail and other programs see too. Keywords already on messages (Thunderbird's
+    `$label1`…`$label5`) are offered as tags to adopt.
+  - Outlook categories for Microsoft accounts signed in with the Graph permissions (see
+    "Signing in with Google and Microsoft"): a tag is the category of the same name, with the
+    nearest of Outlook's 25 colors. Changes go to Graph first; categories set in Outlook come in
+    with the tag scan. Renaming a tag replaces the category (Outlook cannot rename one).
+  - Kept by the app alone, for servers without keywords and Microsoft accounts without the
+    Graph consent. Messages are followed by Message-ID when they move.
+
+  The **tag index** (`tagged_messages`) holds every tagged message the app knows of, with the
+  fields a list shows, so tag folders and the tag filter are read from the database and open at
+  once. It is kept current by the app's own changes, folder syncs and a **tag scan** (every 10
+  minutes for users with tags, soon after a tag is created, and when a tag folder is opened more
+  than 5 minutes after the last one): it searches each folder for the tag keywords (skipping
+  folders whose `HIGHESTMODSEQ` did not move), reads Outlook's categories, and looks for moved
+  messages by Message-ID. Tag folders leave out Trash, Junk and Drafts and show a message that
+  is in several folders (Gmail labels) once. Rules can add tags; the tag is set before a rule's
+  move, so it travels with the message.
 - **IDLE watchers** keep the INBOX cache current without any request:
   - Only accounts of users who used the app in the last 10 minutes are watched, at most 50
     accounts in total. A user's first request starts their watchers at once.
@@ -860,6 +895,11 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
   option yet.
 - Nextcloud installs translations only from app store release archives, so the UI is English
   until the app is published there.
+- Tags: a copy a rule makes (Copy to folder) carries no tag on accounts whose tags the app
+  keeps. Messages without a Message-ID cannot be followed when another program moves them, and
+  cannot carry Outlook categories. Tagged messages that were deleted elsewhere drop out of tag
+  folders with the next scan (a week later for app-kept tags). Outlook categories are matched by
+  name, so a category renamed in Outlook is a different tag.
 
 ## License
 
