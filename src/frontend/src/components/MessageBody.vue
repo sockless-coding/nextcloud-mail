@@ -20,12 +20,17 @@ import { apiUrl } from '../store/mailbox.js'
  * iframe sandbox has no allow-scripts, so even markup the sanitizer missed cannot run code;
  * allow-same-origin only lets this component measure the content height and recolour it for a
  * dark theme. The document inherits Nextcloud's CSP, which also blocks remote loads.
+ *
+ * Links the server marked as showing another domain than they lead to get a marker and a tooltip;
+ * clicking one emits deceptive-link ({ href, shows, leads }) instead of opening it.
  */
 const props = defineProps({
 	html: { type: String, required: true },
 	/** Keep the colours as sent (a white page) even when the theme is dark. */
 	original: { type: Boolean, default: false },
 })
+
+const emit = defineEmits(['deceptive-link'])
 
 const frame = ref(null)
 const colors = pageColors()
@@ -51,6 +56,7 @@ const BASE_STYLE = `
 	html, body { margin: 0; padding: 0; }
 	body { font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding: 8px; overflow-wrap: anywhere; }
 	img { max-width: 100%; height: auto; }
+	a[data-sockless-link-leads]::after { content: " \\26A0\\FE0E"; color: #c9302c; text-decoration: none; display: inline-block; margin-inline-start: 2px; }
 	pre { white-space: pre-wrap; }
 	blockquote { margin: 0 0 0 8px; padding-left: 8px; border-left: 2px solid; }
 `
@@ -61,6 +67,12 @@ const srcdoc = computed(() => {
 	for (const element of doc.querySelectorAll('[data-sockless-src]')) {
 		element.setAttribute('src', apiUrl(element.getAttribute('data-sockless-src')))
 		element.removeAttribute('data-sockless-src')
+	}
+	for (const link of doc.querySelectorAll('[data-sockless-link-leads]')) {
+		link.setAttribute('title', t('sockless_mail', 'Shows {shown} but leads to {host}', {
+			shown: link.getAttribute('data-sockless-link-shows'),
+			host: link.getAttribute('data-sockless-link-leads'),
+		}))
 	}
 	const base = doc.createElement('base')
 	base.setAttribute('target', '_blank')
@@ -84,6 +96,9 @@ function prepare() {
 		if (darkened.value) {
 			adaptToDark(doc, colors.rgb)
 		}
+		doc.addEventListener('click', interceptDeceptive)
+		// Middle click opens a tab without a click event.
+		doc.addEventListener('auxclick', interceptDeceptive)
 		watchHeight(doc)
 		shown.value = true
 	}
@@ -98,6 +113,20 @@ onMounted(() => {
 	}
 	check()
 })
+
+function interceptDeceptive(event) {
+	// Not instanceof Element: the frame's nodes come from its own window.
+	const link = typeof event.target?.closest === 'function' ? event.target.closest('a[data-sockless-link-leads]') : null
+	if (!link || (event.type === 'auxclick' && event.button !== 1)) {
+		return
+	}
+	event.preventDefault()
+	emit('deceptive-link', {
+		href: link.href,
+		shows: link.getAttribute('data-sockless-link-shows'),
+		leads: link.getAttribute('data-sockless-link-leads'),
+	})
+}
 
 function watchHeight(doc) {
 	observer?.disconnect()

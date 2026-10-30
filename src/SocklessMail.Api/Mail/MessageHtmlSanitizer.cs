@@ -2,10 +2,12 @@ using System.Text.RegularExpressions;
 using AngleSharp.Css.Dom;
 using AngleSharp.Dom;
 using Ganss.Xss;
+using SocklessMail.Api.Senders;
 
 namespace SocklessMail.Api.Mail;
 
-public sealed record SanitizedHtml(string Html, bool HasRemoteContent);
+/// <param name="LinkMismatches">Links whose text shows another domain than they lead to (<see cref="LinkText"/>), each once.</param>
+public sealed record SanitizedHtml(string Html, bool HasRemoteContent, IReadOnlyList<LinkMismatch> LinkMismatches);
 
 /// <summary>
 /// Makes message HTML safe to display. First line of defence; the browser shows the result in
@@ -19,7 +21,9 @@ public sealed record SanitizedHtml(string Html, bool HasRemoteContent);
 /// <see cref="SanitizedHtml.HasRemoteContent"/> is set so the UI can offer to load them.</item>
 /// <item>cid: references to inline parts become links to the message part.</item>
 /// <item>Links (and image map areas) keep only http(s) and mailto targets and open in a new tab
-/// without access to the opener.</item>
+/// without access to the opener. A link whose text shows another domain than it leads to gets
+/// <c>data-sockless-link-shows</c> and <c>data-sockless-link-leads</c> (data attributes in the
+/// message itself are removed, so these are always ours); the frontend asks before opening it.</item>
 /// </list>
 /// Rewritten image sources are API-relative paths in <c>data-sockless-src</c>; the frontend turns
 /// them into URLs, since only it knows whether the API is reached through HaRP or the PHP proxy.
@@ -27,6 +31,8 @@ public sealed record SanitizedHtml(string Html, bool HasRemoteContent);
 public static partial class MessageHtmlSanitizer
 {
     public const string SourceAttribute = "data-sockless-src";
+    public const string LinkShowsAttribute = "data-sockless-link-shows";
+    public const string LinkLeadsAttribute = "data-sockless-link-leads";
 
     private static readonly string[] RemovedTags =
         ["form", "input", "button", "select", "textarea", "option", "optgroup", "fieldset", "legend", "label", "datalist", "output"];
@@ -43,6 +49,7 @@ public static partial class MessageHtmlSanitizer
     public static SanitizedHtml Sanitize(string html, Func<string, string?> resolveContentId, Func<string, string>? proxyRemote)
     {
         var hasRemote = false;
+        var mismatches = new List<LinkMismatch>();
         var sanitizer = new HtmlSanitizer();
         foreach (var tag in RemovedTags)
         {
@@ -62,15 +69,16 @@ public static partial class MessageHtmlSanitizer
         {
             foreach (var element in e.Document.All.ToList())
             {
-                RewriteElement(element, resolveContentId, proxyRemote, ref hasRemote);
+                RewriteElement(element, resolveContentId, proxyRemote, mismatches, ref hasRemote);
             }
         };
 
         var result = sanitizer.SanitizeDocument(html);
-        return new SanitizedHtml(result, hasRemote);
+        return new SanitizedHtml(result, hasRemote, mismatches.Distinct().ToList());
     }
 
-    private static void RewriteElement(IElement element, Func<string, string?> resolveContentId, Func<string, string>? proxyRemote, ref bool hasRemote)
+    private static void RewriteElement(
+        IElement element, Func<string, string?> resolveContentId, Func<string, string>? proxyRemote, List<LinkMismatch> mismatches, ref bool hasRemote)
     {
         switch (element.LocalName)
         {
@@ -80,7 +88,7 @@ public static partial class MessageHtmlSanitizer
                 break;
             // Image map areas are links too, and data: is an allowed scheme for images.
             case "a" or "area":
-                RewriteLink(element);
+                RewriteLink(element, mismatches);
                 break;
             case "style":
                 element.TextContent = RewriteCssUrls(element.TextContent, ref hasRemote);
@@ -129,12 +137,18 @@ public static partial class MessageHtmlSanitizer
         }
     }
 
-    private static void RewriteLink(IElement a)
+    private static void RewriteLink(IElement a, List<LinkMismatch> mismatches)
     {
         var href = a.GetAttribute("href")?.Trim();
         if (href is not null && !(IsRemote(href) || href.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)))
         {
             a.RemoveAttribute("href");
+        }
+        else if (href is not null && IsRemote(href) && LinkText.Compare(a.TextContent, href) is { } mismatch)
+        {
+            a.SetAttribute(LinkShowsAttribute, mismatch.Shown);
+            a.SetAttribute(LinkLeadsAttribute, mismatch.Host);
+            mismatches.Add(mismatch);
         }
 
         a.SetAttribute("target", "_blank");

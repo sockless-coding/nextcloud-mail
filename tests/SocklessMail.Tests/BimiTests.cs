@@ -304,9 +304,9 @@ public sealed class BimiEndpointTests : IDisposable
         _dns.Records["_dmarc.brand.example"] = ["v=DMARC1; p=none"];
         var client = _app.ClientAs("alice");
         var response = await client.GetAsync("/api/bimi/brand.example", Ct);
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.True(response.Headers.CacheControl is { Private: true, MaxAge.TotalHours: 1 });
-        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/bimi/brand.example", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.GetAsync("/api/bimi/brand.example", Ct)).StatusCode);
         Assert.Equal(1, _dns.Queries.Count(q => q == "_dmarc.brand.example"));
         Assert.Empty(_logos.Requests);
     }
@@ -317,7 +317,7 @@ public sealed class BimiEndpointTests : IDisposable
         // The registry of shop.example publishes a logo; customer.shop.example must not borrow it.
         _dns.Records["_dmarc.shop.example"] = ["v=DMARC1; p=reject; psd=y"];
         _dns.Records["default._bimi.shop.example"] = ["v=BIMI1; l=https://cdn.brand.example/logo.svg"];
-        Assert.Equal(HttpStatusCode.NotFound, (await _app.ClientAs("alice").GetAsync("/api/bimi/x.customer.shop.example", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await _app.ClientAs("alice").GetAsync("/api/bimi/x.customer.shop.example", Ct)).StatusCode);
         Assert.DoesNotContain("default._bimi.shop.example", _dns.Queries);
         Assert.Contains("default._bimi.customer.shop.example", _dns.Queries);
     }
@@ -326,11 +326,11 @@ public sealed class BimiEndpointTests : IDisposable
     public async Task RefusesUnsafeLogosAndPlainHttp()
     {
         _logos.Files["https://cdn.brand.example/logo.svg"] = """<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>""";
-        Assert.Equal(HttpStatusCode.NotFound, (await _app.ClientAs("alice").GetAsync("/api/bimi/brand.example", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await _app.ClientAs("alice").GetAsync("/api/bimi/brand.example", Ct)).StatusCode);
 
         _dns.Records["_dmarc.other.example"] = ["v=DMARC1; p=reject"];
         _dns.Records["default._bimi.other.example"] = ["v=BIMI1; l=http://cdn.brand.example/logo.svg"];
-        Assert.Equal(HttpStatusCode.NotFound, (await _app.ClientAs("alice").GetAsync("/api/bimi/other.example", Ct)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await _app.ClientAs("alice").GetAsync("/api/bimi/other.example", Ct)).StatusCode);
     }
 
     [Fact]

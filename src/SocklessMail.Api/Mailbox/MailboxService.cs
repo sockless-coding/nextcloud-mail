@@ -230,7 +230,7 @@ public sealed partial class MailboxService(
 
     public async Task<MessageDto> GetMessageAsync(MailAccount account, string folderId, string messageId, bool allowRemote, CancellationToken ct)
     {
-        var (message, dmarcFailed) = await Run(account, async (client, token) =>
+        var (message, dmarcFailed, links) = await Run(account, async (client, token) =>
         {
             var (folder, uid) = await OpenMessageAsync(client, folderId, messageId, token);
             // The view shows the text itself, not a preview of it.
@@ -275,10 +275,10 @@ public sealed partial class MailboxService(
                 LeafParts(summary.Body).Where(IsCalendarPart)
                     .Select(p => new CalendarPartDto(MailboxIds.PartId(p.PartSpecifier), p.ContentType.Parameters["method"]?.Trim().ToUpperInvariant()))
                     .ToArray(),
-                null), bimi.FailedDmarc(envelope.From, summary.Headers));
+                null), bimi.FailedDmarc(envelope.From, summary.Headers), sanitized.LinkMismatches);
         }, ct);
 
-        return message with { SenderWarning = await senderChecks.CheckMessageAsync(account.OwnerUserId, message.From, message.ReplyTo, dmarcFailed, ct) };
+        return message with { SenderWarning = await senderChecks.CheckMessageAsync(account.OwnerUserId, message.From, message.ReplyTo, dmarcFailed, links, ct) };
     }
 
     /// <summary>Calendar data travels as text/calendar (iMIP), sometimes as application/ics or just an .ics file.</summary>

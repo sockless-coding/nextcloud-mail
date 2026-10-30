@@ -638,7 +638,8 @@ three layers of defence:
    - `javascript:` and other unsafe URLs, and `data:` URLs except raster images
 
    It keeps `<style>` blocks, which are sanitized as CSS, so newsletters keep their layout. Links
-   open in a new tab with `rel="noopener noreferrer"`. Plain-text mail is converted to escaped
+   open in a new tab with `rel="noopener noreferrer"`; a link whose text shows another domain than
+   it leads to is marked (see "Suspicious senders"). Plain-text mail is converted to escaped
    HTML with clickable links.
 2. **A sandboxed iframe** without `allow-scripts`, so even markup the sanitizer missed cannot run
    code. `allow-same-origin` is set only so the page can size the frame to its content.
@@ -705,7 +706,7 @@ web content. One lookup per domain and selector is kept:
 | DNS or the logo server failed | 1 hour; a logo already known stays meanwhile |
 
 The browser loads logos from `/api/bimi/<domain>` and caches each answer: a logo for a day, a
-404 for an hour. A long list therefore costs one request per sender domain. The endpoint
+204 (no logo) for an hour. A long list therefore costs one request per sender domain. The endpoint
 serves the logo with the sandbox CSP and is rate-limited to 300 requests per minute per user.
 Users can turn logos off in the view menu ("Sender logos").
 
@@ -736,6 +737,8 @@ These are the checks:
 | Replies go to a look-alike (open message only) | Reply-To `billing@paypa1.com` | warning |
 | The domain was registered less than 30 days ago | (RDAP registration date) | warning |
 | … less than 7 days ago | | danger |
+| A link shows a domain the user knows but leads elsewhere (open message only) | `https://www.paypal.com` → `paypal.com.evil.top` | warning |
+| … to a look-alike of it | `https://www.paypal.com` → `paypa1.com` | danger |
 
 A different Reply-To domain is mentioned only along with another reason, because newsletters
 and ticket systems use one all the time. A domain the user knows, or any of its subdomains,
@@ -765,6 +768,20 @@ registries see which sender domains the instance receives mail from (not who rec
 admin can turn the lookups off under **Administration** → **Suspicious senders** ("Warn about
 newly registered sender domains", on by default; `GET`/`PUT /api/admin/settings`). Requests go
 through the same address policy as BIMI and image proxy fetches.
+
+**Deceptive links.** While sanitizing, the app compares each web link's visible text with its
+target (`Senders/LinkText.cs`). Only text that is itself an address counts: a web address, a
+domain name with `www.`, a usual ending (`.com`, `.net`, ..., any country) or an e-mail address.
+"Log in here" or a sentence that mentions a domain do not count. A link that stays on the shown
+registered domain or one of its subdomains is fine. Any other target is a mismatch, including a
+redirect service, an IP address, or `https://paypal.com@evil.top`. Mismatched links get
+`data-sockless-link-shows`/`-leads` attributes (the sanitizer strips every `data-*` attribute of
+the message itself, so a message cannot set them). The reader marks such links with ⚠ and a
+tooltip, and clicking one, middle click included, asks first and shows the whole address. The
+banner mentions a mismatch only when the shown domain is one the user knows (brand list, own
+accounts, contacts, correspondents) and the target is not known or trusted, at most 3 per message.
+Newsletters routinely send "shop.example" through a click tracker, so other mismatches only get
+the question on click.
 
 ### Connections to mail servers
 

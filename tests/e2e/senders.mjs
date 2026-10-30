@@ -1,5 +1,6 @@
 // Suspicious senders: the list icon and the reader banner for a look-alike domain, "Trust", the
-// trusted domains dialog and the setting that turns warnings off.
+// trusted domains dialog, the setting that turns warnings off, and links that show another domain
+// than they lead to (banner reason, marker, confirmation on click).
 // Needs: dev/dev.sh up, the app deployed, and an account for alice@example.test (node mail.mjs creates one).
 import { execSync } from 'node:child_process'
 import { check, messageRows, openAccount, start } from './lib.mjs'
@@ -7,11 +8,15 @@ import { check, messageRows, openAccount, start } from './lib.mjs'
 const suffix = Date.now().toString().slice(-6)
 const phish = `Your account is limited ${suffix}`
 const ordinary = `Lunch on Friday ${suffix}`
-const send = (from, subject) => execSync('curl -s --url smtp://127.0.0.1:3025 --mail-from senders@example.test --mail-rcpt alice@example.test --upload-file -',
-	{ input: `From: ${from}\r\nTo: alice@example.test\r\nSubject: ${subject}\r\n\r\nhello\r\n` })
+const linked = `Confirm your details ${suffix}`
+const send = (from, subject, body = 'hello', type = 'text/plain') => execSync('curl -s --url smtp://127.0.0.1:3025 --mail-from senders@example.test --mail-rcpt alice@example.test --upload-file -',
+	{ input: `From: ${from}\r\nTo: alice@example.test\r\nSubject: ${subject}\r\nMIME-Version: 1.0\r\nContent-Type: ${type}; charset=utf-8\r\n\r\n${body}\r\n` })
 // pаypal.com with a Cyrillic а, as it travels in a header.
 send('"PayPal" <service@xn--pypal-4ve.com>', phish)
 send('Petra <petra@example.org>', ordinary)
+send('News <news@example.org>', linked,
+	'<p><a href="https://paypal.com.evil.test/signin">https://www.paypal.com/signin</a></p><p><a href="https://example.org/news">example.org</a></p>',
+	'text/html')
 
 const { page, step, finish } = await start()
 const items = messageRows(page)
@@ -64,6 +69,33 @@ check(await page.locator('.message-view__address', { hasText: 'service@xn--pypal
 check(text.includes('xn--pypal-4ve.com'), 'with the domain in plain letters')
 await openRow(ordinary)
 check(await until(async () => await banner.count() === 0), 'no warning on the ordinary message')
+
+step('deceptive links')
+await openRow(linked)
+check(await until(async () => await banner.count() === 1), 'a link showing paypal.com that leads elsewhere warns')
+check((await banner.innerText()).includes('A link shows paypal.com but leads to paypal.com.evil.test.'), 'naming both domains')
+const body = page.frameLocator('.message-body')
+const deceptive = body.locator('a', { hasText: 'https://www.paypal.com/signin' })
+check(await deceptive.getAttribute('title') === 'Shows paypal.com but leads to paypal.com.evil.test', 'the link has a tooltip with its real destination')
+check(await body.locator('a', { hasText: /^example\.org$/ }).getAttribute('data-sockless-link-leads') === null, 'a link to the domain it shows is not marked')
+let popups = 0
+page.context().on('page', () => popups++)
+await deceptive.click()
+const confirm = page.getByRole('dialog', { name: 'This link leads somewhere else' })
+await confirm.waitFor()
+check((await confirm.innerText()).includes('https://paypal.com.evil.test/signin'), 'clicking it asks first, showing the whole address')
+await confirm.getByRole('button', { name: 'Cancel' }).click()
+check(await until(async () => await confirm.count() === 0), 'Cancel closes the question')
+check(popups === 0, 'and nothing was opened')
+await deceptive.click()
+await confirm.waitFor()
+// The made-up host never loads; the request shows where the tab went.
+const requested = page.context().waitForEvent('request', (request) => request.url().startsWith('https://paypal.com.evil.test/'))
+const opened = page.context().waitForEvent('page')
+await confirm.getByRole('button', { name: 'Open paypal.com.evil.test' }).click()
+const [request, tab] = await Promise.all([requested, opened])
+check(request.url() === 'https://paypal.com.evil.test/signin' && request.isNavigationRequest(), 'Open opens the real address in a new tab')
+await tab.close()
 
 step('trusting the domain')
 await openRow(phish)

@@ -163,8 +163,9 @@ public sealed class SenderChecks(
         return new Result(warnings, pending);
     }
 
-    /// <summary>The open message's verdict, Reply-To and DMARC result included (not remembered).</summary>
-    public async Task<SenderWarning?> CheckMessageAsync(string userId, AddressDto[] from, AddressDto[] replyTo, bool dmarcFailed, CancellationToken ct)
+    /// <summary>The open message's verdict, Reply-To, DMARC result and deceptive links included (not remembered).</summary>
+    public async Task<SenderWarning?> CheckMessageAsync(
+        string userId, AddressDto[] from, AddressDto[] replyTo, bool dmarcFailed, IReadOnlyList<LinkMismatch> links, CancellationToken ct)
     {
         if (from is not [var author, ..])
         {
@@ -180,7 +181,7 @@ public sealed class SenderChecks(
             (await domainAges.FindAsync([domain], ct))?.TryGetValue(domain, out age);
         }
 
-        return SenderChecker.Check(index, author.Name, author.Address, replyTo.FirstOrDefault()?.Address, dmarcFailed, domainAges.DaysOld(age));
+        return SenderChecker.Check(index, author.Name, author.Address, replyTo.FirstOrDefault()?.Address, dmarcFailed, domainAges.DaysOld(age), links);
     }
 
     /// <summary>The registered domain whose age matters: not for known or trusted senders (nor asked about them).</summary>

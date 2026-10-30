@@ -162,6 +162,12 @@ export async function distrustDomain(domain) {
  */
 export function reasonText(reason) {
 	const values = { domain: reason.domain, known: reason.looksLike }
+	if (reason.code === 'linkMismatch') {
+		return reason.detail === 'alphabet' || reason.detail === 'characters'
+			? t('sockless_mail', 'A link shows {known} but leads to {domain}, which imitates it.', values)
+			: t('sockless_mail', 'A link shows {known} but leads to {domain}.', values)
+	}
+
 	if (reason.field === 'replyTo') {
 		return t('sockless_mail', 'Replies would go to {domain}, which imitates {known}.', values)
 	}

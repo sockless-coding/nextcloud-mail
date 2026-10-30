@@ -122,6 +122,52 @@ public sealed class RdapTests
     }
 }
 
+public sealed class LinkTextTests
+{
+    [Theory]
+    [InlineData("https://www.paypal.com/signin?x=1", "paypal.com")]
+    [InlineData("http://paypal.com", "paypal.com")]
+    [InlineData("www.swedbank.se", "swedbank.se")]
+    [InlineData("PayPal.com", "paypal.com")]
+    [InlineData("  <paypal.com>.  ", "paypal.com")]
+    [InlineData("support@paypal.com", "paypal.com")]
+    [InlineData("mailto:support@paypal.com", "paypal.com")]
+    [InlineData("login.microsoftonline.com/common", "microsoftonline.com")]
+    [InlineData("bank.de", "bank.de")]
+    [InlineData("www.example.museum", "example.museum")]
+    public void Text_that_is_an_address(string text, string registered)
+    {
+        Assert.Equal(registered, LinkText.ShownDomain(text)?.Registered);
+    }
+
+    [Theory]
+    [InlineData("Log in")]
+    [InlineData("Visit paypal.com today")]
+    [InlineData("readme.txt")]
+    [InlineData("Version 2.1")]
+    [InlineData("1.2.3.4")]
+    [InlineData("example.museum")] // an unusual ending without www. or a scheme
+    [InlineData("")]
+    public void Text_that_is_not(string text)
+    {
+        Assert.Null(LinkText.ShownDomain(text));
+    }
+
+    [Theory]
+    [InlineData("paypal.com", "https://www.paypal.com/x", null)]
+    [InlineData("paypal.com", "https://email.paypal.com/c/123", null)]
+    [InlineData("www.paypal.com", "https://paypal.com.evil.top/", "paypal.com.evil.top")]
+    [InlineData("https://paypal.com", "https://paypal.com@evil.top/", "evil.top")]
+    [InlineData("paypal.com", "http://192.0.2.7/login", "192.0.2.7")]
+    [InlineData("paypal.com", "//evil.top/x", "evil.top")]
+    [InlineData("Click here", "https://evil.top/", null)]
+    [InlineData("paypal.com", "mailto:x@evil.top", null)]
+    public void Comparing_text_and_target(string text, string href, string? leads)
+    {
+        Assert.Equal(leads, LinkText.Compare(text, href)?.Host);
+    }
+}
+
 public sealed class SenderCheckerTests
 {
     private static readonly SenderIndex Index = new(
@@ -273,6 +319,26 @@ public sealed class SenderCheckerTests
         var warning = SenderChecker.Check(Index, null, "x@micorsoft.com", 12)!;
         Assert.Equal(["lookalike", "newDomain"], warning.Reasons.Select(r => r.Code));
         Assert.Equal("warning", warning.Level);
+    }
+
+    [Fact]
+    public void Links_that_show_a_known_domain_and_lead_elsewhere()
+    {
+        var warning = SenderChecker.Check(Index, null, "news@example.net", null, false, null,
+        [
+            new LinkMismatch("paypal.com", "evil.top"),
+            new LinkMismatch("paypal.com", "paypa1.com"),
+            new LinkMismatch("shop.example", "click.tracker.example"), // not a domain the user knows
+            new LinkMismatch("sockless.se", "trusted-partner.com"), // leads to a trusted domain
+        ])!;
+
+        Assert.Equal([("linkMismatch", "evil.top", null), ("linkMismatch", "paypa1.com", "characters")],
+            warning.Reasons.Select(r => (r.Code, r.Domain, r.Detail)));
+        Assert.All(warning.Reasons, r => Assert.Equal(("paypal.com", "link"), (r.LooksLike, r.Field)));
+        Assert.Equal("danger", warning.Level);
+
+        Assert.Equal("warning", SenderChecker.Check(Index, null, "news@example.net", null, false, null, [new LinkMismatch("paypal.com", "evil.top")])!.Level);
+        Assert.Null(SenderChecker.Check(Index, null, "news@example.net", null, false, null, [new LinkMismatch("shop.example", "evil.top")]));
     }
 
     [Fact]

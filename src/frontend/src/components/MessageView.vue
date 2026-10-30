@@ -224,7 +224,10 @@
 			</section>
 
 			<div class="message-view__body" :class="{ 'message-view__body--paper': darkTheme && original }">
-				<MessageBody :key="`${message.id}/${message.remoteContentAllowed}/${original}`" :html="message.html" :original="original" />
+				<MessageBody :key="`${message.id}/${message.remoteContentAllowed}/${original}`"
+					:html="message.html"
+					:original="original"
+					@deceptive-link="askDeceptiveLink" />
 			</div>
 
 			<MessageSourceDialog v-if="rawView"
@@ -233,6 +236,10 @@
 				:subject="message.subject"
 				:kind="rawView"
 				@close="rawView = null" />
+			<DeceptiveLinkDialog v-if="deceptiveLink"
+				:key="deceptiveLink.id"
+				:link="deceptiveLink"
+				@close="(id) => deceptiveLink?.id === id && (deceptiveLink = null)" />
 		</article>
 	</div>
 </template>
@@ -263,6 +270,7 @@ import { formatFileSize } from '../fileSize.js'
 import { messageWarning, reasonText, trustDomain, warningTitle } from '../store/senders.js'
 import { pageColors } from '../mailColors.js'
 import { closeMessage, emlUrl, mailboxState, openMessage, partUrl } from '../store/mailbox.js'
+import DeceptiveLinkDialog from './DeceptiveLinkDialog.vue'
 import InvitationCard from './InvitationCard.vue'
 import MessageBody from './MessageBody.vue'
 import MessageSourceDialog from './MessageSourceDialog.vue'
@@ -279,6 +287,14 @@ const where = computed(() => ({ accountId: open.accountId, folderId: open.folder
 const message = computed(() => open.message)
 const warning = computed(() => messageWarning(message.value))
 const trusting = ref(false)
+/** A clicked link that shows another domain than it leads to: { href, shows, leads } */
+const deceptiveLink = ref(null)
+let deceptiveLinks = 0
+/** A fresh dialog per click: a dialog still closing (NcDialog reports it 300 ms later) is not reused. */
+function askDeceptiveLink(link) {
+	deceptiveLink.value = { ...link, id: ++deceptiveLinks }
+}
+watch(() => message.value?.id, () => { deceptiveLink.value = null })
 
 async function trust(domain) {
 	trusting.value = true

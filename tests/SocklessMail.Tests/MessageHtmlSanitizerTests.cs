@@ -182,4 +182,37 @@ public sealed class MessageHtmlSanitizerTests
         Assert.Contains("width=\"600\"", result);
         Assert.False(Clean(html).HasRemoteContent);
     }
+
+    [Fact]
+    public void Links_that_show_another_domain_are_marked()
+    {
+        var result = Clean("""
+            <a href="https://evil.example.top/login">https://www.paypal.com/signin</a>
+            <a href="https://links.shop.example.com/c/1">shop.example.com</a>
+            <a href="https://evil.example.top/x">Log in to PayPal</a>
+            <a href="https://evil.example.top/y"> www.paypal.com </a>
+            """);
+        var links = Dom(result.Html).QuerySelectorAll("a");
+
+        Assert.Equal("paypal.com", links[0].GetAttribute(MessageHtmlSanitizer.LinkShowsAttribute));
+        Assert.Equal("evil.example.top", links[0].GetAttribute(MessageHtmlSanitizer.LinkLeadsAttribute));
+        Assert.Null(links[1].GetAttribute(MessageHtmlSanitizer.LinkLeadsAttribute));
+        Assert.Null(links[2].GetAttribute(MessageHtmlSanitizer.LinkLeadsAttribute));
+        Assert.Equal("paypal.com", links[3].GetAttribute(MessageHtmlSanitizer.LinkShowsAttribute));
+        // Once per pair, for the banner.
+        Assert.Equal([new SocklessMail.Api.Senders.LinkMismatch("paypal.com", "evil.example.top")], result.LinkMismatches);
+    }
+
+    [Fact]
+    public void A_message_cannot_mark_or_unmark_links_itself()
+    {
+        var result = Clean("""
+            <a href="https://bank.example.com/" data-sockless-link-leads="x" data-sockless-link-shows="y">Bank</a>
+            """);
+        var link = Dom(result.Html).QuerySelector("a")!;
+
+        Assert.Null(link.GetAttribute(MessageHtmlSanitizer.LinkLeadsAttribute));
+        Assert.Null(link.GetAttribute(MessageHtmlSanitizer.LinkShowsAttribute));
+        Assert.Empty(result.LinkMismatches);
+    }
 }

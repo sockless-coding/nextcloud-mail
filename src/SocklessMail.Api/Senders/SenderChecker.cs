@@ -15,14 +15,15 @@ namespace SocklessMail.Api.Senders;
 /// <item>dmarcFail: the receiving mail server could not verify the message comes from <see cref="Domain"/>.</item>
 /// <item>replyTo: replies go to <see cref="Domain"/>, another domain than the sender's.</item>
 /// <item>newDomain: <see cref="Domain"/> (the registered domain) was registered <see cref="Detail"/> days ago.</item>
+/// <item>linkMismatch: a link in the message shows <see cref="LooksLike"/> but leads to <see cref="Domain"/> (a host).</item>
 /// </list>
-/// <see cref="Field"/> is "from", or "replyTo" for a look-alike Reply-To address.
+/// <see cref="Field"/> is "from", "replyTo" for a look-alike Reply-To address, or "link".
 /// </summary>
 public sealed record SenderReason(string Code, string Domain, string? LooksLike = null, string? Detail = null, string Field = "from");
 
 /// <summary>
 /// Why a sender looks suspicious. <see cref="Level"/> is "danger" for a domain built to deceive (look-alike
-/// characters), a failed DMARC check or a domain registered days ago, otherwise "warning". <see cref="Domain"/> is how the sender's
+/// characters), a failed DMARC check, a domain registered days ago or a link to a look-alike, otherwise "warning". <see cref="Domain"/> is how the sender's
 /// domain reads; <see cref="AsciiDomain"/> how it is spelled for DNS, when that differs;
 /// <see cref="Registered"/> what "Trust this domain" would trust (with its subdomains).
 /// </summary>
@@ -32,7 +33,7 @@ public sealed record SenderWarning(string Domain, string? AsciiDomain, string Re
 public static partial class SenderChecker
 {
     /// <summary>Endings that make a word in a sender's name read as a domain; plus every two-letter country ending.</summary>
-    private static readonly HashSet<string> NameEndings =
+    internal static readonly HashSet<string> NameEndings =
     [
         "com", "net", "org", "info", "biz", "io", "app", "dev", "xyz", "online", "site", "top", "shop", "store", "email", "support", "help", "live",
     ];
@@ -54,7 +55,12 @@ public static partial class SenderChecker
     /// (<see cref="Bimi.BimiSenders.FailedDmarc"/>). A Reply-To that merely differs is no reason by itself; it is
     /// mentioned along with others.
     /// </summary>
-    public static SenderWarning? Check(SenderIndex index, string? name, string address, string? replyTo, bool dmarcFailed, int? domainAgeDays = null)
+    /// <summary>At most this many link reasons in one warning.</summary>
+    public const int MaxLinkReasons = 3;
+
+    public static SenderWarning? Check(
+        SenderIndex index, string? name, string address, string? replyTo, bool dmarcFailed, int? domainAgeDays = null,
+        IReadOnlyList<LinkMismatch>? links = null)
     {
         if (SenderDomain.OfAddress(address) is not { } sender || index.IsTrusted(sender))
         {
@@ -87,6 +93,8 @@ public static partial class SenderChecker
             reasons.Add(new SenderReason("newDomain", SenderDomain.ToUnicode(sender.Registered), Detail: domainAgeDays.Value.ToString(CultureInfo.InvariantCulture)));
         }
 
+        reasons.AddRange(LinkReasons(index, links ?? []));
+
         var replyToReason = false;
         if (replyTo is not null && SenderDomain.OfAddress(replyTo) is { } reply && reply.Registered != sender.Registered && !index.IsTrusted(reply))
         {
@@ -106,11 +114,25 @@ public static partial class SenderChecker
             return null;
         }
 
-        var danger = reasons.Any(r => r.Code == "dmarcFail" || r is { Code: "lookalike", Detail: "alphabet" or "characters" })
+        var danger = reasons.Any(r => r.Code == "dmarcFail" || r is { Code: "lookalike" or "linkMismatch", Detail: "alphabet" or "characters" })
                      || domainAgeDays < VeryNewDomainDays && reasons.Any(r => r.Code == "newDomain");
         var unicode = sender.Unicode;
         return new SenderWarning(unicode, unicode == sender.Name ? null : sender.Name, sender.Registered, danger ? "danger" : "warning", reasons);
     }
+
+    /// <summary>
+    /// Links that show a domain the user knows (a brand, their own, a contact's, ...) and lead elsewhere. Other
+    /// mismatches are left to the confirmation on click: newsletters link "shop.example" through click trackers
+    /// all the time. A link to a look-alike of the shown domain carries how it imitates it in <see cref="SenderReason.Detail"/>.
+    /// </summary>
+    internal static IEnumerable<SenderReason> LinkReasons(SenderIndex index, IReadOnlyList<LinkMismatch> links) =>
+        links
+            .Select(link => (Link: link, Shown: SenderDomain.Parse(link.Shown), Actual: SenderDomain.Parse(link.Host)))
+            .Where(l => l.Shown is not null && index.IsKnown(l.Shown) && !(l.Actual is not null && (index.IsKnown(l.Actual) || index.IsTrusted(l.Actual))))
+            .DistinctBy(l => (l.Link.Shown, l.Actual?.Registered ?? l.Link.Host))
+            .Take(MaxLinkReasons)
+            .Select(l => new SenderReason(
+                "linkMismatch", l.Link.Host, l.Link.Shown, l.Actual is null ? null : Lookalike(index, l.Actual)?.Detail, "link"));
 
     /// <summary>The known domain <paramref name="domain"/> imitates, best match first: look-alike characters, another ending, a typo, the name within.</summary>
     internal static SenderReason? Lookalike(SenderIndex index, SenderDomain domain)
