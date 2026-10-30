@@ -105,10 +105,20 @@ export async function isUnread(row) {
 	return (await row.getAttribute('class')).includes('message-row--unread')
 }
 
-/** Clicks one of a message row's hover actions ("Delete", "Mark as read", "Flag", "Move…", ...). */
+/** Clicks one of a message row's hover actions ("Delete", "Mark as read", "Flag", "More actions"). */
 export async function rowAction(row, action) {
 	await row.hover()
 	await row.locator('.message-row__actions').getByRole('button', { name: action, exact: true }).click()
+}
+
+/** Opens a message row's menu (with the ⋯ hover button, or right-click) and clicks an entry ("Move…", ...). */
+export async function rowMenuAction(row, action, { rightClick = false } = {}) {
+	if (rightClick) {
+		await row.click({ button: 'right' })
+	} else {
+		await rowAction(row, 'More actions')
+	}
+	await row.page().getByRole('menuitem', { name: action, exact: true }).click()
 }
 
 /** A folder in the folder pane, by its exact name. */

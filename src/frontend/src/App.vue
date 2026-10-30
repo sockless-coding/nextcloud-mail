@@ -87,6 +87,10 @@
 			:request="dialogs.addContact"
 			@close="dialogs.addContact = null" />
 
+		<TaskDialog v-if="dialogs.createTask"
+			:request="dialogs.createTask"
+			@close="dialogs.createTask = null" />
+
 		<FolderNameDialog v-if="dialogs.folderName"
 			:prompt="dialogs.folderName"
 			@close="dialogs.folderName = null" />
@@ -130,6 +134,7 @@ import MessageView from './components/MessageView.vue'
 import MoveDialog from './components/MoveDialog.vue'
 import OAuthSettingsDialog from './components/OAuthSettingsDialog.vue'
 import ShortcutsDialog from './components/ShortcutsDialog.vue'
+import TaskDialog from './components/TaskDialog.vue'
 import TrustedSendersDialog from './components/TrustedSendersDialog.vue'
 import { accountsState, loadAccounts } from './store/accounts.js'
 import { dialogs, removePermanently } from './store/actions.js'
@@ -143,6 +148,7 @@ import { clearSelection, selection } from './store/selection.js'
 import { push, startPush } from './store/push.js'
 import { installShortcuts } from './store/shortcuts.js'
 import { INBOX_ID, inUnifiedView, refreshUnified, viewOf } from './store/unified.js'
+import { loadTasks } from './store/tasks.js'
 import { loadViewState } from './store/viewState.js'
 
 /**
@@ -302,6 +308,8 @@ function sendFilesFromUrl() {
 onMounted(async () => {
 	// Not awaited: the mail view does not depend on it.
 	loadOAuthState()
+	// Whether to offer "Create task"; nothing waits for it.
+	loadTasks()
 	await Promise.all([loadAccounts(), loadViewState()])
 	// The rail shows every account's unread count; not awaited either.
 	loadAllFolders()

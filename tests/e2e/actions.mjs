@@ -2,7 +2,7 @@
 // Works on three messages it sends itself, so it does not depend on other checks or earlier runs.
 // Needs: dev/dev.sh up, the app deployed, and an account for alice@example.test (node mail.mjs creates one).
 import { execSync } from 'node:child_process'
-import { accountAction, check, folderAction, folderNames, folderRow, folderUnread, isUnread, messageRows, openAccount, rowAction, start } from './lib.mjs'
+import { accountAction, check, folderAction, folderNames, folderRow, folderUnread, isUnread, messageRows, openAccount, rowAction, rowMenuAction, start } from './lib.mjs'
 
 const suffix = Date.now().toString().slice(-6)
 const [readMe, deleteMe, moveMe] = ['read', 'delete', 'move'].map((what) => `Action ${what} ${suffix}`)
@@ -83,7 +83,7 @@ const folder = `E2E ${suffix}`
 await accountAction(page, aliceName, 'New folder')
 await submitFolderName(folder)
 await openFolder('Inbox')
-await rowAction(item(moveMe), 'Move…')
+await rowMenuAction(item(moveMe), 'Move…')
 const moveDialog = page.getByRole('dialog')
 await moveDialog.getByLabel('Find folder').fill(suffix)
 await moveDialog.getByText(folder, { exact: true }).click()

@@ -19,6 +19,7 @@ using SocklessMail.Api.OAuth;
 using SocklessMail.Api.Senders;
 using SocklessMail.Api.Security;
 using SocklessMail.Api.Sync;
+using SocklessMail.Api.Tasks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -91,6 +92,8 @@ builder.Services.AddScoped<ViewStates>();
 DomainAges.ConfigureServices(builder.Services);
 builder.Services.AddScoped<NextcloudCalendars>();
 builder.Services.AddScoped<InvitationService>();
+builder.Services.AddScoped<TaskService>();
+builder.Services.AddSingleton<TaskApps>();
 builder.Services.AddSingleton<ImageProxy>();
 ImageProxy.ConfigureServices(builder.Services);
 BimiResolver.ConfigureServices(builder.Services);
@@ -152,6 +155,7 @@ api.MapBimiEndpoints();
 api.MapFilesEndpoints();
 api.MapContactsEndpoints();
 api.MapCalendarEndpoints();
+api.MapTaskEndpoints();
 api.MapSenderEndpoints();
 api.MapAdminEndpoints();
 api.MapViewStateEndpoints();

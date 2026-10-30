@@ -22,6 +22,8 @@ export const dialogs = reactive({
 	oauthSettings: false,
 	/** A sender to add to the address book: { name, address }. */
 	addContact: null,
+	/** A message to make a task from: { where, message }. */
+	createTask: null,
 	/** The keyboard shortcut help. */
 	shortcuts: false,
 	/** The domains exempt from suspicious-sender warnings. */

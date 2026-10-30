@@ -127,16 +127,18 @@ function fromServer(accountId, draft, extra = {}) {
 }
 
 /**
- * Reply, reply all or forward the open message; the server builds recipients, subject and quote.
+ * Reply, reply all or forward a message (by default the open one); the server builds
+ * recipients, subject and quote.
  *
  * @param {'reply'|'replyAll'|'forward'} mode what to do
+ * @param {{accountId: string, folderId: string}} where the message's folder
+ * @param {string} messageId the message
  */
-export async function composeReply(mode) {
+export async function composeReply(mode, where = openLocation(), messageId = mailboxState.open.id) {
 	if (busy()) {
 		return
 	}
-	const { accountId, folderId } = openLocation()
-	const messageId = mailboxState.open.id
+	const { accountId, folderId } = where
 	let draft
 	try {
 		draft = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages/${messageId}/draft?mode=${mode}`)

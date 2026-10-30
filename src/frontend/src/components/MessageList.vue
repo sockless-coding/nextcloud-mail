@@ -70,6 +70,7 @@
 							'message-row--unread': !row.message.seen,
 							'message-row--open': isOpen(row),
 							'message-row--selected': isSelected(row),
+							'message-row--menu': menu.open && menu.key === row.key,
 						}"
 						:data-key="row.key"
 						tabindex="0"
@@ -80,7 +81,7 @@
 						@pointerup="cancelPress"
 						@pointercancel="cancelPress"
 						@pointerleave="cancelPress"
-						@contextmenu="pressed && $event.preventDefault()">
+						@contextmenu="onContextMenu(row, $event)">
 						<span class="message-row__stripe" />
 						<span class="message-row__avatar">
 							<NcAvatar :display-name="sender(row.message)"
@@ -139,15 +140,21 @@
 								<NcIconSvgWrapper :path="row.message.flagged ? mdiFlagRemoveOutline : mdiFlagOutline" :size="18" />
 							</button>
 							<button class="message-row__action"
-								:aria-label="t('sockless_mail', 'Move…')"
-								:title="t('sockless_mail', 'Move…')"
-								@click="askMove(row, [row.message.id])">
-								<NcIconSvgWrapper :path="mdiFolderMoveOutline" :size="18" />
+								:aria-label="t('sockless_mail', 'More actions')"
+								:title="t('sockless_mail', 'More actions')"
+								aria-haspopup="menu"
+								@click="openMenuAt(row, $event.currentTarget)">
+								<NcIconSvgWrapper :path="mdiDotsHorizontal" :size="18" />
 							</button>
 						</span>
 					</li>
 				</template>
 			</ul>
+			<MessageMenu v-model:open="menu.open"
+				:rows="menu.rows"
+				:x="menu.x"
+				:y="menu.y"
+				@closed="menuClosed" />
 			<div v-if="view.canLoadMore" ref="more" class="message-list__more">
 				<NcButton wide :disabled="view.loadingMore" @click="view.loadMore">
 					<template #icon>
@@ -161,7 +168,7 @@
 </template>
 
 <script setup>
-import { mdiCheck, mdiCheckboxMultipleMarkedCircleOutline, mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiMagnify, mdiPaperclip, mdiReply, mdiShieldAlertOutline } from '@mdi/js'
+import { mdiCheck, mdiCheckboxMultipleMarkedCircleOutline, mdiDeleteOutline, mdiDotsHorizontal, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiMagnify, mdiPaperclip, mdiReply, mdiShieldAlertOutline } from '@mdi/js'
 import { getCanonicalLocale, getFirstDay, n, t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -169,16 +176,17 @@ import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { bimiUrl } from '../bimi.js'
 import { accountColor, accountsState } from '../store/accounts.js'
-import { askMove, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
+import { remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { layout, readingPane } from '../store/layout.js'
 import { loadMore, mailboxState, openMessage } from '../store/mailbox.js'
 import { searchMore, searchState as search, setFilter } from '../store/search.js'
 import { checkSenders, listWarning, reasonText, warningTitle } from '../store/senders.js'
 import { clearSelection, endSelectionMode, extendSelection, isSelected, pruneSelection, selectRange, selection, toggleRow } from '../store/selection.js'
 import { loadMoreUnified, unifiedState as unified, viewOf } from '../store/unified.js'
+import MessageMenu from './MessageMenu.vue'
 
 const FILTERS = [
 	{ value: '', label: t('sockless_mail', 'All') },
@@ -390,6 +398,61 @@ function onKey(row, index, event) {
 		clearSelection()
 		selection.anchor = next.key
 		open(next)
+	}
+}
+
+/**
+ * The context menu acts on the selection when the row is part of it, else on the row alone
+ * (the selection stays as it is).
+ */
+const menu = reactive({ open: false, key: null, rows: [], x: 0, y: 0 })
+
+function showMenu(row, x, y) {
+	menu.key = row.key
+	menu.rows = isSelected(row) && selection.rows.length > 1 ? [...selection.rows] : [row]
+	Object.assign(menu, { x, y })
+	// A new position needs a closed menu first, or the popover stays where it was.
+	menu.open = false
+	nextTick(() => { menu.open = true })
+}
+
+/** Under the ⋯ button, or inside the row when opened from the keyboard (Menu key, Shift+F10). */
+function openMenuAt(row, element) {
+	const rect = element.getBoundingClientRect()
+	const button = rect.height < 60
+	showMenu(row, button ? rect.left : rect.left + 48, button ? rect.bottom : rect.top + rect.height / 2)
+}
+
+function onContextMenu(row, event) {
+	event.preventDefault()
+	// A long press selects instead.
+	if (pressed) {
+		return
+	}
+	// From the keyboard the browser gives no pointer position, or one outside the row.
+	const rect = event.currentTarget.getBoundingClientRect()
+	const atPointer = (event.clientX || event.clientY)
+		&& event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom
+	if (atPointer) {
+		showMenu(row, event.clientX, event.clientY)
+	} else {
+		openMenuAt(row, event.currentTarget)
+	}
+}
+
+/** Back to the row the menu was for, so the keyboard carries on from there. */
+function menuClosed() {
+	// Reopened for another row before the closing animation ended.
+	if (menu.open) {
+		return
+	}
+	const key = menu.key
+	menu.key = null
+	// Focus is on the menu's hidden trigger, in the closing popover, or lost; a dialog the
+	// action opened (Move…) keeps it.
+	const active = document.activeElement
+	if (key && (!active || active === document.body || active.closest('.message-menu, .v-popper__popper'))) {
+		scroller.value?.querySelector(`[data-key="${CSS.escape(key)}"]`)?.focus()
 	}
 }
 
@@ -735,6 +798,11 @@ onBeforeUnmount(() => observer?.disconnect())
 
 .message-row--open,
 .message-row--selected,
+.message-row--menu {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -2px;
+}
+
 .message-row--open:hover,
 .message-row--selected:hover {
 	background: var(--color-primary-element-light);

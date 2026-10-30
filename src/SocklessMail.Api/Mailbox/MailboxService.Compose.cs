@@ -456,6 +456,17 @@ public sealed partial class MailboxService
                 parts);
         }, ct);
 
+    /// <summary>What a message says, as plain text, with who sent it and when (for a task made from it).</summary>
+    public Task<MessageText> GetMessageTextAsync(MailAccount account, string folderId, string messageId, CancellationToken ct) =>
+        Run(account, async (client, token) =>
+        {
+            var (folder, uid) = await OpenMessageAsync(client, folderId, messageId, token);
+            var summary = await FetchOneAsync(folder, uid, FolderCache.ListItems & ~MessageSummaryItems.PreviewText, token);
+            var envelope = summary.Envelope ?? new Envelope();
+            var (text, _) = await BodiesAsync(folder, uid, summary, token);
+            return new MessageText(envelope.Subject ?? "", envelope.From.Mailboxes.FirstOrDefault(), MessageDate(summary), text, envelope.MessageId);
+        }, ct);
+
     /// <summary>The message's text and HTML; each made from the other when the message has only one.</summary>
     private static async Task<(string Text, string Html)> BodiesAsync(IMailFolder folder, UniqueId uid, IMessageSummary summary, CancellationToken ct)
     {

@@ -31,6 +31,7 @@ export const LOCAL_SHORTCUTS = [
 	{ keys: ['Space'], label: t('sockless_mail', 'Select or deselect the message (in the list)') },
 	{ keys: ['Shift+↑', 'Shift+↓'], label: t('sockless_mail', 'Extend the selection (in the list)') },
 	{ keys: ['Ctrl+A'], label: t('sockless_mail', 'Select all loaded messages (in the list)') },
+	{ keys: ['Menu', 'Shift+F10'], label: t('sockless_mail', 'Message actions (in the list)') },
 	{ keys: ['Ctrl+Enter'], label: t('sockless_mail', 'Send (in the composer)') },
 ]
 

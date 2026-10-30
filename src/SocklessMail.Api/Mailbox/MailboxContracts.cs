@@ -151,3 +151,6 @@ public sealed record RemovedHit(Guid AccountId, string FolderId, string MessageI
 
 /// <summary>Why one account's part of a combined view is missing or stale; codes as the per-account endpoints use them.</summary>
 public sealed record AccountError(Guid AccountId, string Error, string Message);
+
+/// <summary>A message as plain text, with its sender, date and Message-ID header (without the angle brackets).</summary>
+public sealed record MessageText(string Subject, MailboxAddress? From, DateTimeOffset Date, string Text, string? MessageId);

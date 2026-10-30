@@ -7,7 +7,7 @@ using SocklessMail.Api.AppApi;
 
 namespace SocklessMail.Api.Calendar;
 
-/// <summary>An event calendar of the user, by its name in their calendar home ("personal").</summary>
+/// <summary>An event calendar or task list of the user, by its name in their calendar home ("personal").</summary>
 public sealed record CalendarInfo(string Id, string Name, string? Color, bool Writable);
 
 /// <summary>A stored calendar object: where it is, its ETag and its text.</summary>
@@ -29,8 +29,8 @@ public sealed class CalendarException(string code, string message, int statusCod
 
 /// <summary>
 /// The user's Nextcloud calendars over CalDAV (remote.php/dav/calendars/&lt;user&gt;), as that
-/// user through AppAPI. Subscriptions, task-only calendars and the scheduling inbox/outbox and
-/// trash bin are left out.
+/// user through AppAPI. Subscriptions and the scheduling inbox/outbox and trash bin are left out,
+/// and so are calendars that cannot hold the component asked for (events, or tasks).
 /// </summary>
 public sealed class NextcloudCalendars(NextcloudClient nextcloud, ILogger<NextcloudCalendars> logger)
 {
@@ -38,7 +38,8 @@ public sealed class NextcloudCalendars(NextcloudClient nextcloud, ILogger<Nextcl
     private static readonly XNamespace CalDav = "urn:ietf:params:xml:ns:caldav";
     private static readonly XNamespace Apple = "http://apple.com/ns/ical/";
 
-    public async Task<IReadOnlyList<CalendarInfo>> ListAsync(string userId, CancellationToken ct)
+    /// <param name="component">VEVENT for event calendars, VTODO for task lists.</param>
+    public async Task<IReadOnlyList<CalendarInfo>> ListAsync(string userId, CancellationToken ct, string component = "VEVENT")
     {
         using var request = new HttpRequestMessage(new HttpMethod("PROPFIND"), HomeUrl(userId))
         {
@@ -57,7 +58,7 @@ public sealed class NextcloudCalendars(NextcloudClient nextcloud, ILogger<Nextcl
 
             var components = props.Element(CalDav + "supported-calendar-component-set")?.Elements(CalDav + "comp")
                 .Select(c => c.Attribute("name")?.Value).ToList();
-            if (components is { Count: > 0 } && !components.Contains("VEVENT"))
+            if (components is { Count: > 0 } && !components.Contains(component))
             {
                 continue;
             }

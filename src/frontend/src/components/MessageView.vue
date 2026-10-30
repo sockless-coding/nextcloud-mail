@@ -99,6 +99,14 @@
 									</template>
 									{{ t('sockless_mail', 'Delete') }}
 								</NcActionButton>
+								<NcActionButton v-if="tasksState.available"
+									close-after-click
+									@click="dialogs.createTask = { where, message }">
+									<template #icon>
+										<NcIconSvgWrapper :path="mdiClipboardCheckOutline" />
+									</template>
+									{{ t('sockless_mail', 'Create task…') }}
+								</NcActionButton>
 								<NcActionButton v-if="message.from[0]"
 									close-after-click
 									@click="dialogs.addContact = { name: message.from[0].name, address: message.from[0].address }">
@@ -245,7 +253,7 @@
 </template>
 
 <script setup>
-import { mdiAccountPlusOutline, mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldAlertOutline, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
+import { mdiAccountPlusOutline, mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiClipboardCheckOutline, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldAlertOutline, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -266,6 +274,7 @@ import { composeEdit, composeReply } from '../store/compose.js'
 import { primaryCalendarPart } from '../store/calendar.js'
 import { saveAttachmentsToFiles } from '../store/files.js'
 import { readingPane } from '../store/layout.js'
+import { tasksState } from '../store/tasks.js'
 import { formatFileSize } from '../fileSize.js'
 import { messageWarning, reasonText, trustDomain, warningTitle } from '../store/senders.js'
 import { pageColors } from '../mailColors.js'

@@ -63,7 +63,7 @@ public static class CalendarEndpoints
             });
     }
 
-    private sealed class CalendarErrorFilter : IEndpointFilter
+    internal sealed class CalendarErrorFilter : IEndpointFilter
     {
         public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
         {
