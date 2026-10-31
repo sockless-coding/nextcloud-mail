@@ -116,11 +116,11 @@ Enable HaRP in the AIO interface first. AIO then registers the deploy daemon and
 
 ```bash
 occ() { docker exec --user www-data -i nextcloud-aio-nextcloud php occ "$@"; }
-VERSION=0.32.0                    # the release to install
+VERSION=0.32.1                    # the release to install
 KEY="$(openssl rand -base64 48)"; echo "$KEY"   # store this in your password manager
 
-occ app_api:daemon:list   # the name of the HaRP daemon AIO registered
-occ app_api:app:register sockless_mail <daemon> \
+occ app_api:daemon:list   # AIO's HaRP daemon is harp_aio
+occ app_api:app:register sockless_mail harp_aio \
     --info-xml "https://raw.githubusercontent.com/sockless-coding/nextcloud-mail/v$VERSION/appinfo/info.xml" \
     --env SOCKLESS_MAIL_ENCRYPTION_KEY="$KEY" --wait-finish
 occ app_api:app:list      # check that sockless_mail is enabled
