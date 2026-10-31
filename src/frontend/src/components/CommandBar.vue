@@ -56,7 +56,7 @@
 
 		<form class="command-bar__search" role="search" @submit.prevent="runSearch">
 			<NcIconSvgWrapper :path="mdiMagnify" :size="20" />
-			<select v-if="!mailboxState.selected.unified"
+			<select v-if="!mailboxState.selected.unified && !mailboxState.selected.scheduled"
 				:value="search.scope"
 				class="command-bar__scope"
 				:aria-label="t('sockless_mail', 'Search scope')"
@@ -70,6 +70,7 @@
 			</select>
 			<input v-model="search.query"
 				type="search"
+				:disabled="!!mailboxState.selected.scheduled"
 				:aria-label="searchLabel"
 				:placeholder="searchLabel"
 				@keydown.esc="clearQuery">
@@ -139,6 +140,12 @@
 				</template>
 				{{ t('sockless_mail', 'Trusted domains') }}
 			</NcActionButton>
+			<NcActionButton close-after-click @click="dialogs.sendLaterPresets = true">
+				<template #icon>
+					<NcIconSvgWrapper :path="mdiSendClockOutline" />
+				</template>
+				{{ t('sockless_mail', 'Send later presets') }}
+			</NcActionButton>
 			<NcActionButton close-after-click @click="dialogs.shortcuts = true">
 				<template #icon>
 					<NcIconSvgWrapper :path="mdiKeyboardOutline" />
@@ -150,7 +157,7 @@
 </template>
 
 <script setup>
-import { mdiArchiveArrowDownOutline, mdiClose, mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFolderMoveOutline, mdiKeyboardOutline, mdiMagnify, mdiMenu, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldCheckOutline, mdiTagMultipleOutline, mdiTagOutline, mdiViewSplitVertical } from '@mdi/js'
+import { mdiArchiveArrowDownOutline, mdiClose, mdiDeleteOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFolderMoveOutline, mdiKeyboardOutline, mdiMagnify, mdiMenu, mdiPencilOutline, mdiReply, mdiReplyAll, mdiSendClockOutline, mdiShare, mdiShieldCheckOutline, mdiTagMultipleOutline, mdiTagOutline, mdiViewSplitVertical } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'

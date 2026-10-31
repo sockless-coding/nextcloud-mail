@@ -62,22 +62,72 @@ public sealed partial class MailboxService
 
     public async Task<SendResult> SendAsync(MailAccount account, SendInput input, CancellationToken ct)
     {
-        var composed = await ComposeAsync(account,
-            new MessageFields(input.To, input.Cc, input.Bcc, input.Subject, input.Text, input.Html, input.AttachmentIds, input.Source),
-            draft: false, ct);
+        var composed = await ComposeAsync(account, FieldsOf(input), draft: false, ct);
 
         var credential = await logins.ForConnectionAsync(account, ct);
         await DeliverAsync(account, credential, composed.Message, ct);
         logger.LogInformation("Sent message from account {AccountId} to {RecipientCount} recipients", account.Id, composed.Recipients);
 
+        DeleteUploads(account, composed);
+        var result = await AfterSendAsync(account, composed.Message, input.Source, ct);
+        await RemoveDraftsAsync(account, input);
+        return result;
+    }
+
+    /// <summary>
+    /// Builds the message to be sent later and hands it to <paramref name="store"/>. Once stored,
+    /// its uploads and saved draft go, as after sending: everything it needs is inside it now.
+    /// </summary>
+    public async Task ScheduleAsync(MailAccount account, SendInput input, Func<MimeMessage, CancellationToken, Task> store, CancellationToken ct)
+    {
+        var composed = await ComposeAsync(account, FieldsOf(input), draft: false, ct);
+        await store(composed.Message, ct);
+        DeleteUploads(account, composed);
+        await RemoveDraftsAsync(account, input);
+    }
+
+    /// <summary>
+    /// Sends a message built earlier (see <see cref="ScheduleAsync"/>), dated now, with a copy in
+    /// Sent and the original marked. <paramref name="delivering"/> is called once the SMTP
+    /// connection stands: from then on a failure may mean the message went out anyway.
+    /// </summary>
+    public async Task<SendResult> SendStoredAsync(MailAccount account, MimeMessage message, SendSource? source, Action delivering, CancellationToken ct)
+    {
+        message.Date = clock.GetUtcNow();
+        await DeliverAsync(account, await logins.ForConnectionAsync(account, ct), message, ct, delivering);
+        logger.LogInformation("Sent a scheduled message from account {AccountId}", account.Id);
+        return await AfterSendAsync(account, message, source, ct);
+    }
+
+    /// <summary>Puts a message built earlier back into Drafts (flagged \Draft and \Seen), to be continued there.</summary>
+    public Task<SavedDraftRef?> RestoreDraftAsync(MailAccount account, MimeMessage message, CancellationToken ct) =>
+        Run(account, async (client, token) =>
+        {
+            var drafts = await FindSpecialFolderAsync(client, "drafts", token) ?? await CreateDraftsFolderAsync(client, token);
+            var uid = await drafts.AppendAsync(message, MessageFlags.Seen | MessageFlags.Draft, token);
+            if (uid is null && message.MessageId is { } header)
+            {
+                await drafts.OpenAsync(FolderAccess.ReadOnly, token);
+                uid = (await drafts.SearchAsync(SearchQuery.HeaderContains("Message-ID", header), token)).Cast<UniqueId?>().LastOrDefault();
+            }
+
+            return uid is { } u ? new SavedDraftRef(MailboxIds.FolderId(drafts.FullName), MailboxIds.MessageId(u.Validity, u.Id)) : null;
+        }, ct, retry: false);
+
+    private static MessageFields FieldsOf(SendInput input) =>
+        new(input.To, input.Cc, input.Bcc, input.Subject, input.Text, input.Html, input.AttachmentIds, input.Source);
+
+    private void DeleteUploads(MailAccount account, ComposedMessage composed)
+    {
         foreach (var upload in composed.Uploads)
         {
             uploads.Delete(account.OwnerUserId, upload.Id);
         }
+    }
 
-        var result = await AfterSendAsync(account, composed.Message, input.Source, ct);
-
-        // The draft has served its purpose; so has a continued draft the message was built from.
+    /// <summary>The draft has served its purpose; so has a continued draft the message was built from.</summary>
+    private async Task RemoveDraftsAsync(MailAccount account, SendInput input)
+    {
         if (input.Draft is { } draft)
         {
             await RemoveDraftAsync(account, draft);
@@ -87,8 +137,6 @@ public sealed partial class MailboxService
         {
             await RemoveDraftAsync(account, new SavedDraftRef(source.FolderId, source.MessageId));
         }
-
-        return result;
     }
 
     /// <summary>
@@ -331,10 +379,11 @@ public sealed partial class MailboxService
         }
     }
 
-    private async Task DeliverAsync(MailAccount account, MailCredential credential, MimeMessage message, CancellationToken ct)
+    private async Task DeliverAsync(MailAccount account, MailCredential credential, MimeMessage message, CancellationToken ct, Action? delivering = null)
     {
         var endpoint = new MailEndpoint(account.SmtpHost, account.SmtpPort, account.SmtpSecurity);
         using var smtp = await connector.ConnectSmtpAsync(endpoint, account.Username, credential, ct);
+        delivering?.Invoke();
         try
         {
             // Bcc recipients get the message, but nobody sees the Bcc header; the copy in Sent keeps it.

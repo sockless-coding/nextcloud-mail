@@ -29,6 +29,11 @@
 					</div>
 				</li>
 			</ul>
+			<ul v-if="scheduledListed(null)" class="folder-pane__group folder-pane__group--smart">
+				<li>
+					<ScheduledFolderRow />
+				</li>
+			</ul>
 			<ul v-if="tagsState.list.length" class="folder-pane__group folder-pane__group--smart" :aria-label="t('sockless_mail', 'Tags')">
 				<li v-for="tag in tagsState.list" :key="tag.id">
 					<TagFolderRow :tag="tag" />
@@ -104,6 +109,11 @@
 					:account-id="account.id"
 					:folder="folder" />
 			</ul>
+			<ul v-if="scheduledListed(account.id)" class="folder-pane__group folder-pane__group--smart">
+				<li>
+					<ScheduledFolderRow :account-id="account.id" />
+				</li>
+			</ul>
 			<ul v-if="tagsState.list.length" class="folder-pane__group folder-pane__group--smart" :aria-label="t('sockless_mail', 'Tags')">
 				<li v-for="tag in tagsState.list" :key="tag.id">
 					<TagFolderRow :tag="tag" :account-id="account.id" />
@@ -125,12 +135,19 @@ import { accountColor, accountsState } from '../store/accounts.js'
 import { dialogs } from '../store/actions.js'
 import { loadFolders, mailboxState } from '../store/mailbox.js'
 import { currentAccount, moveAccountBy, newFolder, openUnified } from '../store/navigation.js'
+import { scheduledOf } from '../store/scheduled.js'
 import { tagsState } from '../store/tags.js'
 import { availableViews, unifiedPaneShown, viewUnread } from '../store/unified.js'
 import FolderItem from './FolderItem.vue'
+import ScheduledFolderRow from './ScheduledFolderRow.vue'
 import TagFolderRow from './TagFolderRow.vue'
 
 const EMPTY_FOLDERS = { list: [], loading: false, error: null }
+
+/** The Scheduled entry is there while something is scheduled, or while it is open. */
+function scheduledListed(accountId) {
+	return scheduledOf(accountId).length > 0 || (!!mailboxState.selected.scheduled && mailboxState.selected.accountId === accountId)
+}
 
 const account = computed(() => currentAccount())
 const index = computed(() => accountsState.accounts.indexOf(account.value))

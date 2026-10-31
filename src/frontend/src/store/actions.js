@@ -38,6 +38,8 @@ export const dialogs = reactive({
 	tagPicker: null,
 	/** The tag manager. */
 	tags: false,
+	/** The send later presets. */
+	sendLaterPresets: false,
 })
 
 function fail(what, e) {

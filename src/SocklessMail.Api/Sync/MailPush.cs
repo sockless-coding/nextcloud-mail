@@ -14,6 +14,9 @@ public sealed class MailHub(UserActivity activity) : Hub
 {
     public const string FolderChanged = "folderChanged";
 
+    /// <summary>A scheduled message was sent, failed, or changed otherwise.</summary>
+    public const string ScheduledChanged = "scheduledChanged";
+
     public override Task OnConnectedAsync()
     {
         // An open tab keeps the user's IDLE watchers running although it no longer polls.
@@ -45,6 +48,18 @@ public sealed class MailPush(IHubContext<MailHub> hub, ILogger<MailPush> logger)
         {
             // The cache is already written; clients that miss this catch up on their next refresh.
             logger.LogWarning(e, "Could not push a folder change");
+        }
+    }
+
+    public async Task ScheduledChangedAsync(string userId)
+    {
+        try
+        {
+            await hub.Clients.User(userId).SendAsync(MailHub.ScheduledChanged);
+        }
+        catch (Exception e)
+        {
+            logger.LogWarning(e, "Could not push a scheduled message change");
         }
     }
 }

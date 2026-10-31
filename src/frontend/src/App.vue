@@ -34,7 +34,8 @@
 						:class="`sm-panes--${readingPane}`"
 						:style="paneSizes">
 						<section v-show="listShown" class="sm-panes__list" :aria-label="t('sockless_mail', 'Message list')">
-							<MessageList v-if="mailboxState.selected.folderId || mailboxState.selected.unified" />
+							<ScheduledList v-if="mailboxState.selected.scheduled" />
+							<MessageList v-else-if="mailboxState.selected.folderId || mailboxState.selected.unified" />
 							<NcEmptyContent v-else :name="t('sockless_mail', 'Choose a folder')" />
 						</section>
 						<div v-if="readingPane !== 'off'"
@@ -46,7 +47,15 @@
 							@pointerdown="startResize"
 							@keydown="resizeByKey" />
 						<section v-show="readerShown" class="sm-panes__reader" :aria-label="t('sockless_mail', 'Reading pane')">
-							<div v-if="selection.rows.length" class="sm-selection">
+							<template v-if="mailboxState.selected.scheduled">
+								<ScheduledView v-if="scheduledState.open.id" />
+								<NcEmptyContent v-else :name="t('sockless_mail', 'No message selected')">
+									<template #icon>
+										<NcIconSvgWrapper :path="mdiSendClockOutline" />
+									</template>
+								</NcEmptyContent>
+							</template>
+							<div v-else-if="selection.rows.length" class="sm-selection">
 								<NcIconSvgWrapper :path="mdiCheckboxMultipleMarkedCircleOutline" :size="48" />
 								<h2>{{ n('sockless_mail', '{count} message selected', '{count} messages selected', selection.rows.length, { count: selection.rows.length }) }}</h2>
 								<p>{{ t('sockless_mail', 'Use the commands at the top for all of them.') }}</p>
@@ -84,6 +93,8 @@
 			@close="dialogs.tagPicker = null" />
 
 		<TagsDialog v-if="dialogs.tags" @close="dialogs.tags = false" />
+
+		<SendLaterPresetsDialog v-if="dialogs.sendLaterPresets" @close="dialogs.sendLaterPresets = false" />
 
 		<RulesDialog v-if="dialogs.rules"
 			:account="dialogs.rules.account"
@@ -130,7 +141,7 @@
 </template>
 
 <script setup>
-import { mdiCheckboxMultipleMarkedCircleOutline, mdiEmailOpenOutline, mdiEmailOutline } from '@mdi/js'
+import { mdiCheckboxMultipleMarkedCircleOutline, mdiEmailOpenOutline, mdiEmailOutline, mdiSendClockOutline } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { n, t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -152,6 +163,9 @@ import MessageView from './components/MessageView.vue'
 import MoveDialog from './components/MoveDialog.vue'
 import OAuthSettingsDialog from './components/OAuthSettingsDialog.vue'
 import RulesDialog from './components/RulesDialog.vue'
+import ScheduledList from './components/ScheduledList.vue'
+import ScheduledView from './components/ScheduledView.vue'
+import SendLaterPresetsDialog from './components/SendLaterPresetsDialog.vue'
 import ShortcutsDialog from './components/ShortcutsDialog.vue'
 import TagPickerDialog from './components/TagPickerDialog.vue'
 import TagsDialog from './components/TagsDialog.vue'
@@ -165,6 +179,8 @@ import { closeDrawer, folderPaneShown, layout, readingPane, viewport } from './s
 import { hasPendingWrites, loadFolders, mailboxState, refreshMessages } from './store/mailbox.js'
 import { accountSaved, loadAllFolders, openStartView, removeAccount } from './store/navigation.js'
 import { loadOAuthState } from './store/oauth.js'
+import { loadScheduled, scheduledState } from './store/scheduled.js'
+import { loadPresets } from './store/sendLater.js'
 import { clearSelection, selection } from './store/selection.js'
 import { push, startPush } from './store/push.js'
 import { installShortcuts } from './store/shortcuts.js'
@@ -193,7 +209,8 @@ let stopPush = null
 const folderReloads = new Map()
 
 /** With the reading pane off, the list and the open message take turns. */
-const listShown = computed(() => readingPane.value !== 'off' || !mailboxState.open.id || selection.rows.length > 0)
+const openId = computed(() => mailboxState.selected.scheduled ? scheduledState.open.id : mailboxState.open.id)
+const listShown = computed(() => readingPane.value !== 'off' || !openId.value || selection.rows.length > 0)
 const readerShown = computed(() => readingPane.value !== 'off' || !listShown.value)
 
 const panes = ref(null)
@@ -298,6 +315,9 @@ const permanentButtons = computed(() => [
 ])
 
 function refreshList() {
+	if (mailboxState.selected.scheduled) {
+		return loadScheduled()
+	}
 	return mailboxState.selected.unified ? refreshUnified() : refreshMessages()
 }
 
@@ -316,6 +336,8 @@ async function poll(event) {
 		...(withList ? [refreshList()] : []),
 		...(withFolders ? Object.keys(mailboxState.folders).map((id) => loadFolders(id, true)) : []),
 		...(withFolders ? [loadTagCounts()] : []),
+		// The counts in the folder pane; the Scheduled view itself reloads as the list.
+		...(withFolders && !selected.scheduled ? [loadScheduled()] : []),
 	])
 }
 
@@ -362,11 +384,15 @@ onMounted(async () => {
 	await Promise.all([loadAccounts(), loadViewState()])
 	// The rail shows every account's unread count; not awaited either.
 	loadAllFolders()
+	// The folder pane shows a Scheduled entry while there is something scheduled.
+	loadScheduled()
+	// The built-in presets are offered until the user's own arrive.
+	loadPresets()
 	await openStartView()
 	sendFilesFromUrl()
 	pollTimer = window.setInterval(poll, POLL_INTERVAL_MS)
 	document.addEventListener('visibilitychange', poll)
-	stopPush = startPush({ folderChanged, reconnected: () => poll({ type: 'visibilitychange' }) })
+	stopPush = startPush({ folderChanged, scheduledChanged: loadScheduled, reconnected: () => poll({ type: 'visibilitychange' }) })
 	removeShortcuts = installShortcuts()
 })
 

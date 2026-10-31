@@ -134,6 +134,37 @@
 				</template>
 				{{ uploading ? t('sockless_mail', 'Uploading…') : t('sockless_mail', 'Send') }}
 			</NcButton>
+			<NcActions variant="tertiary"
+				:disabled="uploading || sending"
+				:menu-name="t('sockless_mail', 'Send later')"
+				:aria-label="t('sockless_mail', 'Send later')"
+				@open="menuOpenedAt = new Date()">
+				<template #icon>
+					<NcIconSvgWrapper :path="mdiSendClockOutline" />
+				</template>
+				<NcActionButton v-for="{ preset, when } in laterOptions"
+					:key="preset.id"
+					close-after-click
+					:description="formatSendTime(when, menuOpenedAt)"
+					@click="submit(when)">
+					<template #icon>
+						<NcIconSvgWrapper :path="mdiClockOutline" />
+					</template>
+					{{ preset.label }}
+				</NcActionButton>
+				<NcActionButton close-after-click @click="pickingTime = true">
+					<template #icon>
+						<NcIconSvgWrapper :path="mdiCalendarClock" />
+					</template>
+					{{ t('sockless_mail', 'Pick date and time…') }}
+				</NcActionButton>
+				<NcActionButton close-after-click @click="dialogs.sendLaterPresets = true">
+					<template #icon>
+						<NcIconSvgWrapper :path="mdiCogOutline" />
+					</template>
+					{{ t('sockless_mail', 'Manage presets…') }}
+				</NcActionButton>
+			</NcActions>
 			<input ref="fileInput"
 				type="file"
 				multiple
@@ -186,6 +217,10 @@
 		</footer>
 	</section>
 
+	<SendLaterDialog v-if="pickingTime"
+		@choose="timeChosen"
+		@close="pickTimeClosed" />
+
 	<NcDialog v-if="confirmDiscard"
 		:name="t('sockless_mail', 'Discard this message?')"
 		:message="draft.saved ? t('sockless_mail', 'What you wrote and attached will be lost, and the saved draft is deleted.') : t('sockless_mail', 'What you wrote and attached will be lost.')"
@@ -195,7 +230,7 @@
 </template>
 
 <script setup>
-import { mdiArrowCollapse, mdiArrowExpand, mdiClose, mdiDeleteOutline, mdiFolderOutline, mdiFormatLetterCase, mdiFormatText, mdiLinkVariant, mdiPaperclip, mdiSend, mdiUndo, mdiUpload, mdiWindowMinimize, mdiWindowRestore } from '@mdi/js'
+import { mdiArrowCollapse, mdiArrowExpand, mdiCalendarClock, mdiClockOutline, mdiClose, mdiCogOutline, mdiDeleteOutline, mdiFolderOutline, mdiFormatLetterCase, mdiFormatText, mdiLinkVariant, mdiPaperclip, mdiSend, mdiSendClockOutline, mdiUndo, mdiUpload, mdiWindowMinimize, mdiWindowRestore } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { getCanonicalLocale, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -207,11 +242,14 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { accountsState } from '../store/accounts.js'
-import { attach, closeComposer, composer, detach, hasContent, saveSoon, send, textToHtml } from '../store/compose.js'
+import { dialogs } from '../store/actions.js'
+import { attach, closeComposer, composer, detach, hasContent, saveSoon, scheduleSend, send, textToHtml } from '../store/compose.js'
 import { attachFromFiles as pickAndAttach, createShareLinks } from '../store/files.js'
 import { layout } from '../store/layout.js'
+import { formatSendTime, offeredPresets } from '../store/sendLater.js'
 import RecipientInput from './RecipientInput.vue'
 import RichEditor from './RichEditor.vue'
+import SendLaterDialog from './SendLaterDialog.vue'
 
 const draft = composer.draft
 const fileInput = ref(null)
@@ -281,7 +319,32 @@ function beforeUnload(event) {
 
 const uploading = computed(() => draft.uploads.some((u) => !u.id && !u.error))
 
-async function submit() {
+const pickingTime = ref(false)
+// Acted on once the dialog has closed (see discardClosed).
+let pickedTime = null
+
+function timeChosen(when) {
+	pickedTime = when
+}
+
+function pickTimeClosed() {
+	pickingTime.value = false
+	const when = pickedTime
+	pickedTime = null
+	if (when) {
+		submit(when)
+	}
+}
+// The presets are worked out when the menu opens: "After lunch" is gone once lunch is over.
+const menuOpenedAt = ref(new Date())
+const laterOptions = computed(() => offeredPresets(undefined, menuOpenedAt.value))
+
+/**
+ * Sends now, or with a time, has the server send it then.
+ *
+ * @param {Date} [sendAt] when to send; now when left out
+ */
+async function submit(sendAt) {
 	if (uploading.value || sending.value) {
 		return
 	}
@@ -289,14 +352,17 @@ async function submit() {
 	generalError.value = ''
 	sending.value = true
 	try {
-		await send()
+		await (sendAt instanceof Date ? scheduleSend(sendAt) : send())
 		closeComposer('sent')
 	} catch (e) {
-		errors.value = e.fieldErrors ?? {}
+		const { sendAt: timeError, ...fieldErrors } = e.fieldErrors ?? {}
+		errors.value = fieldErrors
 		if (errors.value.cc || errors.value.bcc) {
 			showCopies.value = true
 		}
-		if (!Object.keys(errors.value).length) {
+		if (timeError) {
+			generalError.value = timeError
+		} else if (!Object.keys(errors.value).length) {
 			generalError.value = e.message
 		}
 		composer.minimized = false

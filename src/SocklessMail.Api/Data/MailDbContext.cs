@@ -8,6 +8,7 @@ using SocklessMail.Api.Bimi;
 using SocklessMail.Api.Mailbox;
 using SocklessMail.Api.OAuth;
 using SocklessMail.Api.Rules;
+using SocklessMail.Api.Scheduling;
 using SocklessMail.Api.Senders;
 using SocklessMail.Api.Sync;
 using SocklessMail.Api.Tags;
@@ -60,6 +61,10 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
     public DbSet<TaggedMessage> TaggedMessages => Set<TaggedMessage>();
 
     public DbSet<TagScanState> TagScanStates => Set<TagScanState>();
+
+    public DbSet<ScheduledMessage> ScheduledMessages => Set<ScheduledMessage>();
+
+    public DbSet<SendLaterPresetList> SendLaterPresets => Set<SendLaterPresetList>();
 
     // SQLite cannot order or compare DateTimeOffset natively; store UTC ticks.
     private static readonly ValueConverter<DateTimeOffset, long> UtcTicks =
@@ -303,6 +308,43 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             scan.Property(s => s.KeywordSet).HasMaxLength(20000);
             scan.Property(s => s.ScannedAt).HasConversion(UtcTicks);
             scan.HasQueryFilter(s => s.OwnerUserId == _userId);
+        });
+
+        model.Entity<ScheduledMessage>(scheduled =>
+        {
+            scheduled.ToTable("scheduled_messages");
+            scheduled.HasKey(m => m.Id);
+            scheduled.HasIndex(m => new { m.Status, m.DueAt });
+            scheduled.HasIndex(m => new { m.OwnerUserId, m.SendAt });
+            // Deleting an account drops what it had scheduled (the files go with the next sweep).
+            scheduled.HasOne<MailAccount>().WithMany().HasForeignKey(m => m.AccountId).OnDelete(DeleteBehavior.Cascade);
+            scheduled.Property(m => m.OwnerUserId).HasMaxLength(64);
+            scheduled.Property(m => m.Status).HasConversion<string>().HasMaxLength(16);
+            scheduled.Property(m => m.SendAt).HasConversion(UtcTicks);
+            scheduled.Property(m => m.DueAt).HasConversion(UtcTicks);
+            scheduled.Property(m => m.ErrorCode).HasMaxLength(64);
+            scheduled.Property(m => m.Error).HasMaxLength(2000);
+            scheduled.Property(m => m.Subject).HasMaxLength(2000);
+            scheduled.Property(m => m.Recipients).HasConversion(Addresses, AddressComparer);
+            scheduled.Property(m => m.Preview).HasMaxLength(MessagePreview.MaxLength);
+            scheduled.Property(m => m.MessageIdHeader).HasMaxLength(1000);
+            scheduled.Property(m => m.SourceFolderId).HasMaxLength(4000);
+            scheduled.Property(m => m.SourceMessageId).HasMaxLength(100);
+            scheduled.Property(m => m.SourceMode).HasConversion<string>().HasMaxLength(16);
+            scheduled.Property(m => m.CreatedAt).HasConversion(UtcTicks);
+            scheduled.Property(m => m.UpdatedAt).HasConversion(UtcTicks);
+            scheduled.Ignore(m => m.Source);
+            scheduled.HasQueryFilter(m => m.OwnerUserId == _userId);
+        });
+
+        model.Entity<SendLaterPresetList>(presets =>
+        {
+            presets.ToTable("send_later_presets");
+            presets.HasKey(p => p.OwnerUserId);
+            presets.Property(p => p.OwnerUserId).HasMaxLength(64);
+            presets.Property(p => p.Presets).HasMaxLength(20000);
+            presets.Property(p => p.UpdatedAt).HasConversion(UtcTicks);
+            presets.HasQueryFilter(p => p.OwnerUserId == _userId);
         });
     }
 }

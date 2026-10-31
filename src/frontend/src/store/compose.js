@@ -6,6 +6,7 @@ import { accountsState } from './accounts.js'
 import { layout } from './layout.js'
 import { ActionError, deleteMessages, loadFolders, mailboxState, messagesById, openLocation, refreshMessages } from './mailbox.js'
 import { searchState } from './search.js'
+import { formatSendTime } from './sendLater.js'
 import { unifiedState } from './unified.js'
 
 /**
@@ -46,6 +47,9 @@ function busy() {
 	showWarning(t('sockless_mail', 'Send or discard the message you are writing first.'))
 	return true
 }
+
+/** Whether a message is being written (it is shown, with a warning, when it is). */
+export const composerInUse = busy
 
 function show(draft) {
 	Object.assign(composer, { draft, minimized: false, saveStatus: 'idle', savedAt: null, saveError: '' })
@@ -149,14 +153,17 @@ export async function composeReply(mode, where = openLocation(), messageId = mai
 }
 
 /**
- * Continues a saved draft (the open message, in a Drafts folder). The first save replaces it.
+ * Continues a saved draft (by default the open message, in a Drafts folder). The first save
+ * replaces it.
+ *
+ * @param {{accountId: string, folderId: string}} where the draft's folder
+ * @param {string} messageId the draft
  */
-export async function composeEdit() {
+export async function composeEdit(where = openLocation(), messageId = mailboxState.open.id) {
 	if (busy()) {
 		return
 	}
-	const { accountId, folderId } = openLocation()
-	const messageId = mailboxState.open.id
+	const { accountId, folderId } = where
 	let draft
 	try {
 		draft = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages/${messageId}/draft?mode=edit`)
@@ -323,19 +330,7 @@ export async function closeComposer(outcome) {
  */
 export async function send() {
 	const draft = composer.draft
-	if (draft.uploads.some((u) => !u.id && !u.error)) {
-		throw new Error(t('sockless_mail', 'Wait until all attachments are uploaded.'))
-	}
-	await settleSaves()
-	let result
-	try {
-		result = await apiSend('POST', `/accounts/${draft.accountId}/send`, { ...payload(draft), draft: draft.saved })
-	} catch (e) {
-		if (e?.response?.status === 429) {
-			throw new Error(t('sockless_mail', 'You have sent many messages in a short time. Wait a few minutes and try again.'))
-		}
-		throw new ActionError(e)
-	}
+	const result = await submitDraft(draft, `/accounts/${draft.accountId}/send`, {})
 
 	// The composer closes itself and then calls closeComposer().
 	showSuccess(t('sockless_mail', 'Message sent'))
@@ -351,6 +346,38 @@ export async function send() {
 		}
 	}
 	return result
+}
+
+/** What sending and scheduling have in common: the server builds the message from the draft either way. */
+async function submitDraft(draft, path, extra) {
+	if (draft.uploads.some((u) => !u.id && !u.error)) {
+		throw new Error(t('sockless_mail', 'Wait until all attachments are uploaded.'))
+	}
+	await settleSaves()
+	try {
+		return await apiSend('POST', path, { ...payload(draft), draft: draft.saved, ...extra })
+	} catch (e) {
+		if (e?.response?.status === 429) {
+			throw new Error(t('sockless_mail', 'You have sent many messages in a short time. Wait a few minutes and try again.'))
+		}
+		throw new ActionError(e)
+	}
+}
+
+/**
+ * Has the server send the draft at sendAt, without the browser. Throws like send(); the server
+ * removes the saved draft and the uploads (the message keeps its attachments).
+ *
+ * @param {Date} sendAt when to send
+ */
+export async function scheduleSend(sendAt) {
+	const draft = composer.draft
+	const scheduled = await submitDraft(draft, `/accounts/${draft.accountId}/schedule`, { sendAt: sendAt.toISOString() })
+	showSuccess(t('sockless_mail', 'Scheduled for {time}', { time: formatSendTime(sendAt) }))
+	if (draft.saved && mailboxState.selected.accountId === draft.accountId && mailboxState.selected.folderId === draft.saved.folderId) {
+		refreshMessages()
+	}
+	return scheduled
 }
 
 /** The server flagged the original \Answered; show it without waiting for the next refresh. */

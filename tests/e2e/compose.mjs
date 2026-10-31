@@ -48,7 +48,7 @@ async function openMessage(text) {
 const composerDialog = () => page.getByRole('dialog').filter({ has: page.getByLabel('Subject') })
 
 async function sendAndWait(dialog) {
-	await dialog.getByRole('button', { name: 'Send' }).click()
+	await dialog.getByRole('button', { name: 'Send', exact: true }).click()
 	await dialog.waitFor({ state: 'detached', timeout: 30000 })
 }
 
@@ -75,7 +75,7 @@ await dialog.getByLabel('Message').fill('Hello from the e2e check.\nSecond line.
 await dialog.locator('input[type=file]').setInputFiles(attachmentPath)
 check(await until(async () => await dialog.locator('.composer__chip', { hasText: attachmentName }).count() === 1
 	&& await dialog.getByText('%').count() === 0), 'attachment uploaded')
-await dialog.getByRole('button', { name: 'Send' }).click()
+await dialog.getByRole('button', { name: 'Send', exact: true }).click()
 check(await until(async () => await dialog.getByText(/is not a valid/).count() > 0), 'invalid recipient is reported on the To field, the dialog stays open')
 
 // The invalid entry stays as a marked chip; remove it.
@@ -89,7 +89,7 @@ await openMessage(subject)
 check(await page.locator('a.message-view__attachment', { hasText: attachmentName }).count() === 1, 'it carries the attachment')
 
 // 2. Reply: prefilled, quoted, threaded.
-await page.getByRole('toolbar').getByRole('button', { name: 'Reply', exact: true }).click()
+await page.locator('.command-bar').getByRole('button', { name: 'Reply', exact: true }).click()
 dialog = composerDialog()
 await dialog.waitFor()
 check(await dialog.getByLabel('Subject').inputValue() === `Re: ${subject}`, 'reply subject is "Re: …"')
@@ -102,7 +102,7 @@ check(await pollFor(`Re: ${subject}`), 'the reply arrives')
 
 // 3. Forward, including the original attachment.
 await openMessage(subject)
-await page.getByRole('toolbar').getByRole('button', { name: 'Forward' }).click()
+await page.locator('.command-bar').getByRole('button', { name: 'Forward' }).click()
 dialog = composerDialog()
 await dialog.waitFor()
 check(await dialog.locator('.composer__chip', { hasText: attachmentName }).count() === 1, 'forward lists the original attachment')

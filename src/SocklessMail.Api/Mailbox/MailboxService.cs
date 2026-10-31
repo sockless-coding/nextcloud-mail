@@ -487,7 +487,7 @@ public sealed partial class MailboxService(
         _ => [],
     };
 
-    private static string PlainTextToHtml(TextPart text)
+    internal static string PlainTextToHtml(TextPart text)
     {
         TextConverter converter = text.IsFlowed
             ? new FlowedToHtml { DeleteSpace = text.ContentType.Parameters["delsp"]?.Equals("yes", StringComparison.OrdinalIgnoreCase) ?? false }

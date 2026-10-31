@@ -30,6 +30,8 @@ the Nextcloud UI, authenticated by their Nextcloud session. Mail is handled with
 > another domain than they lead to ask before opening. Colored tags work across all accounts:
 > as IMAP keywords where the server keeps them, as Outlook categories for Microsoft accounts,
 > with a tag folder per tag (all accounts or one), a tag filter and a "Tag" action in rules.
+> Messages can be sent later, at a preset ("Tomorrow morning") or a chosen time; the app's
+> server sends them, so the browser can be closed meanwhile.
 
 ## Layout
 
@@ -516,6 +518,39 @@ existing accounts then fail with `oauth_not_configured` until it is set up again
   messages by Message-ID. Tag folders leave out Trash, Junk and Drafts and show a message that
   is in several folders (Gmail labels) once. Rules can add tags; the tag is set before a rule's
   move, so it travels with the message.
+- **Send later** (`Scheduling/`): `POST /api/accounts/{id}/schedule` takes what `send` takes
+  plus `sendAt` (at least a minute ahead, at most a year). The message is built and checked
+  right then, so its attachments are inside it (uploads expire after 24 hours, a forwarded
+  original may be moved before the time comes), and the saved draft is removed as after sending.
+  It waits encrypted on the volume (`scheduled/`, see "Stored credentials"), with a row in
+  `scheduled_messages` for the list.
+  - `ScheduledSender` sends due messages, at most 4 at a time, whether or not anybody has the
+    app open. It wakes when the next one is due and looks at least every 30 seconds. Sending
+    sets the date to the moment it goes out and keeps the Message-ID; the copy goes to Sent and
+    a reply or forward marks its original, as with `send`.
+  - Each message is claimed (status `sending`, one UPDATE) before it is sent or cancelled, so
+    the timer, "send now" and cancel never act on the same message twice.
+  - Failures that may pass (server unreachable, login refused) are tried again after 1, 5 and
+    15 minutes, then the message is `failed`. A refused recipient, sender or message fails at
+    once. A connection that broke during the transfer, or a restart while sending, fails
+    without retrying, since the message may have gone out. A failure is also reported in
+    Nextcloud's notifications (when the notifications app is enabled).
+  - `GET /api/scheduled[?accountId=]` lists them; `GET /api/scheduled/{id}` adds the
+    recipients, the HTML (sanitized like received mail, nothing fetched from elsewhere) and the
+    attachments' names; `PUT /api/scheduled/{id}` (`sendAt`) reschedules, a failed one too;
+    `POST /api/scheduled/{id}/send-now`; `DELETE /api/scheduled/{id}` cancels and puts the
+    message back in Drafts. Every change is pushed to the user's tabs (`scheduledChanged`).
+  - The **Scheduled** view sits in the folder pane, across accounts in the "All accounts" pane
+    and per account beside its folders, while something is scheduled (with a mark when one
+    failed). The reader offers Send now (Try again now when failed), Reschedule, Edit (back to
+    Drafts and into the composer) and Cancel sending (back to Drafts, after asking).
+  - The UI offers presets worked out in the browser's time zone and a date and time picker;
+    the server only stores the moment. Built in: tomorrow morning, after lunch, Monday morning
+    (offered Friday to Sunday) and in an hour. Users can replace them with their own ("Send later
+    presets" in the settings menu, or "Manage presets…" in the Send later menu): today, tomorrow
+    or the next given weekday at a time, or a number of hours ahead, each optionally offered on
+    some weekdays only. `GET/PUT/DELETE /api/send-later/presets` keeps them per user
+    (`send_later_presets`, up to 20; `null` means the built-in ones, whose names stay translated).
 - **IDLE watchers** keep the INBOX cache current without any request:
   - Only accounts of users who used the app in the last 10 minutes are watched, at most 50
     accounts in total. A user's first request starts their watchers at once.
@@ -662,6 +697,10 @@ and refreshed shortly before they expire; when a provider rotates the refresh to
 saved. A refused refresh token (revoked, password changed) shows as `oauth_signin_required`, and
 the account settings offer "Sign in again". The admins' client secrets are encrypted with the same
 key ring (purpose bound to the provider) and never returned by the API.
+
+Messages scheduled to be sent later are encrypted with the same key ring (purpose bound to the
+scheduled message), as files under `scheduled/`. One that can no longer be decrypted is not sent:
+it shows as failed.
 
 ### Displaying mail
 
@@ -900,6 +939,9 @@ be a way to probe the network the app runs in (HaRP, Nextcloud, cloud metadata e
   cannot carry Outlook categories. Tagged messages that were deleted elsewhere drop out of tag
   folders with the next scan (a week later for app-kept tags). Outlook categories are matched by
   name, so a category renamed in Outlook is a different tag.
+- Send later needs the app to be running: while it is disabled or its container is down,
+  nothing is sent, and due messages go out as soon as it is back. Scheduled messages are not on
+  the mail server, so other mail programs do not see them.
 
 ## License
 

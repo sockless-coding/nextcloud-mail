@@ -88,7 +88,7 @@ check(href?.startsWith(`${base}/`) && href.includes('/s/'), `the link uses the b
 check((await (await request.newContext().then((c) => c.get(href))).text()).includes(fileName), 'the link opens the shared file, signed out')
 
 step('send it')
-await dialog.getByRole('button', { name: 'Send' }).click()
+await dialog.getByRole('button', { name: 'Send', exact: true }).click()
 await dialog.waitFor({ state: 'detached', timeout: 30000 })
 const row = messageRows(page).filter({ hasText: subject }).first()
 check(await until(async () => {

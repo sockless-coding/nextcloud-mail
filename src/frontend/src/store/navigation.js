@@ -4,6 +4,7 @@ import { accountsState, deleteAccount, moveAccount } from './accounts.js'
 import { askNewFolder } from './actions.js'
 import { closeDrawer } from './layout.js'
 import { forgetAccount, loadFolders, mailboxState, selectFolder } from './mailbox.js'
+import { loadScheduled } from './scheduled.js'
 import { clearSearch } from './search.js'
 import { endSelectionMode } from './selection.js'
 import { showUnified, viewOf } from './unified.js'
@@ -20,11 +21,11 @@ export async function selectAccount(account) {
 	endSelectionMode()
 	// Already showing one of this account's folders (checked again after loading, since the user
 	// may have picked a folder meanwhile): keep it instead of jumping back to the inbox.
-	if (mailboxState.selected.accountId === account.id) {
+	if (mailboxState.selected.accountId === account.id && !mailboxState.selected.scheduled) {
 		return
 	}
 	const folders = mailboxState.folders[account.id]?.list.length ? mailboxState.folders[account.id].list : await loadFolders(account.id)
-	if (mailboxState.selected.accountId === account.id) {
+	if (mailboxState.selected.accountId === account.id && !mailboxState.selected.scheduled) {
 		return
 	}
 	const remembered = lastFolderOf(account.id)
@@ -108,12 +109,14 @@ export async function removeAccount(account) {
 		await deleteAccount(account.id)
 		forgetAccount(account.id)
 		forgetAccountView(account.id)
+		// The server dropped what the account had scheduled.
+		loadScheduled()
 	} catch (e) {
 		showError(t('sockless_mail', 'Could not delete the account: {error}', { error: e.message }))
 		return
 	}
 	// Show something else than the empty space the account left.
-	if (!mailboxState.selected.unified && !mailboxState.selected.accountId) {
+	if (!mailboxState.selected.unified && !mailboxState.selected.scheduled && !mailboxState.selected.accountId) {
 		if (accountsState.accounts.length > 1) {
 			openUnified()
 		} else if (accountsState.accounts.length) {

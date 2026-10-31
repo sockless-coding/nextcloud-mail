@@ -64,9 +64,9 @@ export function inUnifiedView(accountId, folderId) {
 	return !!view && view.roles.some((use) => folderOfUse(accountId, use) === folderId)
 }
 
-/** Whether the folder pane shows all accounts (a unified view, or a tag folder across accounts). */
+/** Whether the folder pane shows all accounts (a unified view, a tag folder or Scheduled across accounts). */
 export function unifiedPaneShown() {
-	return !!mailboxState.selected.unified && !mailboxState.selected.accountId
+	return (!!mailboxState.selected.unified || !!mailboxState.selected.scheduled) && !mailboxState.selected.accountId
 }
 
 /** Unified folders some account has, then the smart folders. */
