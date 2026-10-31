@@ -1,0 +1,73 @@
+# Publishes a release when a tag v<version> is pushed: the container image on ghcr.io and a
+# GitHub release with info.xml and the companion app.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE: ghcr.io/sockless-coding/sockless_mail
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check versions
+        id: version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' appinfo/info.xml | head -1)"
+          image_tag="$(sed -n 's:.*<image-tag>\(.*\)</image-tag>.*:\1:p' appinfo/info.xml | head -1)"
+          image="$(sed -n 's:.*<registry>\(.*\)</registry>.*:\1:p' appinfo/info.xml | head -1)/$(sed -n 's:.*<image>\(.*\)</image>.*:\1:p' appinfo/info.xml | head -1)"
+          [ "$tag" = "$version" ] || { echo "Tag $GITHUB_REF_NAME does not match <version> $version"; exit 1; }
+          [ "$version" = "$image_tag" ] || { echo "<version> $version and <image-tag> $image_tag differ"; exit 1; }
+          [ "$image" = "$IMAGE" ] || { echo "info.xml names $image, the workflow pushes $IMAGE"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Unit tests
+        run: dotnet test --project tests/SocklessMail.Tests
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.licenses=MIT
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Package the companion app
+        run: tar -czf socklessmail.tar.gz -C companion socklessmail
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" appinfo/info.xml socklessmail.tar.gz \
+              --title "Sockless Mail ${{ steps.version.outputs.version }}" --generate-notes

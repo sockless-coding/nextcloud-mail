@@ -85,12 +85,14 @@ Nextcloud and are signed in by their Nextcloud session. Mail is handled with Mai
      `Upgrade` and `Connection` headers in nginx). Without them, the browser falls back to SSE
      or long polling.
    - [dev/nginx.conf](dev/nginx.conf) has a working example.
-2. **Image**: build the [Dockerfile](Dockerfile) and push it to a registry. Set `<registry>`,
-   `<image>` and `<image-tag>` in [appinfo/info.xml](appinfo/info.xml) to match. The
-   `sockless.local` registry in the file is a placeholder used by the dev stack.
-3. **Register**:
+2. **Image**: releases are published as `ghcr.io/sockless-coding/sockless_mail:<version>` for
+   amd64 and arm64 (see [Releasing](#releasing)). For your own build, push it to a registry
+   your Docker engine can pull from, and set `<registry>`, `<image>` and `<image-tag>` in
+   [appinfo/info.xml](appinfo/info.xml) to match.
+3. **Register**. `--info-xml` takes a local path or a URL, such as the release's own manifest:
    ```bash
-   occ app_api:app:register sockless_mail <daemon> --info-xml /path/to/info.xml \
+   occ app_api:app:register sockless_mail <daemon> \
+       --info-xml https://raw.githubusercontent.com/sockless-coding/nextcloud-mail/v<version>/appinfo/info.xml \
        --env SOCKLESS_MAIL_ENCRYPTION_KEY='<long random value>' --wait-finish
    ```
    Generate the key with, for example, `openssl rand -base64 48`, and keep a copy somewhere
@@ -104,22 +106,49 @@ Nextcloud and are signed in by their Nextcloud session. Mail is handled with Mai
    occ app:enable socklessmail
    ```
    The app menu entry then points at the new address, and AppAPI's address keeps working. The
-   companion only serves the page; AppAPI and the ExApp are still required. Keep its
-   `<version>` in step with the ExApp's.
+   companion only serves the page; AppAPI and the ExApp are still required. Each release has
+   it as `socklessmail.tar.gz`.
+
+### Nextcloud AIO
+
+Enable HaRP in the AIO interface first. AIO then registers the deploy daemon and routes
+`/exapps/` for you. Run `occ` inside the Nextcloud container:
+
+```bash
+occ() { docker exec --user www-data -i nextcloud-aio-nextcloud php occ "$@"; }
+VERSION=0.32.0                    # the release to install
+KEY="$(openssl rand -base64 48)"; echo "$KEY"   # store this in your password manager
+
+occ app_api:daemon:list   # the name of the HaRP daemon AIO registered
+occ app_api:app:register sockless_mail <daemon> \
+    --info-xml "https://raw.githubusercontent.com/sockless-coding/nextcloud-mail/v$VERSION/appinfo/info.xml" \
+    --env SOCKLESS_MAIL_ENCRYPTION_KEY="$KEY" --wait-finish
+occ app_api:app:list      # check that sockless_mail is enabled
+
+# Optional: the companion app, for /apps/socklessmail/
+curl -fsSL "https://github.com/sockless-coding/nextcloud-mail/releases/download/v$VERSION/socklessmail.tar.gz" \
+    | docker exec --user www-data -i nextcloud-aio-nextcloud tar -xz -C /var/www/html/custom_apps
+occ app:enable socklessmail
+```
+
+AIO's backup covers AIO's own volumes. Check whether it also includes the app's volume
+`nc_app_sockless_mail_data`, and back that volume up yourself if it does not.
 
 ### Updating
 
-1. Bump `<version>` and `<image-tag>` in `appinfo/info.xml` (keep them equal), then build and
-   push the image.
-2. Run:
+1. Run:
    ```bash
-   occ app_api:app:update sockless_mail --info-xml /path/to/info.xml --wait-finish
+   occ app_api:app:update sockless_mail \
+       --info-xml https://raw.githubusercontent.com/sockless-coding/nextcloud-mail/v<version>/appinfo/info.xml \
+       --wait-finish
    ```
-   The app secret, port, settings and data volume are kept. An update with an unchanged version
-   does nothing.
-3. If every `/exapps/sockless_mail/...` request answers 404 after the update, run
+   The app secret, port, settings and data volume are kept. An update to the version already
+   installed does nothing.
+2. If every `/exapps/sockless_mail/...` request answers 404 after the update, run
    `occ app_api:app:disable sockless_mail` and then `occ app_api:app:enable sockless_mail` (see
    [Known limitations](#known-limitations)).
+3. For the companion app, unpack the new `socklessmail.tar.gz` over the old copy. Nextcloud
+   updates it on the next page load, or with `occ upgrade`.
 
 Unregistering keeps the data volume unless you pass `--rm-data`. Registering again creates a
 new app secret, which matters if no encryption key is set.
@@ -332,7 +361,7 @@ Requirements: .NET SDK 10, Node 22, Docker (Engine 25+ for the healthcheck start
 dotnet test --project tests/SocklessMail.Tests              # unit + endpoint tests
 dotnet test --project tests/SocklessMail.IntegrationTests   # needs Docker: starts GreenMail and Dovecot
 (cd src/frontend && npm ci && npm run build)
-dev/dev.sh build                                            # docker build sockless.local/sockless_mail:<image-tag>
+dev/dev.sh build                                            # docker build ghcr.io/sockless-coding/sockless_mail:<image-tag>
 ```
 
 Database changes: run `dotnet tool restore`, then
@@ -374,7 +403,7 @@ same dev-only secret and port, so you can start the app from your IDE instead.
 **Production-like loop: the container deployed by HaRP**
 
 ```bash
-dev/dev.sh build             # docker build sockless.local/sockless_mail:<image-tag>
+dev/dev.sh build             # docker build ghcr.io/sockless-coding/sockless_mail:<image-tag>
 dev/dev.sh register-docker   # deploy through the harp_dev daemon
 dev/dev.sh logs              # follow the container's logs
 ```
@@ -383,8 +412,9 @@ dev/dev.sh logs              # follow the container's logs
   run `dev/dev.sh build` and `dev/dev.sh update-docker`. `update-docker` also disables and
   enables the app (see [Known limitations](#known-limitations)).
 - `register-docker` replaces any installed copy and works without a bump.
-- `dev.sh up` maps the placeholder `sockless.local` registry to "local", so AppAPI uses the local
-  image.
+- `dev.sh up` maps the registry in `info.xml` (`ghcr.io`) to "local" on the dev daemon, so
+  AppAPI deploys the locally built image instead of pulling the published one. Run `up` once on
+  an existing stack to add the mapping.
 - On Windows, `dev\update-docker.bat` builds and updates from cmd or Explorer, through Git Bash.
   `dev\update-docker.bat register` registers again instead, for a rebuild without a bump.
 
@@ -422,6 +452,22 @@ node accounts.mjs    # one script per area; see the list below
 They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console
 errors. They open the app at `/apps/socklessmail/`; `APP_PAGE=embedded` uses AppAPI's page
 instead.
+
+### Releasing
+
+1. Bump `<version>` and `<image-tag>` in `appinfo/info.xml` (keep them equal), and `<version>`
+   in `companion/socklessmail/appinfo/info.xml`. Commit.
+2. Tag and push:
+   ```bash
+   git tag v0.32.0 && git push origin v0.32.0
+   ```
+3. [.github/workflows/release.yml](.github/workflows/release.yml) checks that the tag, the
+   version and the image tag agree, runs the unit tests, and pushes
+   `ghcr.io/sockless-coding/sockless_mail:<version>` and `:latest` for amd64 and arm64. It then
+   creates a GitHub release with `info.xml` and `socklessmail.tar.gz`.
+4. The first time only: on GitHub, open the package's settings (your profile or organization →
+   Packages → `sockless_mail`) and make the package **public**, so Docker can pull it without
+   logging in.
 
 ## License
 

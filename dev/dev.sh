@@ -15,7 +15,8 @@ APP_ID=sockless_mail
 INFO_XML="$ROOT/appinfo/info.xml"
 VERSION="$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$INFO_XML" | head -1)"
 IMAGE_TAG="$(sed -n 's:.*<image-tag>\(.*\)</image-tag>.*:\1:p' "$INFO_XML" | head -1)"
-IMAGE="sockless.local/$APP_ID:$IMAGE_TAG"
+REGISTRY="$(sed -n 's:.*<registry>\(.*\)</registry>.*:\1:p' "$INFO_XML" | head -1)"
+IMAGE="$REGISTRY/$(sed -n 's:.*<image>\(.*\)</image>.*:\1:p' "$INFO_XML" | head -1):$IMAGE_TAG"
 
 DAEMON_HARP=harp_dev
 DAEMON_MANUAL=manual_dev
@@ -57,8 +58,10 @@ cmd_up() {
     if ! grep -q "$DAEMON_HARP" <<<"$daemons"; then
         occ app_api:daemon:register "$DAEMON_HARP" "HaRP (dev)" docker-install http harp:8780 http://proxy \
             --net sockless-dev --harp --harp_frp_address harp:8782 --harp_shared_key "$HP_SHARED_KEY" --set-default
-        # Deploy locally built images: skip the pull for the fictional registry in info.xml.
-        occ app_api:daemon:registry:add "$DAEMON_HARP" --registry-from sockless.local --registry-to local
+    fi
+    # Deploy locally built images: skip the pull for info.xml's registry (also on older stacks).
+    if ! occ app_api:daemon:registry:list "$DAEMON_HARP" | grep -qxF " - $REGISTRY -> local"; then
+        occ app_api:daemon:registry:add "$DAEMON_HARP" --registry-from "$REGISTRY" --registry-to local
     fi
     if ! grep -q "$DAEMON_MANUAL" <<<"$daemons"; then
         occ app_api:daemon:register "$DAEMON_MANUAL" "Manual (dev)" manual-install http host.docker.internal http://proxy

@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # --- Frontend: Vue bundle into src/SocklessMail.Api/wwwroot/{js,css} -----------------------
-FROM node:22-alpine AS frontend
+# The frontend and the framework-dependent publish are the same on every architecture, so they
+# run on the build machine's platform; only the frp and runtime stages are per target.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 WORKDIR /src/src/frontend
 COPY src/frontend/package.json src/frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
@@ -11,7 +13,7 @@ COPY src/frontend/ ./
 RUN npm run build
 
 # --- Backend: framework-dependent publish ---------------------------------------------------
-FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS backend
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS backend
 WORKDIR /src
 COPY Directory.Build.props ./
 COPY src/SocklessMail.Api/SocklessMail.Api.csproj src/SocklessMail.Api/

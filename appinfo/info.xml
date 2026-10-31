@@ -18,10 +18,10 @@ Each user can connect any number of IMAP/SMTP accounts. The backend is written i
 	</dependencies>
 	<external-app>
 		<docker-install>
-			<!-- Fictional registry for local images (dev/dev.sh maps it to "local").
-			     Set the real registry and image before publishing a release. -->
-			<registry>sockless.local</registry>
-			<image>sockless_mail</image>
+			<!-- Published by .github/workflows/release.yml on a v<version> tag. The dev stack
+			     maps this registry to "local", so it deploys images built by dev/dev.sh instead. -->
+			<registry>ghcr.io</registry>
+			<image>sockless-coding/sockless_mail</image>
 			<image-tag>0.32.0</image-tag>
 		</docker-install>
 		<routes>
