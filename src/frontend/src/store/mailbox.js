@@ -146,7 +146,7 @@ export async function loadMore() {
 	}
 	state.loadingMore = true
 	try {
-		const page = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages?limit=${PAGE_SIZE}&before=${state.nextBefore}`)
+		const page = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages?limit=${PAGE_SIZE}&before=${encodeURIComponent(state.nextBefore)}`)
 		// The token stays the first page's: changes up to this page's token are not merged yet.
 		if (isSelected(accountId, folderId)) {
 			state.list.push(...page.messages)
@@ -202,9 +202,12 @@ export async function refreshMessages() {
 				fresh.push(message)
 			}
 		}
-		// Messages newer than everything listed go on top; others belong to pages not loaded yet.
-		const newestKnown = state.list.length ? uidOf(state.list[0].id) : 0
-		state.list.unshift(...fresh.filter((m) => uidOf(m.id) > newestKnown))
+		// New mail sorts in by date; anything older than the last loaded entry belongs to pages not loaded yet.
+		const last = state.list.at(-1)
+		const inRange = fresh.filter((m) => !state.nextBefore || !last || byDate(m, last) < 0)
+		if (inRange.length) {
+			state.list = [...state.list, ...inRange].sort(byDate)
+		}
 		state.total = changes.total
 		state.token = changes.token
 		updateFolderCounts(changes)
@@ -305,6 +308,11 @@ export function forgetAccount(accountId) {
 
 function isSelected(accountId, folderId) {
 	return mailboxState.selected.accountId === accountId && mailboxState.selected.folderId === folderId
+}
+
+/** The server's order of a folder's list: date, then UID; both descending. */
+function byDate(a, b) {
+	return Date.parse(b.date) - Date.parse(a.date) || uidOf(b.id) - uidOf(a.id)
 }
 
 function uidOf(messageId) {

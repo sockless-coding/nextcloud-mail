@@ -74,20 +74,21 @@ public sealed partial class MailboxService(
         return list;
     }
 
-    public async Task<MessagePage> GetMessagesAsync(MailAccount account, string folderId, uint? before, int limit, CancellationToken ct)
+    public async Task<MessagePage> GetMessagesAsync(MailAccount account, string folderId, string? before, int limit, CancellationToken ct)
     {
+        var cursor = UnifiedCursor.Parse(before);
         var fullName = FullNameOf(folderId);
         var state = await CurrentStateAsync(account, folderId, fullName, ct);
-        var rows = await cache.PageAsync(state, before, limit + 1, ct);
+        var rows = await cache.PageByDateAsync(state, cursor, limit + 1, ct);
         if (rows.Count <= limit && state.WindowStart > 1)
         {
             // The page reaches below the cached window: sync again and page further back on the server.
-            state = await SyncAsync(account, folderId, fullName, (before, limit + 1 - rows.Count), ct);
-            rows = await cache.PageAsync(state, before, limit + 1, ct);
+            state = await SyncAsync(account, folderId, fullName, Math.Max(limit + 1 - rows.Count, DefaultPageSize), ct);
+            rows = await cache.PageByDateAsync(state, cursor, limit + 1, ct);
         }
 
         var page = rows.Take(limit).ToList();
-        uint? next = rows.Count > limit ? page[^1].Uid : null;
+        var next = rows.Count > limit ? UnifiedCursor.Of(account.Id, page[^1]).ToString() : null;
         return new MessagePage(
             page.Select(m => FolderCache.ToSummaryDto(state.UidValidity, m)).ToList(),
             next, state.Total, state.UidValidity, state.Unread, state.ChangeSeq);
@@ -191,7 +192,7 @@ public sealed partial class MailboxService(
 
     /// <summary>Syncs the folder and caches at least <paramref name="need"/> more messages below its window.</summary>
     public Task<CachedFolder> ExtendFolderAsync(MailAccount account, string folderId, int need, CancellationToken ct) =>
-        SyncAsync(account, folderId, FullNameOf(folderId), (null, need), ct);
+        SyncAsync(account, folderId, FullNameOf(folderId), need, ct);
 
     /// <summary>The account's folder id for each special use (see <see cref="FolderRoles"/>), listed on the server when not known.</summary>
     public async Task<IReadOnlyDictionary<string, string>> FolderRolesAsync(MailAccount account, CancellationToken ct)
@@ -216,7 +217,7 @@ public sealed partial class MailboxService(
         ?? await SyncAsync(account, folderId, fullName, null, ct);
 
     private async Task<CachedFolder> SyncAsync(
-        MailAccount account, string folderId, string fullName, (uint? Before, int Need)? extend, CancellationToken ct)
+        MailAccount account, string folderId, string fullName, int? extend, CancellationToken ct)
     {
         // Lock before leasing a connection (see SyncLocks).
         using var _ = await syncLocks.AcquireAsync(account.Id, fullName, ct);
@@ -230,7 +231,7 @@ public sealed partial class MailboxService(
 
             var folder = await OpenFolderAsync(client, folderId, token);
             var state = await cache.SyncAsync(client, account, folder, DefaultPageSize, token);
-            return extend is { } e ? await cache.ExtendAsync(account, folder, state, e.Before, e.Need, token) : state;
+            return extend is { } need ? await cache.ExtendAsync(account, folder, state, need, token) : state;
         }, ct);
     }
 

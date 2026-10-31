@@ -146,6 +146,12 @@ Internals for people working on the app. Installing and configuring it is in the
     the first time the folder is shown, grows downwards when older pages are requested, and new
     mail extends it upwards. More than 500 new messages since the last sync rebuild the window
     from the newest page instead.
+  - UIDs need not follow dates: a Gmail label numbers messages in the order they were labelled,
+    and mail moved or imported into a folder gets new UIDs. Whenever the window is built or
+    grows, `UID SEARCH <below the window> SENTSINCE <oldest date just cached, less a day>` finds
+    older UIDs with newer mail, and the window is extended down to the lowest of them (by at
+    most 500 messages). So the window holds every message at least as new as the ones it
+    caches, and lists can be ordered by date.
   - Every list request first runs an **incremental sync** of the folder, then answers from the
     cache. How the sync finds changes depends on the server:
     - **QRESYNC** (enabled on every connection that offers it):
@@ -165,8 +171,9 @@ Internals for people working on the app. Installing and configuring it is in the
     applied them.
   - Folders that disappear from the folder list (deleted or renamed elsewhere) lose their cache
     the next time the list is loaded. Deleting an account deletes its cache.
-- **Paging**: newest first, 50 per page. The cursor is a UID (`?before=<uid>`), so mail arriving
-  between page loads neither shifts nor duplicates entries. Message ids are `<UIDVALIDITY>-<UID>`,
+- **Paging**: newest first by date (then UID), 50 per page. The cursor names the last message's
+  position (`?before=<utc ticks>.<account id>.<uid>`, as in the unified folders), so mail
+  arriving between page loads neither shifts nor duplicates entries. Message ids are `<UIDVALIDITY>-<UID>`,
   so an id becomes 404 when the server renumbers the folder.
 - **Change tokens**: each folder has a change counter. Every row records the change that last
   touched it, and removals are kept for 24 hours. A page answers with a `token`, and
@@ -200,7 +207,7 @@ Internals for people working on the app. Installing and configuring it is in the
 - **Search** has two scopes, chosen next to the search box in the command bar:
   - **This folder** (`GET …/folders/{id}/search?q=…&before=<uid>`) asks the mail server:
     `UID SEARCH TEXT <term> TEXT <term> …`. It matches headers and message text, finds old mail
-    the cache has never seen, and pages newest first with the same UID cursor as the list. The
+    the cache has never seen, and pages newest first by UID (`?before=<uid>`). The
     server decides how terms match: Dovecot with a full-text index matches words, others (such
     as GreenMail) substrings. The results are not cached.
   - **All accounts** (`GET /api/search?q=…`) only asks the database:

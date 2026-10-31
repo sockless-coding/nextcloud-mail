@@ -116,7 +116,7 @@ Enable HaRP in the AIO interface first. AIO then registers the deploy daemon and
 
 ```bash
 occ() { docker exec --user www-data -i nextcloud-aio-nextcloud php occ "$@"; }
-VERSION=0.32.1                    # the release to install
+VERSION=0.32.2                    # the release to install
 KEY="$(openssl rand -base64 48)"; echo "$KEY"   # store this in your password manager
 
 occ app_api:daemon:list   # AIO's HaRP daemon is harp_aio

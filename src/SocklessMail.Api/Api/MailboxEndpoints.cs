@@ -34,7 +34,7 @@ public static class MailboxEndpoints
                 : NotFound());
 
         account.MapGet("/folders/{folderId}/messages", async (
-                Guid accountId, string folderId, uint? before, int? limit,
+                Guid accountId, string folderId, string? before, int? limit,
                 ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
             await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
                 ? Results.Ok(await mailbox.GetMessagesAsync(a, folderId, before,

@@ -39,12 +39,13 @@ public sealed record MessageSummaryDto(
     string[] Keywords);
 
 /// <summary>
-/// Newest first. <see cref="NextBefore"/> is the cursor for the next (older) page; null at the end.
-/// UID-based, so new mail arriving between page loads does not shift or duplicate entries.
+/// Newest first by date. <see cref="NextBefore"/> is the cursor for the next (older) page; null at
+/// the end. It names the last message's position (a <see cref="UnifiedCursor"/>), so new mail
+/// arriving between page loads does not shift or duplicate entries.
 /// <see cref="Token"/> is what to pass to the changes endpoint to learn what changed afterwards.
 /// </summary>
 public sealed record MessagePage(
-    IReadOnlyList<MessageSummaryDto> Messages, uint? NextBefore, int Total, uint UidValidity, int? Unread, long Token);
+    IReadOnlyList<MessageSummaryDto> Messages, string? NextBefore, int Total, uint UidValidity, int? Unread, long Token);
 
 public sealed record AttachmentDto(string PartId, string FileName, string ContentType, long? Size);
 

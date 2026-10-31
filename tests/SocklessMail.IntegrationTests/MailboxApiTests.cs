@@ -196,7 +196,7 @@ public sealed class MailboxApiTests : IClassFixture<ReaderMailbox>, IAsyncLifeti
                 break;
             }
 
-            query = $"?limit=50&before={page.GetProperty("nextBefore").GetUInt32()}";
+            query = $"?limit=50&before={page.GetProperty("nextBefore").GetString()}";
         }
 
         Assert.Equal(3, pages);

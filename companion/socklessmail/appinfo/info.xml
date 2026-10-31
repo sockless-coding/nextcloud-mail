@@ -8,7 +8,7 @@
 It shows the same mail page at /apps/socklessmail/ instead of AppAPI's /apps/app_api/embedded/sockless_mail/sockless_mail
 and points the Sockless Mail entry of the app menu there. Everything else, including the mail page itself, still comes from the External App.]]></description>
 	<!-- Same version as the External App (appinfo/info.xml at the repository root). -->
-	<version>0.32.1</version>
+	<version>0.32.2</version>
 	<licence>MIT</licence>
 	<author>Jimmy Everling</author>
 	<namespace>SocklessMail</namespace>

@@ -153,11 +153,11 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
     }
 
     /// <summary>
-    /// Extends the window downwards so that at least <paramref name="need"/> messages below
-    /// <paramref name="before"/> are cached (fewer if the folder has no more). Runs right after
-    /// <see cref="SyncAsync"/> on the same open folder.
+    /// Extends the window downwards so that at least <paramref name="need"/> more messages are
+    /// cached (fewer if the folder has no more), and then every message as new as those (see
+    /// <see cref="CoverByDateAsync"/>). Runs right after <see cref="SyncAsync"/> on the same open folder.
     /// </summary>
-    public async Task<CachedFolder> ExtendAsync(MailAccount account, IMailFolder folder, CachedFolder state, uint? before, int need, CancellationToken ct)
+    public async Task<CachedFolder> ExtendAsync(MailAccount account, IMailFolder folder, CachedFolder state, int need, CancellationToken ct)
     {
         if (state.WindowStart is not { } start || start <= 1)
         {
@@ -167,35 +167,23 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         var older = await folder.SearchAsync(
             SearchQuery.Uids(new UniqueIdRange(new UniqueId(state.UidValidity, 1), new UniqueId(state.UidValidity, start - 1))), ct);
         var ids = older.Select(u => u.Id).Where(u => u < start).Order().ToList();
-        // The window must stay contiguous: everything between the cursor and the window comes along.
-        var belowCursor = before is { } b ? ids.Count(u => u < b) : ids.Count;
-        var from = Math.Max(0, belowCursor - need);
+        var from = Math.Max(0, ids.Count - need);
         var fetch = ids[from..];
 
         var plan = new SyncPlan { Quiet = true, WindowStart = from == 0 ? 1 : fetch[0] };
         if (fetch.Count > 0)
         {
-            plan.Inserts.AddRange(await folder.FetchAsync(fetch.Select(u => new UniqueId(state.UidValidity, u)).ToList(), ListRequest(), ct));
+            var summaries = await folder.FetchAsync(fetch.Select(u => new UniqueId(state.UidValidity, u)).ToList(), ListRequest(), ct);
+            plan.Inserts.AddRange(summaries);
+            await CoverByDateAsync(folder, state.UidValidity, summaries, plan, ct);
         }
 
         return await ApplyAsync(account, Key(folder.FullName), plan, null, ct);
     }
 
-    /// <summary>Newest first; <paramref name="take"/> rows below <paramref name="before"/> (all when null).</summary>
-    public Task<List<CachedMessage>> PageAsync(CachedFolder state, uint? before, int take, CancellationToken ct)
-    {
-        var query = db.Messages.AsNoTracking().Where(m => m.FolderId == state.Id);
-        if (before is { } b)
-        {
-            query = query.Where(m => m.Uid < b);
-        }
-
-        return query.OrderByDescending(m => m.Uid).Take(take).ToListAsync(ct);
-    }
-
     /// <summary>
     /// Newest first by date: <paramref name="take"/> rows that come after <paramref name="cursor"/>
-    /// in the unified inbox order (date, account id, UID; all descending).
+    /// in the order of the folder lists and the unified inbox (date, account id, UID; all descending).
     /// </summary>
     public Task<List<CachedMessage>> PageByDateAsync(CachedFolder state, UnifiedCursor? cursor, int take, CancellationToken ct)
     {
@@ -444,6 +432,43 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         plan.Inserts.AddRange(summaries);
         plan.WindowStart = first == 0 || summaries.Count == 0 ? 1 : summaries.Min(s => s.UniqueId.Id);
         plan.LastUid = Math.Max(summaries.Count == 0 ? 0 : summaries.Max(s => s.UniqueId.Id), (uidNext ?? 1) - 1);
+        await CoverByDateAsync(folder, folder.UidValidity, summaries, plan, ct);
+    }
+
+    /// <summary>
+    /// Lists are ordered by date, but the window is a range of UIDs, and UIDs need not follow dates
+    /// (a Gmail label numbers its messages in the order they were labelled; mail moved or imported
+    /// into a folder gets new UIDs). So that the window holds every message at least as new as the
+    /// oldest of <paramref name="loaded"/>, it is extended down to the lowest UID below it that was
+    /// sent since then (a day early: SENTSINCE compares dates without time or zone), by at most
+    /// <see cref="MaxNewMessages"/> messages.
+    /// </summary>
+    private static async Task CoverByDateAsync(IMailFolder folder, uint uidValidity, IList<IMessageSummary> loaded, SyncPlan plan, CancellationToken ct)
+    {
+        if (plan.WindowStart is not { } start || start <= 1 || loaded.Count == 0)
+        {
+            return;
+        }
+
+        var oldest = loaded.Min(s => s.Envelope?.Date ?? s.InternalDate ?? DateTimeOffset.UnixEpoch);
+        var below = new UniqueIdRange(new UniqueId(uidValidity, 1), new UniqueId(uidValidity, start - 1));
+        var newer = await folder.SearchAsync(SearchQuery.Uids(below).And(SearchQuery.SentSince(oldest.UtcDateTime.Date.AddDays(-1))), ct);
+        var lowest = newer.Select(u => u.Id).Where(u => u < start).DefaultIfEmpty(start).Min();
+        if (lowest >= start)
+        {
+            return;
+        }
+
+        // The window must stay contiguous: everything between the lowest such message and the window comes along.
+        var between = await folder.SearchAsync(SearchQuery.Uids(new UniqueIdRange(new UniqueId(uidValidity, lowest), new UniqueId(uidValidity, start - 1))), ct);
+        var fetch = between.Select(u => u.Id).Where(u => u >= lowest && u < start).Order().TakeLast(MaxNewMessages).ToList();
+        if (fetch.Count == 0)
+        {
+            return;
+        }
+
+        plan.Inserts.AddRange(await folder.FetchAsync(fetch.Select(u => new UniqueId(uidValidity, u)).ToList(), ListRequest(), ct));
+        plan.WindowStart = fetch[0];
     }
 
     /// <summary>Flag changes and removals inside the cached window.</summary>

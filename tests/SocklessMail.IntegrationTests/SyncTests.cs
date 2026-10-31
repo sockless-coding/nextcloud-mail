@@ -50,9 +50,14 @@ public sealed class SyncTests(DovecotFixture dovecot) : IDisposable
         return (client, await AddAccountAsync(client, dovecot, user), user, imap);
     }
 
-    private static MimeMessage Simple(string subject)
+    private static MimeMessage Simple(string subject, DateTimeOffset? date = null)
     {
         var message = new MimeMessage { Subject = subject, Body = new TextPart("plain") { Text = subject } };
+        if (date is { } d)
+        {
+            message.Date = d;
+        }
+
         message.From.Add(new MailboxAddress("Sender", "sender@example.test"));
         message.To.Add(new MailboxAddress("", "someone@example.test"));
         return message;
@@ -151,13 +156,13 @@ public sealed class SyncTests(DovecotFixture dovecot) : IDisposable
         var uids = await AppendAsync(imap.Inbox, "Message", 120, Ct);
 
         var seen = new List<string>();
-        uint? before = null;
+        string? before = null;
         long token = 0;
         do
         {
             var page = await GetAsync(client, $"/api/accounts/{account}/folders/{Inbox}/messages?limit=40{(before is null ? "" : $"&before={before}")}");
             seen.AddRange(page.GetProperty("messages").EnumerateArray().Select(m => m.GetProperty("subject").GetString()!));
-            before = page.GetProperty("nextBefore").ValueKind == JsonValueKind.Null ? null : page.GetProperty("nextBefore").GetUInt32();
+            before = page.GetProperty("nextBefore").GetString();
             token = page.GetProperty("token").GetInt64();
         }
         while (before is not null);
@@ -170,6 +175,40 @@ public sealed class SyncTests(DovecotFixture dovecot) : IDisposable
         var changed = changes.GetProperty("messages").EnumerateArray().Single();
         Assert.Equal("Message 5", changed.GetProperty("subject").GetString());
         Assert.True(changed.GetProperty("flagged").GetBoolean());
+    }
+
+    [Theory]
+    [MemberData(nameof(Modes))]
+    public async Task Lists_are_ordered_by_date_when_uids_are_not(string mode)
+    {
+        // Like a Gmail label applied to new mail first and old mail later: the lowest UIDs are the
+        // newest messages, below the window of the newest UIDs that a first sync caches.
+        var (client, account, _, imap) = await SetUpAsync(mode);
+        var recent = new DateTimeOffset(2026, 10, 1, 8, 0, 0, TimeSpan.Zero);
+        var old = new DateTimeOffset(2025, 1, 1, 8, 0, 0, TimeSpan.Zero);
+        for (var i = 1; i <= 30; i++)
+        {
+            await imap.Inbox.AppendAsync(Simple($"Recent {i}", recent.AddHours(i)), MessageFlags.None, Ct);
+        }
+
+        for (var i = 1; i <= 50; i++)
+        {
+            await imap.Inbox.AppendAsync(Simple($"Old {i}", old.AddDays(i)), MessageFlags.None, Ct);
+        }
+
+        var seen = new List<string>();
+        string? before = null;
+        do
+        {
+            var page = await GetAsync(client, $"/api/accounts/{account}/folders/{Inbox}/messages?limit=10{(before is null ? "" : $"&before={before}")}");
+            seen.AddRange(page.GetProperty("messages").EnumerateArray().Select(m => m.GetProperty("subject").GetString()!));
+            before = page.GetProperty("nextBefore").GetString();
+        }
+        while (before is not null);
+
+        Assert.Equal(
+            Enumerable.Range(1, 30).Reverse().Select(i => $"Recent {i}").Concat(Enumerable.Range(1, 50).Reverse().Select(i => $"Old {i}")),
+            seen);
     }
 
     [Theory]
