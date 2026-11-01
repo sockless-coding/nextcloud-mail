@@ -579,8 +579,9 @@ onBeforeUnmount(() => {
  * Nextcloud's server styles give every plain button a background and text colour on hover,
  * focus, press and when disabled, with selectors no component rule outweighs. The app's own
  * buttons draw their states themselves, through --sm-button-background and --sm-button-color.
+ * #content-vue rather than .sm-shell: the composer sits beside the shell, not in it.
  */
-#content-vue .sm-shell button:not(.button-vue):is(:hover, :focus, :active, :disabled) {
+#content-vue button:not(.button-vue):is(:hover, :focus, :active, :disabled) {
 	border-color: transparent;
 	background-color: var(--sm-button-background, transparent);
 	color: var(--sm-button-color, inherit);
@@ -590,8 +591,9 @@ onBeforeUnmount(() => {
  * The server styles also take NcIconSvgWrapper's "icon-vue" span in a plain button for a legacy
  * icon-* class: inline-block on the text bottom at half opacity, so the icon sits high and faded.
  * Give it back its centred box, sized to the icon; the button's own padding and gap place it.
+ * The composer sits beside .sm-shell and dialogs are on <body> (.modal-mask), so both are named.
  */
-#content-vue .sm-shell button:not(.button-vue) > .icon-vue {
+:is(#content-vue, .modal-mask) button:not(.button-vue) > .icon-vue {
 	display: flex;
 	min-width: 0;
 	min-height: 0;

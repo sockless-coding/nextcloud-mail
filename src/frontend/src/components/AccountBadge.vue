@@ -46,4 +46,10 @@ const text = computed(() => shown.value.badgeText || accountInitials(props.accou
 	overflow: hidden;
 	white-space: nowrap;
 }
+
+/* NcIconSvgWrapper is a whole click target (34–44px) by default; small badges are less. */
+.account-badge :deep(.icon-vue) {
+	min-width: 0;
+	min-height: 0;
+}
 </style>

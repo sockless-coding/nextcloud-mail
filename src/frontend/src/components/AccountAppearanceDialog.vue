@@ -210,6 +210,11 @@ const buttons = computed(() => [
 	cursor: pointer;
 }
 
+/* NcColorPicker wraps its trigger in a block, which puts the button on a text line. */
+.appearance__swatches :deep(.v-popper) {
+	display: flex;
+}
+
 .appearance__swatch {
 	outline: 2px solid transparent;
 	outline-offset: 1px;

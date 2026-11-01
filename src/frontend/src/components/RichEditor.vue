@@ -107,9 +107,10 @@
 					<button v-if="editor?.isActive('link')" type="button" class="rich-editor__link-apply" @click="removeLink">{{ t('sockless_mail', 'Remove') }}</button>
 				</form>
 			</span>
+			<!-- No menu-name: NcActions shows it as button text, which pads the icon off-centre. -->
 			<NcActions class="rich-editor__actions"
 				variant="tertiary"
-				:menu-name="t('sockless_mail', 'Insert image')"
+				:title="t('sockless_mail', 'Insert image')"
 				:aria-label="t('sockless_mail', 'Insert image')">
 				<template #icon>
 					<NcIconSvgWrapper :path="mdiImagePlusOutline" :size="18" />
@@ -1010,11 +1011,15 @@ defineExpose({ getText, focus, insertLinks, insertImages, hasImages })
 	opacity: 0.5;
 }
 
+/* Sized through --button-size so NcButton's icon box shrinks with it, not just the button. */
 .rich-editor__actions :deep(.button-vue) {
+	--button-size: 30px;
+	--button-inner-size: 30px;
 	width: 30px;
 	min-width: 30px;
 	height: 30px;
 	min-height: 30px;
+	border-radius: 6px;
 }
 
 .rich-editor__content :deep(.ProseMirror img.ProseMirror-selectednode) {
