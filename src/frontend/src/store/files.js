@@ -3,6 +3,7 @@ import { n, t } from '@nextcloud/l10n'
 import { reactive } from 'vue'
 import { generateUrl } from '@nextcloud/router'
 import { apiSend } from '../api.js'
+import { INLINE_IMAGE_TYPES } from '../images.js'
 import { composer, saveSoon } from './compose.js'
 import { ActionError } from './mailbox.js'
 
@@ -17,12 +18,14 @@ import { ActionError } from './mailbox.js'
  *
  * @param {string} title picker title
  * @param {boolean} folders whether folders may be chosen too
+ * @param {string[]} [mimeTypes] only files of these types
  */
-async function pickFiles(title, folders = false) {
+async function pickFiles(title, folders = false, mimeTypes = []) {
 	try {
 		return await getFilePickerBuilder(title)
 			.setMultiSelect(true)
 			.allowDirectories(folders)
+			.setMimeTypeFilter(mimeTypes)
 			.addButton({ label: t('sockless_mail', 'Choose'), variant: 'primary', callback: () => {} })
 			.build()
 			.pick()
@@ -70,6 +73,25 @@ export async function attachFromFiles() {
 	const paths = await pickFiles(t('sockless_mail', 'Attach from Files'))
 	if (paths?.length) {
 		await addFromFiles({ paths }, paths.length)
+	}
+}
+
+/** Images chosen in Files to put into the text (paths), or null when the picker was closed. */
+export function pickImages() {
+	return pickFiles(t('sockless_mail', 'Insert image from Files'), false, INLINE_IMAGE_TYPES)
+}
+
+/**
+ * Has the server copy files from Files into uploads.
+ *
+ * @param {string[]} paths the files
+ * @return {Promise<{name: string, upload: object | null, message?: string}[]>} one result per file
+ */
+export async function copyFromFiles(paths) {
+	try {
+		return (await apiSend('POST', '/files/attachments', { paths })).files
+	} catch (e) {
+		throw new ActionError(e)
 	}
 }
 

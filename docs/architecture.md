@@ -105,11 +105,37 @@ Internals for people working on the app. Installing and configuring it is in the
   - **Rich text** (TipTap) is the default: paragraph styles, font and size, bold, italic,
     underline, strikethrough, text colour and highlight, lists, quotes, alignment, links. The
     message goes out as HTML with a plain-text alternative the server makes from it. The server
-    cleans the HTML with an allowlist first (no scripts, event handlers, forms, frames or
-    images), gives paragraphs no margins (one Enter is one line, as in desktop mail programs) and
-    sets a default font. **Plain text** is one click away and is remembered for new messages.
-    Replies and forwards quote the original's HTML (cleaned the same way, images left out) in a
-    blockquote, or below a header block for a forward.
+    cleans the HTML with an allowlist first (no scripts, event handlers, forms, frames, and no
+    images except its own, see below), gives paragraphs no margins (one Enter is one line, as in
+    desktop mail programs) and sets a default font. **Plain text** is one click away and is
+    remembered for new messages; it asks first when the text has images. Replies and forwards
+    quote the original's HTML (cleaned the same way) in a blockquote, or below a header block
+    for a forward. The quote keeps the original's own inline images (its `cid:` parts, listed in
+    `inlineImages` like a continued draft's and sent along from the original), never remote ones.
+  - **Images in the text** are pasted, dropped where they should go, or inserted from the
+    toolbar, from this device or from Files (PNG, JPEG, GIF, WebP; other dropped or pasted files
+    are attached instead). Pasted content with text of its own (from a document or a web page) is
+    pasted as HTML, and its images are added one by one, a grey placeholder until then, so the
+    browser never loads them from elsewhere: `data:` images are decoded in the browser, images of
+    a message shown in the app are fetched as the user, and anything else over `http(s)` is fetched
+    by the server (`POST /api/uploads/import`, through the image proxy's connector: no internal
+    addresses, raster images up to 5 MB, 200 per 10 minutes per user). Images that cannot be
+    fetched (`file:` paths from a word processor, say) are left out, with a warning. The
+    browser scales images down to at most 2000 pixels on the longest side and turns WebP into
+    JPEG; "Full quality" in the image menu sends the original instead. The menu also sets the
+    width (Small 200, Medium 400, Large 640 pixels, or Fit) and alternative text.
+    - Each image is an upload (`POST /api/uploads`), shown from an object URL and marked
+      `data-cid="<upload id>@inline.sockless-mail"`; the HTML's src is never sent. The server
+      keeps `<img>` only with a Content-ID (plus alt, width, height) and builds a
+      `multipart/related` with each image as an inline part under that Content-ID, so the
+      HTML refers to it as `cid:`. Images count toward the 25 MB total.
+    - A continued draft lists its images' parts (`inlineImages` of `…/draft?mode=edit`); the
+      composer fetches them once and shows them from object URLs. On saving or sending, a
+      Content-ID is looked up in the source draft first and then among the uploads, so an image
+      keeps its Content-ID through every saved copy. An image whose upload is gone is left out
+      of a draft and refused when sending. Uploads the server made (imports, Files) are shown via
+      `GET /api/uploads/{id}/content` (images only, sandboxed). At most 100 images per message,
+      apart from the 25 attachments.
   - **Drafts** are saved to the account's Drafts folder (created when there is none) 4 seconds
     after the last change: `PUT /api/accounts/{id}/drafts` appends the message flagged `\Draft`
     and `\Seen`, then removes the version it replaces. Addresses still being typed are kept as

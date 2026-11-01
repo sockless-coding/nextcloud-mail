@@ -72,7 +72,7 @@ await dialog.waitFor()
 await dialog.getByLabel('To', { exact: true }).fill('not an address')
 await dialog.getByLabel('Subject').fill(subject)
 await dialog.getByLabel('Message').fill('Hello from the e2e check.\nSecond line.')
-await dialog.locator('input[type=file]').setInputFiles(attachmentPath)
+await dialog.locator('input[type=file]:not([accept])').setInputFiles(attachmentPath)
 check(await until(async () => await dialog.locator('.composer__chip', { hasText: attachmentName }).count() === 1
 	&& await dialog.getByText('%').count() === 0), 'attachment uploaded')
 await dialog.getByRole('button', { name: 'Send', exact: true }).click()

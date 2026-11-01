@@ -4,10 +4,14 @@
 	     Escape and clicks elsewhere do nothing, so a half-written message cannot vanish by
 	     accident. Close keeps it (saved in Drafts); Send and Discard end it. -->
 	<section class="composer"
-		:class="{ 'composer--minimized': composer.minimized, 'composer--expanded': composer.expanded && !composer.minimized }"
+		:class="{ 'composer--minimized': composer.minimized, 'composer--expanded': composer.expanded && !composer.minimized, 'composer--dropping': dropping }"
 		role="dialog"
 		aria-modal="false"
 		:aria-label="title"
+		@dragenter="onDragEnter"
+		@dragover="onDragOver"
+		@dragleave="onDragLeave"
+		@drop="onDrop"
 		@keydown.ctrl.enter.prevent="submit"
 		@keydown.meta.enter.prevent="submit">
 		<header class="composer__header" @dblclick="composer.minimized = !composer.minimized">
@@ -73,6 +77,7 @@
 				v-model="draft.html"
 				class="composer__editor"
 				@normalized="onNormalized"
+				@attach="(files) => files.forEach(attach)"
 				:label="t('sockless_mail', 'Message')"
 				:placeholder="t('sockless_mail', 'Write your message')" />
 			<template v-else>
@@ -221,6 +226,13 @@
 		@choose="timeChosen"
 		@close="pickTimeClosed" />
 
+	<NcDialog v-if="confirmPlainText"
+		:name="t('sockless_mail', 'Switch to plain text?')"
+		:message="t('sockless_mail', 'The images in the message are removed, and so is its formatting.')"
+		:buttons="plainTextButtons"
+		:open="true"
+		@update:open="(open) => !open && plainTextClosed()" />
+
 	<NcDialog v-if="confirmDiscard"
 		:name="t('sockless_mail', 'Discard this message?')"
 		:message="draft.saved ? t('sockless_mail', 'What you wrote and attached will be lost, and the saved draft is deleted.') : t('sockless_mail', 'What you wrote and attached will be lost.')"
@@ -243,7 +255,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { accountsState } from '../store/accounts.js'
 import { dialogs } from '../store/actions.js'
-import { attach, closeComposer, composer, detach, hasContent, saveSoon, scheduleSend, send, textToHtml } from '../store/compose.js'
+import { attach, closeComposer, composer, detach, hasContent, saveSoon, scheduleSend, send, textToHtml, uploadsPending } from '../store/compose.js'
 import { attachFromFiles as pickAndAttach, createShareLinks } from '../store/files.js'
 import { layout } from '../store/layout.js'
 import { formatSendTime, offeredPresets } from '../store/sendLater.js'
@@ -291,8 +303,16 @@ function onNormalized(html) {
 	}
 }
 
+const confirmPlainText = ref(false)
+let plainTextChosen = false
+
 /** Rich text and plain text, either way; the choice is remembered for new messages. */
-function switchFormat() {
+function switchFormat(confirmed = false) {
+	if (draft.format === 'html' && confirmed !== true && editor.value?.hasImages()) {
+		plainTextChosen = false
+		confirmPlainText.value = true
+		return
+	}
 	if (draft.format === 'html') {
 		draft.text = editor.value?.getText() ?? draft.text
 		draft.format = 'text'
@@ -301,6 +321,19 @@ function switchFormat() {
 		draft.format = 'html'
 	}
 	layout.composeFormat = draft.format
+}
+
+const plainTextButtons = computed(() => [
+	{ label: t('sockless_mail', 'Keep rich text') },
+	{ label: t('sockless_mail', 'Switch to plain text'), variant: 'primary', callback: () => { plainTextChosen = true } },
+])
+
+// As with discarding: acted on once the dialog has closed.
+function plainTextClosed() {
+	confirmPlainText.value = false
+	if (plainTextChosen) {
+		switchFormat(true)
+	}
 }
 
 /** Close keeps the message: saved in Drafts, to be continued from there. */
@@ -317,7 +350,7 @@ function beforeUnload(event) {
 	}
 }
 
-const uploading = computed(() => draft.uploads.some((u) => !u.id && !u.error))
+const uploading = computed(() => uploadsPending(draft))
 
 const pickingTime = ref(false)
 // Acted on once the dialog has closed (see discardClosed).
@@ -447,6 +480,46 @@ async function linkInstead(upload) {
 	}
 }
 
+// Files dragged over the composer: dropped into the text, images go there (RichEditor); dropped
+// anywhere else, everything is attached.
+const dropping = ref(false)
+let dragDepth = 0
+
+const draggingFiles = (event) => event.dataTransfer?.types.includes('Files')
+
+function onDragEnter(event) {
+	if (draggingFiles(event)) {
+		dragDepth++
+		dropping.value = true
+	}
+}
+
+function onDragOver(event) {
+	if (draggingFiles(event)) {
+		event.preventDefault()
+		event.dataTransfer.dropEffect = 'copy'
+	}
+}
+
+function onDragLeave(event) {
+	if (draggingFiles(event) && --dragDepth <= 0) {
+		dragDepth = 0
+		dropping.value = false
+	}
+}
+
+function onDrop(event) {
+	dragDepth = 0
+	dropping.value = false
+	if (event.defaultPrevented || !event.dataTransfer?.files.length) {
+		return
+	}
+	event.preventDefault()
+	for (const file of event.dataTransfer.files) {
+		attach(file)
+	}
+}
+
 function onFiles(event) {
 	for (const file of event.target.files) {
 		attach(file)
@@ -501,6 +574,11 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 	height: auto;
 	border-bottom: 1px solid var(--color-border);
 	border-radius: var(--border-radius-container, 12px);
+}
+
+.composer--dropping {
+	outline: 2px dashed var(--color-primary-element);
+	outline-offset: -4px;
 }
 
 .composer-backdrop {

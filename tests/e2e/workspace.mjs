@@ -64,7 +64,7 @@ check(!(await composer.getByLabel('Subject').isVisible()), 'minimised, only the 
 await item(second).click()
 await page.locator('.message-view h2', { hasText: second }).waitFor()
 check(true, 'the mailbox stays usable while writing')
-await page.getByRole('toolbar', { name: 'Message actions' }).getByRole('button', { name: 'Reply', exact: true }).click()
+await page.locator('.command-bar').getByRole('button', { name: 'Reply', exact: true }).click()
 check(await until(async () => await composer.getByLabel('Subject').isVisible()), 'replying while a draft is open shows the draft instead')
 check((await composer.getByLabel('Subject').inputValue()) === `Draft ${suffix}`, 'and keeps it')
 

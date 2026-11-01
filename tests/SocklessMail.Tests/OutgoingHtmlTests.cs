@@ -93,4 +93,59 @@ public sealed class OutgoingHtmlTests
         Assert.Contains("Subject: S &amp; T", forward);
         Assert.DoesNotContain("<blockquote>", forward);
     }
+
+    [Fact]
+    public void Editor_images_are_kept_by_content_id_and_nothing_else()
+    {
+        var html = OutgoingHtml.SanitizeWithImages(
+            "<p><img src=\"blob:https://cloud.example/1\" data-cid=\"a1@inline.sockless-mail\" width=\"400\" height=\"x\" alt=\"Chart\" "
+            + "title=\"t\" style=\"border:1px solid\" data-pending=\"\" onerror=\"x()\"></p>"
+            + "<p><img src=\"cid:b2@example.test\" width=\"99999\"></p>"
+            + "<p><img src=\"https://tracker.example/t.gif\"><img src=\"data:image/png;base64,AAAA\">"
+            + "<img data-cid=\"not a content id\"><img data-cid=\"x@y\" src=\"javascript:x()\"></p>");
+        Assert.Contains("<img width=\"400\" alt=\"Chart\" src=\"cid:a1@inline.sockless-mail\">", html);
+        Assert.Contains("<img src=\"cid:b2@example.test\">", html);
+        Assert.Contains("<img src=\"cid:x@y\">", html);
+        Assert.DoesNotContain("tracker.example", html);
+        Assert.DoesNotContain("data:", html);
+        Assert.DoesNotContain("blob:", html);
+        Assert.DoesNotContain("not a content id", html);
+        Assert.DoesNotContain("x()", html);
+        Assert.Equal(["a1@inline.sockless-mail", "b2@example.test", "x@y"], OutgoingHtml.ContentIds(html));
+
+        var kept = OutgoingHtml.KeepImages(html, new HashSet<string> { "b2@example.test" });
+        Assert.Equal(["b2@example.test"], OutgoingHtml.ContentIds(kept));
+    }
+
+    [Fact]
+    public void A_quote_keeps_the_images_that_go_along()
+    {
+        var reply = OutgoingHtml.Quote(ReplyMode.Reply, DateTimeOffset.UnixEpoch, null, null, null, "S",
+            "<p><img src=\"cid:own@x\"><img src=\"cid:missing@x\"><img src=\"https://tracker.example/t.gif\"></p>",
+            new HashSet<string> { "own@x" });
+        Assert.Equal(["own@x"], OutgoingHtml.ContentIds(reply));
+        Assert.DoesNotContain("tracker.example", reply);
+    }
+
+    [Fact]
+    public void A_quoted_original_keeps_no_images()
+    {
+        Assert.DoesNotContain("<img", OutgoingHtml.Sanitize("<p><img src=\"cid:a@b\" data-cid=\"a@b\"></p>"));
+    }
+
+    [Fact]
+    public void Uploaded_images_are_found_by_their_content_id()
+    {
+        var id = new string('a', 32);
+        Assert.Equal(id, OutgoingHtml.UploadIdOf(OutgoingHtml.UploadContentId(id)));
+        Assert.Null(OutgoingHtml.UploadIdOf("a@example.test"));
+        Assert.Null(OutgoingHtml.UploadIdOf("../x@inline.sockless-mail"));
+    }
+
+    [Fact]
+    public void Images_never_overflow_the_window_they_are_read_in()
+    {
+        Assert.Contains("<img src=\"cid:a@b\" width=\"640\" style=\"max-width:100%;height:auto\">",
+            OutgoingHtml.Document("<p><img src=\"cid:a@b\" width=\"640\"></p>"));
+    }
 }

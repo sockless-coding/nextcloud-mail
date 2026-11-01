@@ -11,6 +11,17 @@ namespace SocklessMail.Api.Api;
 public static class ComposeEndpoints
 {
     public const string SendRateLimit = "send";
+    public const string ImageImportRateLimit = "image-import";
+
+    public sealed record ImageImportInput(string? Url);
+
+    /// <summary>The last segment of the URL's path, with an extension matching what was received.</summary>
+    private static string ImageFileName(string url, string contentType)
+    {
+        var name = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? Path.GetFileNameWithoutExtension(Uri.UnescapeDataString(uri.AbsolutePath)) : "";
+        var extension = contentType switch { "image/png" => ".png", "image/gif" => ".gif", "image/webp" => ".webp", _ => ".jpg" };
+        return (string.IsNullOrWhiteSpace(name) ? "image" : name) + extension;
+    }
 
     public static void MapComposeEndpoints(this RouteGroupBuilder api)
     {
@@ -32,6 +43,34 @@ public static class ComposeEndpoints
             uploads.Delete(user.GetNextcloudUserId(), id);
             return Results.NoContent();
         });
+
+        // An uploaded image, for the editor to show (one copied from Files or from the web).
+        api.MapGet("/uploads/{id}/content", async (string id, ClaimsPrincipal user, AttachmentUploads uploads, HttpContext http, CancellationToken ct) =>
+        {
+            var userId = user.GetNextcloudUserId();
+            if (await uploads.GetAsync(userId, id, ct) is not { } upload || !OutgoingHtml.InlineImageTypes.Contains(upload.ContentType))
+            {
+                return MailboxEndpoints.NotFound();
+            }
+
+            http.Response.Headers.ContentSecurityPolicy = MailboxEndpoints.ContentSandbox;
+            http.Response.Headers.ContentDisposition = "inline";
+            return Results.Stream(uploads.OpenRead(userId, upload), upload.ContentType);
+        });
+
+        // An image of pasted web content, fetched by the server (as the image proxy does: never
+        // from internal addresses) so it can be sent as part of the message.
+        api.MapPost("/uploads/import", async (ImageImportInput input, ClaimsPrincipal user, AttachmentUploads uploads, ImageProxy proxy, CancellationToken ct) =>
+            {
+                if (await proxy.FetchAsync(input.Url ?? "", ct) is not { } image || !OutgoingHtml.InlineImageTypes.Contains(image.ContentType))
+                {
+                    return Results.Json(new { error = "image_unavailable", message = "The image could not be fetched." }, statusCode: StatusCodes.Status422UnprocessableEntity);
+                }
+
+                await using var content = new MemoryStream(image.Content);
+                return Results.Ok(await uploads.SaveAsync(user.GetNextcloudUserId(), ImageFileName(input.Url!, image.ContentType), image.ContentType, content, ct));
+            })
+            .RequireRateLimiting(ImageImportRateLimit);
 
         var account = api.MapGroup("/accounts/{accountId:guid}").AddEndpointFilter<MailboxEndpoints.MailErrorFilter>();
 

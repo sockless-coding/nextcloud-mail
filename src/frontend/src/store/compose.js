@@ -1,10 +1,10 @@
 import { showSuccess, showWarning } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import { reactive } from 'vue'
-import { apiGet, apiSend, apiUpload } from '../api.js'
+import { apiBase, apiGet, apiGetBlob, apiSend, apiUpload } from '../api.js'
 import { accountsState } from './accounts.js'
 import { layout } from './layout.js'
-import { ActionError, deleteMessages, loadFolders, mailboxState, messagesById, openLocation, refreshMessages } from './mailbox.js'
+import { ActionError, deleteMessages, loadFolders, mailboxState, messagesById, openLocation, partUrl, refreshMessages } from './mailbox.js'
 import { searchState } from './search.js'
 import { formatSendTime } from './sendLater.js'
 import { unifiedState } from './unified.js'
@@ -21,7 +21,10 @@ import { unifiedState } from './unified.js'
 export const composer = reactive({
 	/**
 	 * { accountId, to, cc, bcc, subject, format ('html' | 'text'), html, text, source,
-	 *   forwarded: [{partId, fileName, size, include}], uploads: [...], saved: {folderId, messageId} | null }
+	 *   forwarded: [{partId, fileName, size, include}], uploads: [...], images: [{id}], imageJobs,
+ *   saved: {folderId, messageId} | null }
+ * images are the uploads of images in the HTML (see uploadImage), apart from attachments;
+ * imageJobs counts images still being prepared or uploaded (see imageJob).
 	 */
 	draft: null,
 	minimized: false,
@@ -100,6 +103,8 @@ function emptyDraft(accountId) {
 		source: null,
 		forwarded: [],
 		uploads: [],
+		images: [],
+		imageJobs: 0,
 		saved: null,
 	}
 }
@@ -149,7 +154,9 @@ export async function composeReply(mode, where = openLocation(), messageId = mai
 	} catch (e) {
 		throw new ActionError(e)
 	}
-	show(fromServer(accountId, draft))
+	// The quoted original's own images go along.
+	const html = await withImages(draft.html, draft.inlineImages, (partId) => partUrl(accountId, folderId, messageId, partId))
+	show(fromServer(accountId, { ...draft, html }))
 }
 
 /**
@@ -170,7 +177,128 @@ export async function composeEdit(where = openLocation(), messageId = mailboxSta
 	} catch (e) {
 		throw new ActionError(e)
 	}
-	show(fromServer(accountId, draft, { saved: { folderId, messageId } }))
+	const html = await withImages(draft.html, draft.inlineImages, (partId) => partUrl(accountId, folderId, messageId, partId))
+	show(fromServer(accountId, { ...draft, html }, { saved: { folderId, messageId } }))
+}
+
+/** Object URLs of the images shown in the editor, released when the composer closes. */
+let objectUrls = []
+
+/**
+ * A URL showing the image in the editor for as long as the composer is open.
+ *
+ * @param {Blob} blob the image
+ */
+export function objectUrl(blob) {
+	const url = URL.createObjectURL(blob)
+	objectUrls.push(url)
+	return url
+}
+
+/**
+ * The draft's HTML with its images (src="cid:…", parts of the draft) shown from object URLs:
+ * fetched once, so they still show once the draft they came from has been replaced.
+ * An image that cannot be fetched keeps its Content-ID, and so stays in the message.
+ */
+async function withImages(html, images, urlOf) {
+	if (!images?.length) {
+		return html
+	}
+	const sources = new Map(await Promise.all(images.map(async (image) => {
+		try {
+			return [image.contentId.toLowerCase(), objectUrl(await apiGetBlob(urlOf(image.partId)))]
+		} catch {
+			return [image.contentId.toLowerCase(), null]
+		}
+	})))
+	const document = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html')
+	for (const img of document.body.querySelectorAll('img[src^="cid:"]')) {
+		const contentId = img.getAttribute('src').slice(4)
+		img.setAttribute('data-cid', contentId)
+		const src = sources.get(contentId.toLowerCase())
+		if (src) {
+			img.setAttribute('src', src)
+		}
+	}
+	return document.body.innerHTML
+}
+
+/** The Content-ID of an image that is an upload (OutgoingHtml.UploadContentId on the server). */
+const uploadContentId = (id) => `${id}@inline.sockless-mail`
+
+/** Where an uploaded image can be fetched from, to show it. */
+export const uploadContentUrl = (id) => `${apiBase}/uploads/${id}/content`
+
+/**
+ * Remembers an upload as an image of the current draft (deleted with the draft) and returns
+ * the Content-ID to mark it with.
+ *
+ * @param {string} id the upload
+ */
+export function adoptImage(id) {
+	composer.draft?.images.push({ id })
+	return uploadContentId(id)
+}
+
+/**
+ * Forgets an image upload that is not used after all, and deletes it.
+ *
+ * @param {string} id the upload
+ */
+export function discardImage(id) {
+	if (composer.draft) {
+		composer.draft.images = composer.draft.images.filter((i) => i.id !== id)
+	}
+	apiSend('DELETE', `/uploads/${id}`).catch(() => {})
+}
+
+/**
+ * Uploads an image put into the text of the current draft.
+ *
+ * @param {File} file the image, as it should be sent
+ * @return {Promise<string>} the Content-ID the editor marks the image with
+ */
+export async function uploadImage(file) {
+	try {
+		return adoptImage((await apiUpload('/uploads', file)).id)
+	} catch (e) {
+		throw new ActionError(e)
+	}
+}
+
+/**
+ * Has the server fetch an image of pasted web content; the upload is not adopted yet.
+ *
+ * @param {string} url where the image is
+ * @return {Promise<{id: string, fileName: string, contentType: string}>} the upload
+ */
+export async function importImage(url) {
+	try {
+		return await apiSend('POST', '/uploads/import', { url })
+	} catch (e) {
+		throw new ActionError(e)
+	}
+}
+
+/**
+ * Runs work on an image of the current draft (preparing, uploading, fetching): sending waits
+ * until it is done.
+ *
+ * @param {() => Promise<any>} work what to do
+ */
+export async function imageJob(work) {
+	const draft = composer.draft
+	draft.imageJobs++
+	try {
+		return await work()
+	} finally {
+		draft.imageJobs--
+	}
+}
+
+/** Whether images or attachments are still uploading. */
+export function uploadsPending(draft = composer.draft) {
+	return draft.uploads.some((u) => !u.id && !u.error) || draft.imageJobs > 0
 }
 
 /**
@@ -249,6 +377,7 @@ export async function saveDraft() {
 				draft.source = result.source
 				draft.forwarded = result.attachments.map((a) => ({ ...a, include: true }))
 				draft.uploads = draft.uploads.filter((u) => !body.attachmentIds.includes(u.id))
+				draft.images = draft.images.filter((i) => !i.id || !body.html?.includes(uploadContentId(i.id)))
 			}
 			Object.assign(composer, { saveStatus: 'saved', savedAt: new Date(), saveError: '' })
 			showSavedDraft(draft.accountId, result.folderId)
@@ -310,10 +439,14 @@ export async function closeComposer(outcome) {
 	}
 	await settleSaves()
 	Object.assign(composer, { draft: null, minimized: false, expanded: false, saveStatus: 'idle', savedAt: null, saveError: '' })
+	// After the editor is gone (it is unmounted with the draft).
+	const urls = objectUrls
+	objectUrls = []
+	window.setTimeout(() => urls.forEach((url) => URL.revokeObjectURL(url)))
 	if (outcome === 'sent') {
 		return true
 	}
-	for (const upload of draft.uploads) {
+	for (const upload of [...draft.uploads, ...draft.images]) {
 		if (upload.id) {
 			apiSend('DELETE', `/uploads/${upload.id}`).catch(() => {})
 		}
@@ -350,8 +483,8 @@ export async function send() {
 
 /** What sending and scheduling have in common: the server builds the message from the draft either way. */
 async function submitDraft(draft, path, extra) {
-	if (draft.uploads.some((u) => !u.id && !u.error)) {
-		throw new Error(t('sockless_mail', 'Wait until all attachments are uploaded.'))
+	if (uploadsPending(draft)) {
+		throw new Error(t('sockless_mail', 'Wait until all attachments and images are uploaded.'))
 	}
 	await settleSaves()
 	try {

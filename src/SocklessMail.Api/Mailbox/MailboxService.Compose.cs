@@ -16,6 +16,7 @@ public sealed partial class MailboxService
 {
     public const int MaxRecipients = 100;
     public const int MaxAttachments = 25;
+    public const int MaxInlineImages = 100;
     public const long MaxAttachmentBytes = 25 * 1024 * 1024;
     public const int MaxTextLength = 1024 * 1024;
 
@@ -34,6 +35,15 @@ public sealed partial class MailboxService
             var (text, html) = await BodiesAsync(folder, uid, summary, token);
             var attachments = summary.Attachments.Select(ToAttachmentDto).ToArray();
 
+            // The images the HTML shows from the message's own parts; the editor shows them, and
+            // sending takes them from this message again (see LoadSourceAsync).
+            var parts = InlinePartsOf(summary);
+            var images = OutgoingHtml.ContentIds(OutgoingHtml.SanitizeWithImages(html))
+                .Where(cid => parts.TryGetValue(cid, out var part) && OutgoingHtml.InlineImageTypes.Contains(part.ContentType.MimeType))
+                .Select(cid => new InlineImageDto(cid, MailboxIds.PartId(parts[cid].PartSpecifier)))
+                .ToArray();
+            var shown = images.Select(i => i.ContentId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             if (mode == ReplyMode.Edit)
             {
                 return new DraftDto(
@@ -42,9 +52,10 @@ public sealed partial class MailboxService
                     envelope.Bcc?.ToString() ?? "",
                     envelope.Subject ?? "",
                     text,
-                    OutgoingHtml.Sanitize(html),
+                    OutgoingHtml.KeepImages(OutgoingHtml.SanitizeWithImages(html), shown),
                     attachments,
-                    new DraftSource(folderId, messageId, mode));
+                    new DraftSource(folderId, messageId, mode),
+                    images);
             }
 
             var (to, cc) = ReplyBuilder.Recipients(mode, envelope.From, envelope.ReplyTo, envelope.To, envelope.Cc, account.EmailAddress);
@@ -55,10 +66,18 @@ public sealed partial class MailboxService
                 "",
                 ReplyBuilder.Subject(mode, envelope.Subject),
                 ReplyBuilder.QuotedText(mode, date, envelope.From, envelope.To, envelope.Cc, envelope.Subject, text),
-                OutgoingHtml.Quote(mode, date, envelope.From, envelope.To, envelope.Cc, envelope.Subject, html),
+                OutgoingHtml.Quote(mode, date, envelope.From, envelope.To, envelope.Cc, envelope.Subject, html, shown),
                 mode == ReplyMode.Forward ? attachments : [],
-                new DraftSource(folderId, messageId, mode));
+                new DraftSource(folderId, messageId, mode),
+                images);
         }, ct);
+
+    /// <summary>A message's parts with a Content-ID (by it, without brackets): what its HTML can show inline.</summary>
+    private static Dictionary<string, BodyPartBasic> InlinePartsOf(IMessageSummary summary) =>
+        LeafParts(summary.Body)
+            .Where(p => !string.IsNullOrEmpty(p.ContentId))
+            .GroupBy(p => p.ContentId!.Trim().Trim('<', '>'), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
     public async Task<SendResult> SendAsync(MailAccount account, SendInput input, CancellationToken ct)
     {
@@ -276,11 +295,19 @@ public sealed partial class MailboxService
             throw new MailboxValidationException("text", "The message is too long.");
         }
 
+        var fragment = html is null ? null : OutgoingHtml.SanitizeWithImages(html);
+        var contentIds = fragment is null ? [] : OutgoingHtml.ContentIds(fragment);
         var attachmentIds = input.AttachmentIds ?? [];
         var forwardPartIds = input.Source is { Mode: ReplyMode.Forward or ReplyMode.Edit } ? input.Source.ForwardPartIds ?? [] : [];
         if (attachmentIds.Count + forwardPartIds.Count > MaxAttachments)
         {
             throw new MailboxValidationException("attachmentIds", $"At most {MaxAttachments} attachments per message.");
+        }
+
+        // More than attachments: a quoted newsletter brings its own.
+        if (contentIds.Count > MaxInlineImages)
+        {
+            throw new MailboxValidationException("text", $"At most {MaxInlineImages} images per message.");
         }
 
         var uploaded = new List<UploadedAttachment>();
@@ -290,7 +317,34 @@ public sealed partial class MailboxService
                 ?? throw new MailboxValidationException("attachmentIds", "An attachment has expired or was removed. Attach it again."));
         }
 
-        var original = input.Source is { } source ? await LoadSourceAsync(account, source, forwardPartIds, ct) : null;
+        // Images of the source: a continued draft's own (also those inserted before it was saved),
+        // a quoted original's.
+        var original = input.Source is { } source ? await LoadSourceAsync(account, source, forwardPartIds, contentIds, ct) : null;
+        var inlineUploads = new List<(string ContentId, UploadedAttachment Upload)>();
+        foreach (var contentId in contentIds.Where(cid => original?.InlineParts.ContainsKey(cid) != true))
+        {
+            var upload = OutgoingHtml.UploadIdOf(contentId) is { } uploadId ? await uploads.GetAsync(account.OwnerUserId, uploadId, ct) : null;
+            if (upload is not null && !OutgoingHtml.InlineImageTypes.Contains(upload.ContentType))
+            {
+                throw new MailboxValidationException("text", $"\"{upload.FileName}\" cannot be shown in the message. Attach it instead.");
+            }
+
+            if (upload is not null)
+            {
+                inlineUploads.Add((contentId, upload));
+            }
+            else if (!draft)
+            {
+                // A draft is saved without it; sending would lose it unnoticed.
+                throw new MailboxValidationException("text", "An image in the message has expired or was removed. Insert it again.");
+            }
+        }
+
+        if (fragment is not null)
+        {
+            var available = inlineUploads.Select(i => i.ContentId).Concat(original?.InlineParts.Keys ?? []).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            fragment = OutgoingHtml.KeepImages(fragment, available);
+        }
 
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(account.SenderName, account.EmailAddress));
@@ -319,9 +373,8 @@ public sealed partial class MailboxService
         }
 
         var builder = new BodyBuilder();
-        if (html is not null)
+        if (fragment is not null)
         {
-            var fragment = OutgoingHtml.Sanitize(html);
             builder.HtmlBody = OutgoingHtml.Document(fragment);
             builder.TextBody = ReplyBuilder.HtmlToText(fragment);
         }
@@ -348,9 +401,29 @@ public sealed partial class MailboxService
                 builder.Attachments.Add(part.Entity);
             }
 
+            // Images in the HTML: parts of a multipart/related, by the Content-ID the HTML refers to.
+            if (fragment is not null)
+            {
+                foreach (var (contentId, upload) in inlineUploads)
+                {
+                    var stream = uploads.OpenRead(account.OwnerUserId, upload);
+                    streams.Add(stream);
+                    total += upload.Size;
+                    var image = builder.LinkedResources.Add(upload.FileName, stream, ContentType.Parse(upload.ContentType));
+                    image.ContentId = contentId;
+                    image.ContentDisposition = new ContentDisposition(ContentDisposition.Inline) { FileName = upload.FileName };
+                }
+
+                foreach (var part in original?.InlineParts.Values ?? [])
+                {
+                    total += part.Size;
+                    builder.LinkedResources.Add(part.Entity);
+                }
+            }
+
             if (total > MaxAttachmentBytes)
             {
-                throw new MailboxValidationException("attachmentIds", $"Attachments may total at most {MaxAttachmentBytes / (1024 * 1024)} MB.");
+                throw new MailboxValidationException("attachmentIds", $"Attachments and images may total at most {MaxAttachmentBytes / (1024 * 1024)} MB.");
             }
 
             message.Body = builder.ToMessageBody();
@@ -363,7 +436,7 @@ public sealed partial class MailboxService
             }
         }
 
-        return new ComposedMessage(message, uploaded, recipients);
+        return new ComposedMessage(message, [.. uploaded, .. inlineUploads.Select(i => i.Upload)], recipients);
     }
 
     /// <summary>Parsed addresses, or for a draft whose field does not parse yet, the text as written.</summary>
@@ -471,10 +544,13 @@ public sealed partial class MailboxService
 
     private sealed record ForwardedPart(MimeEntity Entity, long Size);
 
+    /// <param name="InlineParts">The source's parts the new HTML shows, by Content-ID.</param>
     private sealed record SourceMessage(
-        string? MessageId, string? InReplyTo, IReadOnlyList<string> References, IReadOnlyList<ForwardedPart> ForwardedParts);
+        string? MessageId, string? InReplyTo, IReadOnlyList<string> References, IReadOnlyList<ForwardedPart> ForwardedParts,
+        IReadOnlyDictionary<string, ForwardedPart> InlineParts);
 
-    private Task<SourceMessage> LoadSourceAsync(MailAccount account, SendSource source, IReadOnlyList<string> forwardPartIds, CancellationToken ct) =>
+    private Task<SourceMessage> LoadSourceAsync(
+        MailAccount account, SendSource source, IReadOnlyList<string> forwardPartIds, IReadOnlyList<string> inlineContentIds, CancellationToken ct) =>
         Run(account, async (client, token) =>
         {
             var (folder, uid) = await OpenMessageAsync(client, source.FolderId, source.MessageId, token);
@@ -498,11 +574,29 @@ public sealed partial class MailboxService
                 parts.Add(new ForwardedPart(entity, part.Octets));
             }
 
+            var inline = new Dictionary<string, ForwardedPart>(StringComparer.OrdinalIgnoreCase);
+            var withContentId = InlinePartsOf(summary);
+            foreach (var contentId in inlineContentIds)
+            {
+                if (withContentId.TryGetValue(contentId, out var part)
+                    && OutgoingHtml.InlineImageTypes.Contains(part.ContentType.MimeType)
+                    && await FetchPartAsync(folder, uid, part, token) is MimePart image)
+                {
+                    image.ContentId = contentId;
+                    // As the server reported it (some in upper case); as the upload had it.
+                    image.ContentType.MediaType = image.ContentType.MediaType.ToLowerInvariant();
+                    image.ContentType.MediaSubtype = image.ContentType.MediaSubtype.ToLowerInvariant();
+                    image.ContentDisposition ??= new ContentDisposition(ContentDisposition.Inline);
+                    inline[contentId] = new ForwardedPart(image, part.Octets);
+                }
+            }
+
             return new SourceMessage(
                 summary.Envelope?.MessageId,
                 summary.Envelope?.InReplyTo,
                 summary.References?.ToList() ?? [],
-                parts);
+                parts,
+                inline);
         }, ct);
 
     /// <summary>What a message says, as plain text, with who sent it and when (for a task made from it).</summary>

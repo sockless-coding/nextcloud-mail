@@ -39,6 +39,9 @@ Nextcloud and are signed in by their Nextcloud session. Mail is handled with Mai
 **Writing**
 - A composer window docked at the bottom, with rich-text editing or plain text, and drafts saved
   while writing.
+- Images in the text: paste them (also with content copied from web pages), drag them in or
+  insert them from this device or Files, then size and describe them. They go out as inline
+  parts, as from desktop mail programs, and replies and forwards keep the original's.
 - Reply, reply all, forward, attachments, and a copy saved to Sent.
 - **Send later**: at a preset ("Tomorrow morning") or a chosen time. The app's server sends the
   message, so the browser can be closed meanwhile.
@@ -435,6 +438,8 @@ node accounts.mjs    # one script per area; see the list below
 | `menu.mjs` | the message row menu |
 | `compose.mjs` | new message with attachment, invalid recipients, reply, forward, copies in Sent |
 | `drafts.mjs` | rich text, drafts saved while writing, Close, Continue editing, plain text |
+| `images.mjs` | images pasted, dropped and inserted, scaled down, image menu, continued draft, received inline |
+| `images-sources.mjs` | pasted web content with images, copying from a shown message, quoted images in a reply, insert from Files |
 | `workspace.mjs` | sender details, attachment cards, composer window, recipient chips, shortcuts |
 | `layout.mjs` | multi-select, reading pane and density, folder pane |
 | `viewstate.mjs` | remembered folders and last view |

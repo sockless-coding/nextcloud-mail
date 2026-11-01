@@ -18,10 +18,15 @@ public sealed record DraftSource(string FolderId, string MessageId, ReplyMode Mo
 /// <summary>
 /// A prefilled message for the composer. Address fields are RFC 5322 address lists as the user
 /// would type them ("Ann &lt;ann@example.com&gt;, bob@example.com"). <see cref="Html"/> is the
-/// same content for the rich-text editor (see <see cref="OutgoingHtml"/>).
+/// same content for the rich-text editor (see <see cref="OutgoingHtml"/>); its images refer to
+/// parts of the source by Content-ID, which <see cref="InlineImages"/> lists to show them.
 /// </summary>
 public sealed record DraftDto(
-    string To, string Cc, string Bcc, string Subject, string Text, string Html, AttachmentDto[] ForwardedAttachments, DraftSource Source);
+    string To, string Cc, string Bcc, string Subject, string Text, string Html, AttachmentDto[] ForwardedAttachments, DraftSource Source,
+    InlineImageDto[] InlineImages);
+
+/// <summary>An image in a draft's HTML (<c>src="cid:ContentId"</c>) and the part of the source holding it.</summary>
+public sealed record InlineImageDto(string ContentId, string PartId);
 
 /// <param name="ForwardPartIds">For a forward or a continued draft: which of the source's attachments to include.</param>
 public sealed record SendSource(string FolderId, string MessageId, ReplyMode Mode, IReadOnlyList<string>? ForwardPartIds);

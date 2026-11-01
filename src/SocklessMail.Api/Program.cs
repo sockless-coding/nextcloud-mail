@@ -138,6 +138,11 @@ builder.Services.AddRateLimiter(limiter =>
         RateLimitPartition.GetFixedWindowLimiter(
             context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "",
             _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(10) }));
+    // Images of pasted web content: a long page at once, but no general-purpose fetcher.
+    limiter.AddPolicy(ComposeEndpoints.ImageImportRateLimit, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "",
+            _ => new FixedWindowRateLimiterOptions { PermitLimit = 200, Window = TimeSpan.FromMinutes(10) }));
     // Sender logos: browsers cache them, so this only limits looking up arbitrary domains.
     limiter.AddPolicy(BimiEndpoints.RateLimit, context =>
         RateLimitPartition.GetFixedWindowLimiter(

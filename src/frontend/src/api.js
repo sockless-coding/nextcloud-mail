@@ -42,6 +42,15 @@ export async function apiSend(method, path, body) {
 }
 
 /**
+ * @param {string} url full URL of an API resource, e.g. from partUrl()
+ * @return {Promise<Blob>} its content
+ */
+export async function apiGetBlob(url) {
+	const { data } = await axios.get(url, { headers, responseType: 'blob' })
+	return data
+}
+
+/**
  * Uploads one file as multipart form data.
  *
  * @param {string} path API path
