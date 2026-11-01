@@ -784,7 +784,98 @@ function hasImages() {
 	return findImages(() => true).length > 0
 }
 
-defineExpose({ getText, focus, insertLinks, insertImages, hasImages })
+/**
+ * Where the user's own words end: before the quoted original of a reply ("On … wrote:" and the
+ * quote after it) or a forward's header (see OutgoingHtml.Quote on the server), without the
+ * empty paragraphs above it. The whole document when there is neither.
+ */
+function ownEnd() {
+	const doc = editor.value.state.doc
+	let end = doc.content.size
+	let ownTo = 0
+	const nodes = []
+	doc.forEach((node, position, index) => nodes.push({ node, position, index }))
+	for (const { node, position, index } of nodes) {
+		const text = node.textContent
+		if ((/wrote:\s*$/.test(text) && doc.maybeChild(index + 1)?.type.name === 'blockquote') || text.startsWith('---------- Forwarded message')) {
+			end = position
+			break
+		}
+	}
+	for (const { node, position } of nodes) {
+		if (position >= end) {
+			break
+		}
+		if (node.textContent.trim() || hasImageIn(node)) {
+			ownTo = position + node.nodeSize
+		}
+	}
+	return ownTo
+}
+
+function hasImageIn(node) {
+	let found = false
+	node.descendants((child) => {
+		found ||= child.type.name === 'image'
+		return !found
+	})
+	return found
+}
+
+/**
+ * What the Assistant rewrites: the selection, or else the user's own text (see ownEnd).
+ *
+ * @return {{text: string, range: {from: number, to: number}, selection: boolean, images: boolean}} the text and where it is
+ */
+function assistantTarget() {
+	const { state } = editor.value
+	const { from, to, empty } = state.selection
+	const range = empty ? { from: 0, to: ownEnd() } : { from, to }
+	const text = state.doc.textBetween(range.from, range.to, '\n\n', '\n').trim()
+	let images = false
+	state.doc.nodesBetween(range.from, range.to, (node) => {
+		images ||= node.type.name === 'image'
+	})
+	return { text, range, selection: !empty, images }
+}
+
+/** Text from the Assistant as paragraphs: blank lines part them, single line breaks stay. */
+function paragraphs(text) {
+	return text.trim().split(/\n{2,}/).map((paragraph) => ({
+		type: 'paragraph',
+		content: paragraph.split('\n').flatMap((line, i) => [
+			...(i > 0 ? [{ type: 'hardBreak' }] : []),
+			...(line ? [{ type: 'text', text: line }] : []),
+		]),
+	}))
+}
+
+/**
+ * Puts the Assistant's text into the message: in place of the range assistantTarget gave, or
+ * where the cursor is (at the very start of a reply, above the quote).
+ *
+ * @param {string} text plain text
+ * @param {{from: number, to: number}|null} range what it replaces; null to insert at the cursor
+ * @param {boolean} below insert as paragraphs after the block where range ends instead
+ */
+function putAssistantText(text, range = null, below = false) {
+	const blocks = paragraphs(text)
+	const chain = editor.value.chain().focus()
+	if (below) {
+		const end = editor.value.state.doc.resolve(range.to)
+		chain.insertContentAt(end.depth > 0 ? end.after(1) : range.to, blocks, { updateSelection: true }).run()
+		return
+	}
+	// One paragraph goes in as text, so a few words chosen inside a paragraph do not split it.
+	const content = blocks.length === 1 && !(range && range.from === 0) ? blocks[0].content : blocks
+	if (range) {
+		chain.insertContentAt(range, content, { updateSelection: true }).run()
+	} else {
+		chain.insertContent(content).run()
+	}
+}
+
+defineExpose({ getText, focus, insertLinks, insertImages, hasImages, assistantTarget, putAssistantText })
 </script>
 
 <style scoped>

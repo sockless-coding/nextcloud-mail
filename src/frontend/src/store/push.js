@@ -18,10 +18,11 @@ const retryDelay = (attempt) => Math.min(MAX_RETRY_MS, 1000 * 2 ** attempt)
  * @param {object} handlers callbacks
  * @param {(change: {accountId: string, folderId: string}) => void} handlers.folderChanged a folder changed
  * @param {() => void} handlers.scheduledChanged a scheduled message was sent, failed or changed
+ * @param {(task: {id: number}) => void} handlers.assistantTaskChanged an Assistant task ended
  * @param {() => void} handlers.reconnected nudges may have been missed: refresh everything
  * @return {() => void} stops the connection
  */
-export function startPush({ folderChanged, scheduledChanged, reconnected }) {
+export function startPush({ folderChanged, scheduledChanged, assistantTaskChanged, reconnected }) {
 	if (apiMode !== 'harp') {
 		return () => {}
 	}
@@ -33,6 +34,7 @@ export function startPush({ folderChanged, scheduledChanged, reconnected }) {
 		.build()
 	connection.on('folderChanged', folderChanged)
 	connection.on('scheduledChanged', scheduledChanged)
+	connection.on('assistantTaskChanged', assistantTaskChanged)
 	connection.onreconnecting(() => {
 		push.connected = false
 	})

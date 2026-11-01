@@ -11,12 +11,14 @@ public sealed class AppSetting
 }
 
 /// <summary>What admins see and change under /api/admin/settings.</summary>
-public sealed record AppSettingsDto(bool DomainAgeChecks);
+/// <param name="Assistant">Offer the Nextcloud Assistant's mail tasks (summaries, drafting) where a provider handles them.</param>
+public sealed record AppSettingsDto(bool DomainAgeChecks, bool Assistant);
 
 /// <summary>Admins' settings, read from the database once and kept in memory (this process is their only writer).</summary>
 public sealed class AppSettings(IServiceScopeFactory scopes, TimeProvider clock)
 {
     private const string DomainAgeChecksKey = "domain_age_checks";
+    private const string AssistantKey = "assistant";
 
     private readonly SemaphoreSlim _lock = new(1, 1);
     private volatile IReadOnlyDictionary<string, string>? _values;
@@ -25,7 +27,14 @@ public sealed class AppSettings(IServiceScopeFactory scopes, TimeProvider clock)
     public async Task<bool> DomainAgeChecksAsync(CancellationToken ct) =>
         !(await ValuesAsync(ct)).TryGetValue(DomainAgeChecksKey, out var value) || value != "false";
 
-    public async Task<AppSettingsDto> GetAsync(CancellationToken ct) => new(await DomainAgeChecksAsync(ct));
+    /// <summary>
+    /// Offer the Assistant's tasks. On unless turned off: nothing shows without a provider the
+    /// admin set up, and nothing runs unless the user asks.
+    /// </summary>
+    public async Task<bool> AssistantAsync(CancellationToken ct) =>
+        !(await ValuesAsync(ct)).TryGetValue(AssistantKey, out var value) || value != "false";
+
+    public async Task<AppSettingsDto> GetAsync(CancellationToken ct) => new(await DomainAgeChecksAsync(ct), await AssistantAsync(ct));
 
     public async Task<AppSettingsDto> SaveAsync(AppSettingsDto settings, CancellationToken ct)
     {
@@ -35,6 +44,7 @@ public sealed class AppSettings(IServiceScopeFactory scopes, TimeProvider clock)
             await using var scope = scopes.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<MailDbContext>();
             await SetAsync(db, DomainAgeChecksKey, settings.DomainAgeChecks ? "true" : "false", ct);
+            await SetAsync(db, AssistantKey, settings.Assistant ? "true" : "false", ct);
             await db.SaveChangesAsync(ct);
             _values = await db.AppSettings.AsNoTracking().ToDictionaryAsync(s => s.Key, s => s.Value, ct);
         }

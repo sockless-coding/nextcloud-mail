@@ -195,6 +195,7 @@ import TaskDialog from './components/TaskDialog.vue'
 import TrustedSendersDialog from './components/TrustedSendersDialog.vue'
 import { accountsState, loadAccounts } from './store/accounts.js'
 import { dialogs, removeFolder, removePermanently } from './store/actions.js'
+import { assistantTaskChanged, loadAssistant } from './store/assistant.js'
 import { composeNew, composer } from './store/compose.js'
 import { attachFileIds, takeFileIdsFromUrl } from './store/files.js'
 import { closeDrawer, folderPaneShown, layout, readingPane, viewport } from './store/layout.js'
@@ -407,6 +408,8 @@ onMounted(async () => {
 	loadOAuthState()
 	// Whether to offer "Create task"; nothing waits for it.
 	loadTasks()
+	// Whether to offer the Assistant's summaries; nothing waits for it either.
+	loadAssistant()
 	// Lists show tags once these arrive; nothing waits for them.
 	loadTags().then(loadTagCounts)
 	await Promise.all([loadAccounts(), loadViewState()])
@@ -420,7 +423,7 @@ onMounted(async () => {
 	sendFilesFromUrl()
 	pollTimer = window.setInterval(poll, POLL_INTERVAL_MS)
 	document.addEventListener('visibilitychange', poll)
-	stopPush = startPush({ folderChanged, scheduledChanged: loadScheduled, reconnected: () => poll({ type: 'visibilitychange' }) })
+	stopPush = startPush({ folderChanged, scheduledChanged: loadScheduled, assistantTaskChanged, reconnected: () => poll({ type: 'visibilitychange' }) })
 	removeShortcuts = installShortcuts()
 })
 

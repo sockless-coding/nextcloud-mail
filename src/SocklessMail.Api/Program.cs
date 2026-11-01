@@ -6,6 +6,7 @@ using SocklessMail.Api;
 using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Api;
 using SocklessMail.Api.AppApi;
+using SocklessMail.Api.Assistant;
 using SocklessMail.Api.Bimi;
 using SocklessMail.Api.Calendar;
 using SocklessMail.Api.Compose;
@@ -97,6 +98,8 @@ builder.Services.AddScoped<NextcloudCalendars>();
 builder.Services.AddScoped<InvitationService>();
 builder.Services.AddScoped<TaskService>();
 builder.Services.AddSingleton<TaskApps>();
+builder.Services.AddScoped<AssistantService>();
+builder.Services.AddSingleton<AssistantTypes>();
 builder.Services.AddScoped<RuleStore>();
 builder.Services.AddScoped<TagStore>();
 builder.Services.AddScoped<TagIndex>();
@@ -188,6 +191,7 @@ api.MapFilesEndpoints();
 api.MapContactsEndpoints();
 api.MapCalendarEndpoints();
 api.MapTaskEndpoints();
+api.MapAssistantEndpoints();
 api.MapSenderEndpoints();
 api.MapAdminEndpoints();
 api.MapViewStateEndpoints();
@@ -198,6 +202,7 @@ api.MapScheduleEndpoints();
 api.MapHub<MailHub>("/hub");
 app.MapOAuthCallback();
 app.MapFilesAction();
+app.MapAssistantWebhook();
 
 // Unmatched paths must answer 404, not the fallback policy's 401/403: AppAPI calls POST /init
 // with system credentials and treats only 404/501 as "no init needed".

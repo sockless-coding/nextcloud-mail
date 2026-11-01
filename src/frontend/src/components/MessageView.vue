@@ -66,6 +66,32 @@
 								@click="reply(mode.id)">
 								<NcIconSvgWrapper :path="mode.icon" :size="20" />
 							</button>
+							<NcActions v-if="assistantMenu"
+								class="message-view__assistant"
+								:aria-label="t('sockless_mail', 'Assistant')"
+								:title="t('sockless_mail', 'Assistant')">
+								<template #icon>
+									<AssistantIcon :size="20" />
+								</template>
+								<NcActionButton v-if="assistantState.summarize" close-after-click @click="summarize(where, message.id)">
+									<template #icon>
+										<NcIconSvgWrapper :path="mdiTextBoxOutline" />
+									</template>
+									{{ t('sockless_mail', 'Summarize') }}
+								</NcActionButton>
+								<NcActionButton v-if="canTranslate" close-after-click @click="translateMessage(where, message.id)">
+									<template #icon>
+										<NcIconSvgWrapper :path="mdiTranslate" />
+									</template>
+									{{ t('sockless_mail', 'Translate') }}
+								</NcActionButton>
+								<NcActionButton v-if="assistantState.checkScam" close-after-click @click="checkScam(where, message.id)">
+									<template #icon>
+										<NcIconSvgWrapper :path="mdiShieldSearch" />
+									</template>
+									{{ t('sockless_mail', 'Check for scams') }}
+								</NcActionButton>
+							</NcActions>
 							<button class="message-view__icon-button"
 								:aria-label="t('sockless_mail', 'Tags')"
 								:title="t('sockless_mail', 'Tags')"
@@ -192,9 +218,17 @@
 						{{ t('sockless_mail', 'The domain is spelled {ascii} in plain letters.', { ascii: warning.asciiDomain }) }}
 					</p>
 				</div>
-				<NcButton variant="secondary" :disabled="trusting" @click="trust(warning.registered)">
-					{{ t('sockless_mail', 'Trust {domain}', { domain: warning.registered }) }}
-				</NcButton>
+				<div class="message-view__warning-buttons">
+					<NcButton v-if="assistantState.checkScam && !scamChecked" variant="secondary" @click="checkScam(where, message.id)">
+						<template #icon>
+							<AssistantIcon :size="20" />
+						</template>
+						{{ t('sockless_mail', 'Ask the Assistant') }}
+					</NcButton>
+					<NcButton variant="secondary" :disabled="trusting" @click="trust(warning.registered)">
+						{{ t('sockless_mail', 'Trust {domain}', { domain: warning.registered }) }}
+					</NcButton>
+				</div>
 			</section>
 
 			<div v-if="message.hasRemoteContent && !message.remoteContentAllowed" class="message-view__notice" role="status">
@@ -204,6 +238,10 @@
 					{{ t('sockless_mail', 'Show images') }}
 				</button>
 			</div>
+
+			<AssistantScamCheck :where="where" :message-id="message.id" />
+			<AssistantSummary :where="where" :message-id="message.id" />
+			<AssistantTranslation :where="where" :message-id="message.id" />
 
 			<InvitationCard v-if="calendarPart"
 				:key="`${message.id}/${calendarPart.partId}`"
@@ -273,7 +311,7 @@
 </template>
 
 <script setup>
-import { mdiAccountPlusOutline, mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiClipboardCheckOutline, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFilterPlusOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiOpenInNew, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldAlertOutline, mdiTagOutline, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
+import { mdiAccountPlusOutline, mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiClipboardCheckOutline, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFilterPlusOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiOpenInNew, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldAlertOutline, mdiShieldSearch, mdiTagOutline, mdiTextBoxOutline, mdiTranslate, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -290,6 +328,7 @@ import { computed, ref, watch } from 'vue'
 import { bimiUrl } from '../bimi.js'
 import { accountColor, accountsState } from '../store/accounts.js'
 import { askMove, askTags, createRuleFrom, dialogs, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
+import { assistantState, checkScam, scamChecks, summarize, summaryKey, translateMessage } from '../store/assistant.js'
 import { composeEdit, composeReply } from '../store/compose.js'
 import { primaryCalendarPart } from '../store/calendar.js'
 import { saveAttachmentsToFiles } from '../store/files.js'
@@ -301,6 +340,10 @@ import { messageWarning, reasonText, trustDomain, warningTitle } from '../store/
 import { pageColors } from '../mailColors.js'
 import { closeMessage, emlUrl, mailboxState, openMessage, partUrl } from '../store/mailbox.js'
 import { openMessageWindow, windowMode } from '../store/windows.js'
+import AssistantIcon from './AssistantIcon.vue'
+import AssistantScamCheck from './AssistantScamCheck.vue'
+import AssistantSummary from './AssistantSummary.vue'
+import AssistantTranslation from './AssistantTranslation.vue'
 import DeceptiveLinkDialog from './DeceptiveLinkDialog.vue'
 import InvitationCard from './InvitationCard.vue'
 import MessageBody from './MessageBody.vue'
@@ -384,6 +427,11 @@ const detailRows = computed(() => {
 		m.replyTo.length && { label: t('sockless_mail', 'Reply to'), value: full(m.replyTo) },
 	].filter(Boolean)
 })
+
+/** The Assistant's menu: what it can do for a message here (the cards above the text show the answers). */
+const canTranslate = computed(() => assistantState.rewrite.includes('translate') && assistantState.languages.length > 0)
+const assistantMenu = computed(() => assistantState.summarize || canTranslate.value || assistantState.checkScam)
+const scamChecked = computed(() => !!scamChecks[summaryKey(where.value, message.value.id)])
 
 const calendarPart = computed(() => primaryCalendarPart(message.value.calendarParts ?? []))
 const accountAddress = computed(() => accountsState.accounts.find((a) => a.id === where.value.accountId)?.emailAddress ?? '')
@@ -650,6 +698,12 @@ function fileType(attachment) {
 
 .message-view__warning--danger .message-view__warning-icon {
 	color: var(--color-error-text);
+}
+
+.message-view__warning-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
 }
 
 .message-view__warning-text {

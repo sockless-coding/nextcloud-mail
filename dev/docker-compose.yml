@@ -52,6 +52,23 @@ services:
       - "127.0.0.1:3465:3465"
       - "127.0.0.1:3993:3993"
 
+  # Assistant (phase 21): an OpenAI-compatible stand-in for integration_openai (dev/dev.sh ai).
+  ai-stub:
+    image: node:22-alpine
+    command: ["node", "/stub/ai-stub.mjs"]
+    volumes:
+      - ./ai-stub.mjs:/stub/ai-stub.mjs:ro
+
+  # Runs Assistant tasks as soon as they are scheduled; Nextcloud's own cron would take minutes.
+  taskworker:
+    image: nextcloud:35-apache
+    user: www-data
+    entrypoint: ["sh", "-c", "while true; do php /var/www/html/occ background-job:worker -t 10m 'OC\\TaskProcessing\\SynchronousBackgroundJob' || sleep 10; done"]
+    volumes:
+      - nextcloud:/var/www/html
+    depends_on:
+      - nextcloud
+
 networks:
   default:
     # Fixed name: the HaRP daemon puts ExApp containers on it (--net).

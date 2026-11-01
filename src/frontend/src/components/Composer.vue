@@ -211,6 +211,31 @@
 					{{ t('sockless_mail', 'Share link from Files') }}
 				</NcActionButton>
 			</NcActions>
+			<!-- Icon only: with its name the footer no longer fits a docked composer. -->
+			<NcActions v-if="assistantState.write || assistantState.rewrite.length"
+				variant="tertiary"
+				:title="t('sockless_mail', 'Assistant')"
+				:aria-label="t('sockless_mail', 'Assistant')">
+				<template #icon>
+					<AssistantIcon :size="20" />
+				</template>
+				<NcActionButton v-if="assistantState.write" close-after-click @click="openAssistant('write')">
+					<template #icon>
+						<span class="composer__menu-icon"><AssistantIcon :size="20" /></span>
+					</template>
+					{{ isReply ? t('sockless_mail', 'Write the reply…') : t('sockless_mail', 'Write the message…') }}
+				</NcActionButton>
+				<NcActionSeparator v-if="assistantState.write && rewriteItems.length" />
+				<NcActionButton v-for="item in rewriteItems"
+					:key="item.action"
+					close-after-click
+					@click="openAssistant('rewrite', item.action, item.start)">
+					<template #icon>
+						<NcIconSvgWrapper :path="item.icon" />
+					</template>
+					{{ item.label }}
+				</NcActionButton>
+			</NcActions>
 			<NcButton variant="tertiary"
 				:aria-pressed="String(draft.format === 'text')"
 				:title="draft.format === 'html' ? t('sockless_mail', 'Write in plain text, without formatting') : t('sockless_mail', 'Write with formatting')"
@@ -232,6 +257,17 @@
 			</button>
 		</footer>
 	</section>
+
+	<AssistantComposeDialog v-if="assistant"
+		:key="assistant.id"
+		:mode="assistant.mode"
+		:action="assistant.action"
+		:start="assistant.start"
+		:target="assistant.target"
+		:context="assistant.context"
+		@replace="(text) => putAssistantText(text, 'replace')"
+		@insert="(text) => putAssistantText(text, 'insert')"
+		@close="assistant = null" />
 
 	<SendLaterDialog v-if="pickingTime"
 		@choose="timeChosen"
@@ -260,11 +296,12 @@
 </template>
 
 <script setup>
-import { mdiArrowCollapse, mdiArrowExpand, mdiCalendarClock, mdiClockOutline, mdiClose, mdiCogOutline, mdiDeleteOutline, mdiFolderOutline, mdiFormatLetterCase, mdiFormatText, mdiLinkVariant, mdiOpenInNew, mdiPaperclip, mdiSend, mdiSendClockOutline, mdiUndo, mdiUpload, mdiWindowMinimize, mdiWindowRestore } from '@mdi/js'
-import { showError } from '@nextcloud/dialogs/toast'
+import { mdiArrowCollapse, mdiArrowExpand, mdiCalendarClock, mdiClockOutline, mdiClose, mdiCogOutline, mdiDeleteOutline, mdiEmoticonHappyOutline, mdiFolderOutline, mdiFormatLetterCase, mdiFormatText, mdiLinkVariant, mdiOpenInNew, mdiPaperclip, mdiPencilOutline, mdiSend, mdiSendClockOutline, mdiSpellcheck, mdiTextShort, mdiTranslate, mdiUndo, mdiUpload, mdiWindowMinimize, mdiWindowRestore } from '@mdi/js'
+import { showError, showWarning } from '@nextcloud/dialogs/toast'
 import { getCanonicalLocale, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -273,11 +310,14 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { accountsState } from '../store/accounts.js'
 import { dialogs } from '../store/actions.js'
+import { assistantState } from '../store/assistant.js'
 import { attach, closeComposer, composer, detach, hasContent, saveSoon, scheduleSend, send, textToHtml, uploadsPending } from '../store/compose.js'
 import { attachFromFiles as pickAndAttach, createShareLinks } from '../store/files.js'
 import { layout } from '../store/layout.js'
 import { formatSendTime, offeredPresets } from '../store/sendLater.js'
 import { popOutComposer, windowMode } from '../store/windows.js'
+import AssistantComposeDialog from './AssistantComposeDialog.vue'
+import AssistantIcon from './AssistantIcon.vue'
 import RecipientInput from './RecipientInput.vue'
 import RichEditor from './RichEditor.vue'
 import SendLaterDialog from './SendLaterDialog.vue'
@@ -320,6 +360,99 @@ function onNormalized(html) {
 		draft.html = html
 		draft.initialHtml = html
 	}
+}
+
+const isReply = computed(() => ['reply', 'replyAll'].includes(draft.source?.mode))
+
+/** The Assistant's rewrites in the menu; those without choices start at once. */
+const REWRITES = [
+	{ action: 'tone', icon: mdiEmoticonHappyOutline, label: t('sockless_mail', 'Change the tone…') },
+	{ action: 'fix', icon: mdiSpellcheck, label: t('sockless_mail', 'Fix spelling and grammar'), start: true },
+	{ action: 'shorter', icon: mdiTextShort, label: t('sockless_mail', 'Make it shorter'), start: true },
+	{ action: 'clearer', icon: mdiFormatText, label: t('sockless_mail', 'Make it clearer'), start: true },
+	{ action: 'translate', icon: mdiTranslate, label: t('sockless_mail', 'Translate…') },
+	{ action: 'custom', icon: mdiPencilOutline, label: t('sockless_mail', 'Rewrite with your own instruction…') },
+]
+const rewriteItems = computed(() => REWRITES.filter((item) => assistantState.rewrite.includes(item.action)))
+
+/** The Assistant dialog while it is open: { id, mode, action, start, target, context }. */
+const assistant = ref(null)
+let assistants = 0
+
+/**
+ * Where the user's own words end in plain text: before the "On … wrote:" of a reply or a
+ * forward's header (ReplyBuilder.QuotedText on the server), or another "… wrote:" followed by
+ * "> " lines; trailing blank lines left out. A reply switched from rich text has no "> " left.
+ */
+function plainOwnEnd(text) {
+	const lines = text.split('\n')
+	let offset = 0
+	let end = text.length
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i]
+		if (/^On .+ wrote:\s*$/.test(line) || (/wrote:\s*$/.test(line) && (lines[i + 1] ?? '').startsWith('>')) || line.startsWith('---------- Forwarded message')) {
+			end = offset
+			break
+		}
+		offset += lines[i].length + 1
+	}
+	return text.slice(0, end).trimEnd().length
+}
+
+/** What the Assistant works on: the selection, or else the user's own text; and where it is. */
+function assistantTarget() {
+	if (draft.format === 'html') {
+		return editor.value.assistantTarget()
+	}
+	const area = body.value
+	const selected = area.selectionStart !== area.selectionEnd
+	const range = selected ? { from: area.selectionStart, to: area.selectionEnd } : { from: 0, to: plainOwnEnd(draft.text) }
+	return { text: draft.text.slice(range.from, range.to).trim(), range, selection: selected, images: false, cursor: area.selectionStart }
+}
+
+function openAssistant(mode, action = null, start = false) {
+	const target = assistantTarget()
+	if (mode === 'rewrite' && !target.text) {
+		showWarning(t('sockless_mail', 'Write or select some text first.'))
+		return
+	}
+	const account = accountsState.accounts.find((a) => a.id === draft.accountId)
+	assistant.value = {
+		id: ++assistants,
+		mode,
+		action,
+		start,
+		target,
+		context: {
+			subject: draft.subject,
+			to: draft.to,
+			senderName: account?.senderName || null,
+			source: draft.source && draft.source.mode !== 'edit'
+				? { accountId: draft.accountId, folderId: draft.source.folderId, messageId: draft.source.messageId, mode: draft.source.mode }
+				: null,
+		},
+	}
+}
+
+/**
+ * The Assistant's text into the message: in place of what it was made from ('replace'), or
+ * ('insert') at the cursor when writing and below that text when rewriting.
+ */
+function putAssistantText(text, how) {
+	const { mode, target } = assistant.value
+	const below = how === 'insert' && mode === 'rewrite'
+	const range = how === 'replace' ? target.range : below ? { from: target.range.to, to: target.range.to } : null
+	if (draft.format === 'html') {
+		editor.value.putAssistantText(text, range, below)
+		return
+	}
+	const at = range ?? { from: target.cursor, to: target.cursor }
+	const piece = below ? `\n\n${text.trim()}` : text.trim()
+	draft.text = draft.text.slice(0, at.from) + piece + draft.text.slice(at.to)
+	nextTick(() => {
+		body.value.focus()
+		body.value.setSelectionRange(at.from + piece.length, at.from + piece.length)
+	})
 }
 
 const confirmPlainText = ref(false)
@@ -612,6 +745,15 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 </script>
 
 <style scoped>
+/* Centred in the menu's icon column, as NcIconSvgWrapper centres its icons. */
+.composer__menu-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--default-clickable-area, 34px);
+	height: var(--default-clickable-area, 34px);
+}
+
 .composer {
 	position: fixed;
 	inset-inline-end: 24px;

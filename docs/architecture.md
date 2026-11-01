@@ -508,6 +508,66 @@ Internals for people working on the app. Installing and configuring it is in the
     "Date:" plus up to 2000 characters of the text, and an `X-` property keeps the Message-ID.
     A due time is sent as a UTC instant, a due day as a date.
   - The toast links to the task in the Tasks app.
+- **Nextcloud Assistant** (`Assistant/`): summaries, writing and rewriting run as TaskProcessing
+  tasks through OCS, as the user, with our app id as the task's `appId`.
+  - `GET /api/assistant` says what is offered. That needs the admin switch on, and the task types
+    with a provider (`taskprocessing/tasktypes`, cached per user for 5 minutes). Summaries need
+    `core:text2text:summary` or `core:text2text`; with only the free prompt, the app writes its
+    own summary instructions. It also returns the provider's tones (`changetone`) and translation
+    targets (`translate`), or the app's own lists when only the free prompt can do it.
+  - `POST …/messages/{id}/summary` gathers the conversation over IMAP. The ids come from the
+    message's `References` and `In-Reply-To` (up to 30), and the first one is the conversation's
+    root. The message's folder, the inbox and Sent are searched (`SEARCH HEADER`) for messages
+    that reference the root or the open message, or whose Message-ID is one of the ids. The
+    newest 10 go in, oldest first, each with Subject/From/Date in the user's time zone. In a
+    conversation each message loses its quoted history (`> ` lines and the "… wrote:" line
+    before them, Outlook header blocks, "Original Message" separators). A single message keeps
+    its quotes. Each message gets at most 8 000 characters, and the oldest messages go first to
+    keep the whole under 32 000.
+  - The task is scheduled with `webhookMethod: AppAPI:sockless_mail:POST` and
+    `webhookUri: /assistant/task-done`. When the task ends, Nextcloud calls that path through
+    AppAPI with the task's user. The handler sends only `{ id }` to that user's tabs over the
+    push hub. Browsers then read the task through `GET /api/assistant/tasks/{id}`, which only
+    returns tasks with our app id. Without the push channel they poll every 3 s for 30 s, then
+    every 10 s; with it, every 20 s in case a nudge is missed.
+  - Cancel is `POST /api/assistant/tasks/{id}/cancel`. Summaries live in the tab only;
+    Nextcloud deletes finished tasks after about a week.
+  - The model's answer is rendered as text, with bullets, numbered items, headings and `**bold**`
+    turned into lists, paragraphs and `<strong>`. It is never rendered as HTML.
+  - *Translating* a message (`POST …/messages/{id}/translation`) sends its subject and text (at
+    most 20 000 characters; `truncated` says when it was cut) to the provider's translation task,
+    or the free prompt, as a rewrite into another language does. The browser starts with the
+    user's Nextcloud language when it is offered, and the card's language list translates again.
+  - The *scam check* (`POST …/messages/{id}/scam-check`, free prompt only) builds its prompt in
+    `ScamEvidence`. It loads the message the way the reader does (so the sender checks run) and
+    its raw headers. The prompt has the app's own findings as sentences, From/Reply-To/To/Subject/
+    Date, the topmost Return-Path, Sender, Authentication-Results, Received-SPF, X-Mailer and
+    List-Unsubscribe (the receiving server's; lower ones can be forged), up to 30 web links as
+    shown text → target, the attachments and the first 6 000 characters of the text. It asks for
+    JSON (`verdict` safe/suspicious/scam, `summary`, `reasons`, `advice`) in the user's language,
+    and says the mail is evidence, not instructions. The browser takes the JSON from the answer
+    (code fences and words around it allowed); an answer without JSON shows as text with "No
+    clear verdict". It runs only on request: from the Assistant menu, or "Ask the Assistant" in
+    the sender warning.
+  - The reader's cards (`AssistantCard.vue` with the answer in its slot) keep their state per
+    message in the tab: summaries, translations and scam checks each by "account/folder/message".
+  - *Writing* (`POST /api/assistant/write`) always uses the free prompt (`AssistantPrompts.Write`):
+    a reply to the last message of the conversation (the newest 5, gathered as for summaries),
+    the note for a forward (that message only), or a new message. In it go the user's request
+    (optional for a reply), a tone from a fixed list, the subject, the recipients, the account's
+    sender name for the sign-off, and optionally what the user wrote so far. The prompt marks the
+    mails as content, not instructions.
+  - *Rewriting* (`POST /api/assistant/rewrite`) takes the text from the browser: the selection,
+    or else everything above the quoted original (the app's own "On … wrote:" header or a
+    forward's header). Change tone and translate use the provider's own task types with their
+    enum values when there are any; fix, shorter, clearer and own instructions use
+    `core:text2text:improve` with instructions; everything falls back to the free prompt.
+    Requests are checked against the offered tones and languages, at most 1 000 characters of
+    instruction and 20 000 of text.
+  - The composer shows the answer in a dialog. *Replace* puts it in place of the text it was
+    made from, *Insert* (writing) puts it at the cursor, *Insert below* (rewriting) after the
+    block where that text ends. Text containing images can only get the answer below it.
+    Paragraphs come from blank lines and line breaks from single newlines.
 
 ## The companion app (`companion/socklessmail/`)
 

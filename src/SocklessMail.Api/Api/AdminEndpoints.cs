@@ -3,7 +3,7 @@ using SocklessMail.Api.Data;
 
 namespace SocklessMail.Api.Api;
 
-public sealed record AppSettingsInput(bool? DomainAgeChecks);
+public sealed record AppSettingsInput(bool? DomainAgeChecks, bool? Assistant);
 
 /// <summary>Instance-wide settings for Nextcloud admins (access level ADMIN in info.xml, checked here again).</summary>
 public static class AdminEndpoints
@@ -18,7 +18,8 @@ public static class AdminEndpoints
         admin.MapPut("/settings", async (AppSettingsInput input, AppSettings settings, CancellationToken ct) =>
         {
             var current = await settings.GetAsync(ct);
-            return await settings.SaveAsync(new AppSettingsDto(input.DomainAgeChecks ?? current.DomainAgeChecks), ct);
+            return await settings.SaveAsync(
+                new AppSettingsDto(input.DomainAgeChecks ?? current.DomainAgeChecks, input.Assistant ?? current.Assistant), ct);
         });
     }
 }

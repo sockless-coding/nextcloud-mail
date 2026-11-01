@@ -17,6 +17,9 @@ public sealed class MailHub(UserActivity activity) : Hub
     /// <summary>A scheduled message was sent, failed, or changed otherwise.</summary>
     public const string ScheduledChanged = "scheduledChanged";
 
+    /// <summary>An Assistant task ended; carries only its id.</summary>
+    public const string AssistantTaskChanged = "assistantTaskChanged";
+
     public override Task OnConnectedAsync()
     {
         // An open tab keeps the user's IDLE watchers running although it no longer polls.
@@ -60,6 +63,19 @@ public sealed class MailPush(IHubContext<MailHub> hub, ILogger<MailPush> logger)
         catch (Exception e)
         {
             logger.LogWarning(e, "Could not push a scheduled message change");
+        }
+    }
+
+    public async Task AssistantTaskChangedAsync(string userId, long taskId)
+    {
+        try
+        {
+            await hub.Clients.User(userId).SendAsync(MailHub.AssistantTaskChanged, new { id = taskId });
+        }
+        catch (Exception e)
+        {
+            // The browser also asks for the task while it waits.
+            logger.LogWarning(e, "Could not push an Assistant task change");
         }
     }
 }

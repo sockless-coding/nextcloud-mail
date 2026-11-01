@@ -12,11 +12,22 @@
 				:model-value="settings.domainAgeChecks"
 				:loading="savingSettings"
 				type="switch"
-				@update:model-value="saveDomainAgeChecks">
+				@update:model-value="(value) => saveSettings({ domainAgeChecks: value })">
 				{{ t('sockless_mail', 'Warn about newly registered sender domains') }}
 			</NcCheckboxRadioSwitch>
 			<p class="oauth-settings__hint">
 				{{ t('sockless_mail', 'Asks the domain registry (RDAP) when an unfamiliar sender’s domain was registered. The registries learn which domains your users receive mail from, not who receives it.') }}
+			</p>
+			<h2>{{ t('sockless_mail', 'Assistant') }}</h2>
+			<NcCheckboxRadioSwitch v-if="settings"
+				:model-value="settings.assistant"
+				:loading="savingSettings"
+				type="switch"
+				@update:model-value="(value) => saveSettings({ assistant: value })">
+				{{ t('sockless_mail', 'Offer the Nextcloud Assistant in mail') }}
+			</NcCheckboxRadioSwitch>
+			<p class="oauth-settings__hint">
+				{{ t('sockless_mail', 'Users can have messages and conversations summarized, translated and checked for scams, and get help writing and rewriting. Only when they ask, the text goes to the AI provider set up for the Nextcloud Assistant (Administration settings → Artificial intelligence). Nothing is offered while no provider is set up.') }}
 			</p>
 			<h2>{{ t('sockless_mail', 'Sign-in providers') }}</h2>
 			<p>
@@ -85,6 +96,7 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcPasswordField from '@nextcloud/vue/components/NcPasswordField'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import { onMounted, reactive, ref } from 'vue'
+import { loadAssistant } from '../store/assistant.js'
 import { callbackUrl, loadAdminSettings, loadOAuthClients, saveAdminSettings, saveOAuthClient } from '../store/oauth.js'
 
 const emit = defineEmits(['close'])
@@ -97,14 +109,17 @@ const fieldErrors = reactive({})
 const loading = ref(true)
 const loadError = ref('')
 const saving = ref(null)
-/** { domainAgeChecks }; null until loaded */
+/** { domainAgeChecks, assistant }; null until loaded */
 const settings = ref(null)
 const savingSettings = ref(false)
 
-async function saveDomainAgeChecks(value) {
+async function saveSettings(input) {
 	savingSettings.value = true
 	try {
-		settings.value = await saveAdminSettings({ domainAgeChecks: value })
+		settings.value = await saveAdminSettings(input)
+		if ('assistant' in input) {
+			loadAssistant()
+		}
 	} catch (e) {
 		showError(t('sockless_mail', 'Could not save: {error}', { error: e.message }))
 	} finally {

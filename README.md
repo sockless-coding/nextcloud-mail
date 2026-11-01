@@ -66,6 +66,12 @@ Nextcloud and are signed in by their Nextcloud session. Mail is handled with Mai
   Nextcloud calendar and the answer goes to the organizer from the mail account. Cancellations,
   attendees' replies and `.ics` files update the calendar the same way.
 - Tasks: "Create task…" turns a message into a task in the Tasks app.
+- Assistant, with the AI provider set up for the Nextcloud Assistant: summarize a message or its
+  whole conversation (from the inbox and Sent), translate it, or have it checked for phishing and
+  scams (also offered in the suspicious-sender warning); in the composer, write a reply or a new message
+  from a short request in a chosen tone, and change the tone of the text, fix its spelling and
+  grammar, shorten it, make it clearer, translate it, or rewrite it as told. Answers show in a
+  preview first. Only offered when a provider is set up, and only run when the user asks.
 
 **Safety**
 - Senders whose domain imitates a known one, or was registered only recently, get a warning.
@@ -199,10 +205,36 @@ Back up the volume, but keep `SOCKLESS_MAIL_ENCRYPTION_KEY` out of the same back
 ### Admin settings
 
 Members of the Nextcloud `admin` group see **Administration** at the bottom of the account rail.
-It has two sections:
+It has three sections:
 
 - **Sign-in providers**: set up Google and Microsoft sign-in (see below).
 - **Suspicious senders**: turn domain-age lookups over RDAP on or off.
+- **Assistant**: offer the Nextcloud Assistant in mail, or not (on by default). See below.
+
+### Nextcloud Assistant
+
+Summaries, writing and rewriting run as Nextcloud Assistant tasks (Nextcloud's TaskProcessing API), as the user, with
+whatever provider the admin chose under *Administration settings → Artificial intelligence*:
+for example `integration_openai` with an OpenAI-compatible service, or a local model through
+`llm2`. Sockless Mail stores no AI settings or keys of its own.
+
+- Each feature shows only when a provider handles it. Summaries need *Summarize* or the free
+  prompt (*Free text to text prompt*); writing needs the free prompt; rewriting uses *Change tone*,
+  *Improve text* and *Translate* where a provider offers them, and the free prompt otherwise.
+- When a user asks, that text goes to the provider: the message (or up to 10 messages of the
+  conversation, without their quoted history) for a summary; for a reply, up to 5 messages of
+  the conversation, the subject, the recipients and the user's request; for a rewrite, the
+  selected text or the user's own text above the quote; for a translation, the subject and
+  text of the message (up to 20 000 characters); for a scam check, the sender's addresses, the
+  topmost Authentication-Results, Received-SPF and Return-Path headers, the links (text and
+  target), the attachment names and types, the app's own sender warnings and the first 6 000
+  characters of the text. Nothing is sent otherwise.
+- The scam check is an AI assessment and can be wrong both ways; the app's own sender warnings
+  stay as they are, whatever it says.
+- Nextcloud runs the tasks as background jobs. With only the usual 5-minute cron a summary can
+  take minutes; run dedicated workers for prompt results, as the Nextcloud admin manual
+  describes (`occ background-job:worker 'OC\TaskProcessing\SynchronousBackgroundJob'`).
+- Nextcloud keeps finished tasks, with their input and output, for about a week.
 
 ### Signing in with Google and Microsoft (OAuth2)
 
@@ -352,6 +384,7 @@ src/SocklessMail.Api/       ASP.NET Core minimal APIs
   Contacts/                 Nextcloud address books over CardDAV: suggestions, groups, adding senders
   Calendar/                 invitations (iMIP) and .ics files against Nextcloud calendars over CalDAV
   Tasks/                    tasks from messages in the Tasks app over CalDAV
+  Assistant/                Nextcloud Assistant tasks (TaskProcessing): summaries, translation, scam check, writing, rewriting, webhook
   Security/                 Data Protection key ring wrapping
 src/frontend/               Vue 3 + @nextcloud/vue 9, built into wwwroot/js and wwwroot/css
 tests/SocklessMail.Tests/   xUnit v3: auth, CSRF, accounts, user isolation, key ring, pool, sanitizer
@@ -394,6 +427,9 @@ dev/dev.sh seed-mail     # send 61 test messages (optionally to a given address)
   addresses are local.
 - The seeded mail has numbered plain-text messages and an HTML newsletter with a script, a
   remote image, an inline image and a PDF attachment.
+- `dev/dev.sh ai` makes Assistant tasks work: it installs `integration_openai` and points it at
+  `dev/ai-stub.mjs`, an OpenAI-compatible stand-in with predictable answers. The `taskworker`
+  service runs tasks as soon as they are scheduled.
 
 **Fast loop: the app on your machine (manual-install daemon)**
 
@@ -456,6 +492,8 @@ node accounts.mjs    # one script per area; see the list below
 | `push.mjs` | WebSocket push through HaRP |
 | `oauth.mjs` | admin sign-in settings, Google popup with PKCE, callback through HaRP |
 | `files.mjs`, `contacts.mjs`, `calendar.mjs`, `tasks.mjs` | Nextcloud integration |
+| `assistant.mjs` | summaries, translation, scam checks (from the warning and the menu), cancelling, the admin switch (needs `dev/dev.sh ai`) |
+| `assistant-compose.mjs` | writing and rewriting in the composer, around the quote, in rich and plain text (needs `dev/dev.sh ai`) |
 | `senders.mjs` | suspicious-sender warnings |
 | `tags.mjs`, `rules.mjs` | tags and rules |
 | `sendlater.mjs`, `scheduled.mjs`, `presets.mjs` | send later, the Scheduled view, presets |

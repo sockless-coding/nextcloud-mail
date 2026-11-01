@@ -110,11 +110,28 @@ cmd_update_docker() {
     occ app_api:app:enable "$APP_ID"
 }
 
+# Assistant (phase 21): integration_openai as the task provider, answered by dev/ai-stub.mjs,
+# with dev/docker-compose.yml's taskworker running tasks at once. Dev-only settings.
+cmd_ai() {
+    occ app:install integration_openai >/dev/null 2>&1 || occ app:enable integration_openai >/dev/null
+    # The stub lives on the compose network, which Nextcloud's HTTP client refuses by default.
+    occ config:system:set allow_local_remote_servers --value=true --type=boolean
+    occ config:app:set integration_openai url --value=http://ai-stub:8000/v1 --lazy
+    occ config:app:set integration_openai api_key --value=dev-only-stub-key --lazy
+    occ config:app:set integration_openai default_completion_model_id --value=stub-model --lazy
+    occ config:app:set integration_openai chat_endpoint_enabled --value=1 --lazy
+    occ config:app:set integration_openai llm_provider_enabled --value=1 --lazy
+    # The worker caches app config for its lifetime.
+    "${COMPOSE[@]}" restart taskworker >/dev/null
+    echo "Assistant tasks now run against the stub (http://ai-stub:8000/v1)."
+}
+
 cmd_help() {
     cat <<EOF
 Usage: dev/dev.sh <command>
 
   up               Start Nextcloud + HaRP + GreenMail, register both deploy daemons
+  ai               Make Assistant tasks work: integration_openai against the AI stub
   down             Stop the stack (data volumes are kept)
 
   Fast loop (app runs on your machine, manual-install daemon):
@@ -136,6 +153,7 @@ EOF
 
 case "${1:-help}" in
     up) cmd_up ;;
+    ai) cmd_ai ;;
     down) "${COMPOSE[@]}" down ;;
     run) cmd_run ;;
     frontend) cmd_frontend ;;

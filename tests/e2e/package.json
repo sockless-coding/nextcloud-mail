@@ -16,7 +16,8 @@
     "viewstate": "node viewstate.mjs",
     "settings": "node settings.mjs",
     "windows": "node windows.mjs",
-    "appearance": "node appearance.mjs"
+    "appearance": "node appearance.mjs",
+    "assistant": "node assistant.mjs"
   },
   "dependencies": {
     "playwright-core": "^1.64.1"

@@ -2,6 +2,7 @@ import { showWarning } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import { reactive, watch } from 'vue'
 import { accountsState, loadAccounts } from './accounts.js'
+import { loadAssistant } from './assistant.js'
 import { adoptDraft, composeEdit, composeNew, composer, composeReply, handOverDraft } from './compose.js'
 import { layout } from './layout.js'
 import { loadFolders, mailboxState, openMessage } from './mailbox.js'
@@ -174,6 +175,7 @@ export async function startWindow() {
 	stripPage()
 	// What the composer and the reader offer, as in the main window; nothing waits for them.
 	loadTasks()
+	loadAssistant()
 	loadTags()
 	loadPresets()
 	await loadAccounts()

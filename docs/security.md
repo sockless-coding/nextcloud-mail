@@ -18,7 +18,10 @@ How Sockless Mail authenticates requests, keeps users apart, stores credentials 
   both proxies apply the first matching route) as ADMIN. HaRP and the PHP proxy reject other
   requests before they reach the app, and the app checks again: a user id for `/api`, and
   membership in Nextcloud's `admin` group (asked from Nextcloud, remembered for a minute) for
-  `/api/admin`. `/oauth/callback` is PUBLIC, see below.
+  `/api/admin`. `/oauth/callback` is PUBLIC, see below. `/assistant/task-done` (Nextcloud's
+  call when an Assistant task ends) is in no route, so neither proxy forwards it from browsers.
+  It only accepts tasks with our app id whose user is the user on the request, and it passes on
+  nothing but the task id.
 - **OAuth2 sign-in** uses the authorization code flow with PKCE (S256). A sign-in in progress is
   held in memory for 10 minutes and identified by two random 256-bit values: the `state` sent to
   the provider, and a flow id the user's browser polls. The provider's redirect is a cross-site
