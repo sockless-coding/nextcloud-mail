@@ -138,6 +138,23 @@ export async function setAppearance(id, appearance) {
 	}
 }
 
+/**
+ * Turns grouping into conversations on or off for one account.
+ *
+ * @param {string} id account id
+ * @param {boolean} enabled whether the account's mail is shown as conversations
+ */
+export async function setConversations(id, enabled) {
+	try {
+		const account = await apiSend('PUT', `/accounts/${id}/conversations`, { enabled })
+		const index = accountsState.accounts.findIndex((a) => a.id === id)
+		accountsState.accounts.splice(index, 1, account)
+		return account
+	} catch (e) {
+		rethrow(e)
+	}
+}
+
 /** The accounts the "All accounts" views take in. */
 export const unifiedAccounts = computed(() => accountsState.accounts.filter((a) => a.includeInUnified !== false))
 

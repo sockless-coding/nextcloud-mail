@@ -170,7 +170,9 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { computed } from 'vue'
 import { accountsState } from '../store/accounts.js'
 import { askMoveRows, askTags, canMoveRows, dialogs, moveTo, removeRows, setFlaggedRows, setSeenRows } from '../store/actions.js'
-import { composeNew, composeReply } from '../store/compose.js'
+import { composeNew } from '../store/compose.js'
+import { replyFrom } from '../store/conversation.js'
+import { rowIds } from '../store/conversationRows.js'
 import { folderPaneShown, layout, toggleFolderPane, viewport } from '../store/layout.js'
 import { mailboxState } from '../store/mailbox.js'
 import { clearQuery, currentScope, runSearch, searchState as search } from '../store/search.js'
@@ -229,7 +231,7 @@ const searchLabel = computed(() => {
 
 async function reply(mode) {
 	try {
-		await composeReply(mode)
+		await replyFrom(mode)
 	} catch (e) {
 		showError(t('sockless_mail', 'Could not prepare the message: {error}', { error: e.message }))
 	}
@@ -246,7 +248,7 @@ function setScope(value) {
 function archive() {
 	const rows = targets.value
 	const { accountId, folderId } = rows[0]
-	moveTo({ where: { accountId, folderId }, messageIds: rows.map((r) => r.message.id) }, archiveFolder.value.id)
+	moveTo({ where: { accountId, folderId }, messageIds: rows.flatMap(rowIds) }, archiveFolder.value.id)
 }
 </script>
 

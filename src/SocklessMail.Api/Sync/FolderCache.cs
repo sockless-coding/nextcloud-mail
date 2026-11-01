@@ -33,7 +33,8 @@ public sealed record FolderChanges(
 /// Callers hold the folder's <see cref="SyncLocks"/> lock around every method that writes. Every
 /// write that a client's list or counts would show is pushed to the owner's open tabs.
 /// </summary>
-public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush push, BimiSenders bimi, TagIndex tags, ILogger<FolderCache> logger)
+public sealed class FolderCache(
+    MailDbContext db, TimeProvider clock, MailPush push, BimiSenders bimi, TagIndex tags, ConversationIndex conversations, ILogger<FolderCache> logger)
 {
     /// <summary>More new messages than this since the last sync: rebuild the window from the newest page instead.</summary>
     public const int MaxNewMessages = 500;
@@ -52,10 +53,13 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
     /// <summary>Cached rows without a BIMI verdict (from before BIMI was cached) filled in per sync.</summary>
     public const int BimiBackfill = 200;
 
+    /// <summary>Cached rows without conversation headers filled in per sync, for accounts with conversations.</summary>
+    public const int ConversationBackfill = 500;
+
     internal const MessageSummaryItems ListItems =
         MessageSummaryItems.UniqueId | MessageSummaryItems.Envelope | MessageSummaryItems.Flags
         | MessageSummaryItems.InternalDate | MessageSummaryItems.Size | MessageSummaryItems.BodyStructure
-        | MessageSummaryItems.PreviewText;
+        | MessageSummaryItems.PreviewText | MessageSummaryItems.References;
 
     /// <summary><paramref name="items"/> plus the headers <see cref="BimiSenders"/> reads.</summary>
     internal static FetchRequest ListRequest(MessageSummaryItems items = ListItems) => new(items, BimiSenders.Headers);
@@ -89,6 +93,12 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         /// <summary>BIMI verdicts for rows cached without one; null means none, which no client needs to hear about.</summary>
         public readonly Dictionary<uint, BimiDto?> Bimi = [];
 
+        /// <summary>Conversation headers for rows cached without them; clients regroup their lists.</summary>
+        public readonly Dictionary<uint, ConversationHeaders> Conversations = [];
+
+        /// <summary>Cached rows of this folder moved to another conversation (two were merged).</summary>
+        public bool Merged;
+
         public uint? WindowStart;
         public uint? LastUid;
 
@@ -97,7 +107,7 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
 
         public bool ChangesRows =>
             Wipe || Inserts.Count > 0 || Flags.Count > 0 || Keywords.Count > 0 || Removals.Count > 0 || Previews.Count > 0
-            || Bimi.Values.Any(b => b is not null) || KeywordFill.Values.Any(k => k != "");
+            || Bimi.Values.Any(b => b is not null) || KeywordFill.Values.Any(k => k != "") || Conversations.Count > 0 || Merged;
     }
 
     /// <summary>The cache key of a folder: its full name, with any spelling of INBOX as "INBOX".</summary>
@@ -131,6 +141,10 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             await FillPreviewsAsync(folder, state, plan, ct);
             await FillBimiAsync(folder, state, plan, ct);
             await FillKeywordsAsync(folder, state, serverKeywords, plan, ct);
+            if (account.Conversations)
+            {
+                await FillConversationsAsync(folder, state, plan, ct);
+            }
         }
 
         // UNSEEN covers the whole folder, not just the window. Without mod-sequences there is no
@@ -255,6 +269,56 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         return new CachedSearchResult(
             rows.Take(limit).Select(x => new SearchHit(x.AccountId, MailboxIds.FolderId(x.FullName), x.FullName, ToSummaryDto(x.UidValidity, x.Message))).ToList(),
             rows.Count > limit);
+    }
+
+    /// <summary>
+    /// The cached messages of the account in the conversation of any of <paramref name="keys"/> (a
+    /// message's own id and those it references), newest first, at most <paramref name="limit"/>.
+    /// </summary>
+    public async Task<List<(string FullName, uint UidValidity, uint Uid)>> ConversationAsync(
+        Guid accountId, IEnumerable<string> keys, int limit, CancellationToken ct)
+    {
+        var lookup = keys.Distinct(StringComparer.Ordinal).Take(ConversationIndex.MaxReferences + 1).ToList();
+        if (lookup.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = await db.ConversationLinks.AsNoTracking()
+            .Where(l => l.AccountId == accountId && lookup.Contains(l.MessageIdHeader))
+            .Select(l => (Guid?)l.ConversationId)
+            .Distinct()
+            .ToListAsync(ct);
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var rows = await db.Messages.AsNoTracking()
+            .Where(m => ids.Contains(m.ConversationId))
+            .Join(db.Folders.AsNoTracking().Where(f => f.AccountId == accountId), m => m.FolderId, f => f.Id,
+                (m, f) => new { f.FullName, f.UidValidity, m.Uid, m.Date })
+            .OrderByDescending(x => x.Date)
+            .Take(limit)
+            .ToListAsync(ct);
+        return rows.Select(x => (x.FullName, x.UidValidity, x.Uid)).ToList();
+    }
+
+    /// <summary>
+    /// The UIDs whose conversation the cache knows for every message of the folder (its window,
+    /// once every row has its headers), so a search for the rest can skip them; null when the
+    /// cache cannot be relied on and the whole folder must be searched.
+    /// </summary>
+    public async Task<UniqueIdRange?> ConversationsKnownAsync(Guid accountId, string fullName, uint uidValidity, CancellationToken ct)
+    {
+        var state = await FindAsync(accountId, fullName, ct);
+        if (state is not { WindowStart: { } start } || state.UidValidity != uidValidity
+            || await db.Messages.AnyAsync(m => m.FolderId == state.Id && m.MessageIdHeader == null, ct))
+        {
+            return null;
+        }
+
+        return state.LastUid < start ? null : new UniqueIdRange(uidValidity, start, state.LastUid);
     }
 
     /// <summary>Applies a flag change the app itself just made on the server.</summary>
@@ -423,7 +487,72 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         m.Size,
         m.Preview,
         string.IsNullOrEmpty(m.BimiDomain) ? null : new BimiDto(m.BimiDomain, m.BimiSelector),
-        Keywords.ForClient(m.Keywords));
+        Keywords.ForClient(m.Keywords),
+        m.ConversationId);
+
+    /// <summary>At most this many messages of a conversation in one folder are summed up for its row.</summary>
+    public const int MaxMembers = 200;
+
+    /// <summary>
+    /// The cached messages of a conversation in one folder, newest first, and whether the user
+    /// answered in it: a message of the conversation marked answered, or one in Sent (any folder).
+    /// </summary>
+    /// <param name="sentFullName">The account's Sent folder (cache key); null when unknown.</param>
+    public async Task<ConversationMembersDto?> MembersAsync(
+        Guid accountId, string folderId, Guid conversationId, string? sentFullName, CancellationToken ct)
+    {
+        if (MailboxIds.FolderFullName(folderId) is not { } fullName || await FindAsync(accountId, Key(fullName), ct) is not { } state)
+        {
+            return null;
+        }
+
+        var rows = await db.Messages.AsNoTracking()
+            .Where(m => m.FolderId == state.Id && m.ConversationId == conversationId)
+            .OrderByDescending(m => m.Date)
+            .Take(MaxMembers)
+            .Select(m => new { m.Uid, m.Flags, m.HasAttachments, m.From, m.Date })
+            .ToListAsync(ct);
+        var replied = rows.Any(r => r.Flags.HasFlag(MessageFlags.Answered))
+            || await db.Messages.AsNoTracking()
+                .Where(m => m.ConversationId == conversationId)
+                .Join(db.Folders.AsNoTracking().Where(f => f.AccountId == accountId), m => m.FolderId, f => f.Id, (m, f) => new { m.Flags, f.FullName })
+                .AnyAsync(x => x.FullName == sentFullName || (x.Flags & MessageFlags.Answered) != 0, ct);
+        return new ConversationMembersDto(accountId, folderId, conversationId,
+            rows.Select(r => new ConversationMemberDto(
+                MailboxIds.MessageId(state.UidValidity, r.Uid),
+                r.Flags.HasFlag(MessageFlags.Seen),
+                r.Flags.HasFlag(MessageFlags.Flagged),
+                r.Flags.HasFlag(MessageFlags.Answered),
+                r.HasAttachments,
+                r.From,
+                r.Date)).ToList(),
+            replied);
+    }
+
+    /// <summary>The conversation of each of these messages that the cache knows, by UID.</summary>
+    public async Task<Dictionary<uint, Guid>> ConversationIdsAsync(Guid accountId, string fullName, uint uidValidity, IReadOnlyCollection<uint> uids, CancellationToken ct)
+    {
+        var state = await FindAsync(accountId, fullName, ct);
+        if (state is null || state.UidValidity != uidValidity || uids.Count == 0)
+        {
+            return [];
+        }
+
+        var found = new Dictionary<uint, Guid>();
+        foreach (var chunk in uids.Chunk(Chunk))
+        {
+            var rows = await db.Messages.AsNoTracking()
+                .Where(m => m.FolderId == state.Id && chunk.Contains(m.Uid) && m.ConversationId != null)
+                .Select(m => new { m.Uid, m.ConversationId })
+                .ToListAsync(ct);
+            foreach (var row in rows)
+            {
+                found[row.Uid] = row.ConversationId!.Value;
+            }
+        }
+
+        return found;
+    }
 
     private static async Task LoadNewestAsync(IMailFolder folder, int count, uint? uidNext, int window, SyncPlan plan, CancellationToken ct)
     {
@@ -687,6 +816,35 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         }
     }
 
+    /// <summary>Conversation headers for rows cached without them, newest first, <see cref="ConversationBackfill"/> per sync.</summary>
+    private async Task FillConversationsAsync(IMailFolder folder, CachedFolder state, SyncPlan plan, CancellationToken ct)
+    {
+        if (plan.Wipe)
+        {
+            return;
+        }
+
+        var missing = await db.Messages.AsNoTracking()
+            .Where(m => m.FolderId == state.Id && m.MessageIdHeader == null)
+            .OrderByDescending(m => m.Uid)
+            .Select(m => m.Uid)
+            .Take(ConversationBackfill)
+            .ToListAsync(ct);
+        missing.RemoveAll(plan.Removals.Contains);
+        if (missing.Count == 0)
+        {
+            return;
+        }
+
+        var summaries = await folder.FetchAsync(
+            missing.Select(u => new UniqueId(state.UidValidity, u)).ToList(),
+            MessageSummaryItems.UniqueId | MessageSummaryItems.Envelope | MessageSummaryItems.References, ct);
+        foreach (var summary in summaries)
+        {
+            plan.Conversations[summary.UniqueId.Id] = ConversationHeaders.Of(summary);
+        }
+    }
+
     private static FetchRequest ChangedSince(ulong modSeq) =>
         new(MessageSummaryItems.UniqueId | MessageSummaryItems.Flags | MessageSummaryItems.ModSeq) { ChangedSince = modSeq };
 
@@ -779,7 +937,24 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
         }
 
         var localKeywords = await tags.ClaimAsync(account.Id, fullName, plan.UidValidity ?? state.UidValidity, inserts, ct);
-        db.Messages.AddRange(inserts.Select(s => ToCachedMessage(state, s, bimi.Find(s), localKeywords.GetValueOrDefault(s.UniqueId.Id), seq)));
+        var headers = inserts.Select(ConversationHeaders.Of).ToList();
+        var fills = plan.Conversations.ToList();
+        var assignment = await conversations.AssignAsync(account.Id, account.OwnerUserId, [.. headers, .. fills.Select(f => f.Value)], state.Id, seq, ct);
+        var conversationIds = assignment.Ids;
+        plan.Merged = assignment.ChangedHere;
+        db.Messages.AddRange(inserts.Select((s, i) =>
+            ToCachedMessage(state, s, bimi.Find(s), localKeywords.GetValueOrDefault(s.UniqueId.Id), headers[i], conversationIds[i], seq)));
+        foreach (var ((uid, filled), i) in fills.Select((f, i) => (f, i)))
+        {
+            var conversationId = conversationIds[headers.Count + i];
+            await db.Messages
+                .Where(m => m.FolderId == state.Id && m.Uid == uid)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(m => m.MessageIdHeader, filled.MessageId)
+                    .SetProperty(m => m.ParentIdHeader, filled.ParentId)
+                    .SetProperty(m => m.ConversationId, conversationId)
+                    .SetProperty(m => m.ChangeSeq, seq), ct);
+        }
 
         if (plan.WindowStart is { } windowStart)
         {
@@ -828,6 +1003,11 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             await push.FolderChangedAsync(state.OwnerUserId, account.Id, fullName);
         }
 
+        foreach (var other in assignment.ChangedFolders)
+        {
+            await push.FolderChangedAsync(other.OwnerUserId, account.Id, other.FullName);
+        }
+
         return state;
     }
 
@@ -861,7 +1041,8 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
     }
 
     /// <param name="localKeywords">The tag index's keywords, for an account whose server keeps none; null takes the server's.</param>
-    private static CachedMessage ToCachedMessage(CachedFolder state, IMessageSummary s, BimiDto? sender, string? localKeywords, long seq)
+    private static CachedMessage ToCachedMessage(
+        CachedFolder state, IMessageSummary s, BimiDto? sender, string? localKeywords, ConversationHeaders headers, Guid conversationId, long seq)
     {
         var subject = s.Envelope?.Subject ?? "";
         var from = AddressDto.From(s.Envelope?.From);
@@ -883,6 +1064,9 @@ public sealed class FolderCache(MailDbContext db, TimeProvider clock, MailPush p
             BimiSelector = sender?.Selector,
             Flags = (s.Flags ?? MessageFlags.None) & SystemFlags,
             Keywords = localKeywords ?? Keywords.Format(s.Keywords),
+            MessageIdHeader = headers.MessageId,
+            ParentIdHeader = headers.ParentId,
+            ConversationId = conversationId,
             ChangeSeq = seq,
         };
     }

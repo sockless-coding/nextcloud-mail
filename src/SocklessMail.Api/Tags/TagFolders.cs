@@ -41,8 +41,9 @@ public sealed class TagFolders(MailDbContext db, AccountService accounts, Mailbo
         var page = after.Take(limit).ToList();
         var ids = page.Select(c => c.Id).ToList();
         var rows = (await db.TaggedMessages.AsNoTracking().Where(m => ids.Contains(m.Id)).ToListAsync(ct)).ToDictionary(m => m.Id);
+        var conversations = await ConversationsAsync(rows.Values, ct);
         return new TagPage(
-            page.Where(c => rows.ContainsKey(c.Id)).Select(c => Hit(rows[c.Id])).ToList(),
+            page.Where(c => rows.ContainsKey(c.Id)).Select(c => Hit(rows[c.Id], conversations)).ToList(),
             after.Count > limit ? $"{page[^1].Date.UtcTicks}.{page[^1].Id}" : null,
             shown.Count,
             shown.Count(c => !c.Seen));
@@ -153,13 +154,34 @@ public sealed class TagFolders(MailDbContext db, AccountService accounts, Mailbo
         }
     }
 
-    private static SearchHit Hit(TaggedMessage m) => new(
+    /// <summary>The conversation of each tagged message, by account and Message-ID (<see cref="Sync.ConversationLink"/>).</summary>
+    private async Task<Dictionary<(Guid, string), Guid>> ConversationsAsync(IEnumerable<TaggedMessage> messages, CancellationToken ct)
+    {
+        var found = new Dictionary<(Guid, string), Guid>();
+        foreach (var account in messages.Where(m => m.MessageIdHeader is not null).GroupBy(m => m.AccountId))
+        {
+            var headers = account.Select(m => m.MessageIdHeader!).Distinct().ToList();
+            var links = await db.ConversationLinks.AsNoTracking()
+                .Where(l => l.AccountId == account.Key && headers.Contains(l.MessageIdHeader))
+                .Select(l => new { l.MessageIdHeader, l.ConversationId })
+                .ToListAsync(ct);
+            foreach (var link in links)
+            {
+                found[(account.Key, link.MessageIdHeader)] = link.ConversationId;
+            }
+        }
+
+        return found;
+    }
+
+    private static SearchHit Hit(TaggedMessage m, IReadOnlyDictionary<(Guid, string), Guid>? conversations = null) => new(
         m.AccountId,
         MailboxIds.FolderId(m.FolderName),
         m.FolderName,
         new MessageSummaryDto(
             MailboxIds.MessageId(m.UidValidity, m.Uid), m.Subject, m.From, m.To, m.Date, m.Seen, m.Flagged, m.Answered, m.HasAttachments,
-            m.Size, m.Preview, string.IsNullOrEmpty(m.BimiDomain) ? null : new BimiDto(m.BimiDomain, m.BimiSelector), Keywords.ForClient(m.Keywords)));
+            m.Size, m.Preview, string.IsNullOrEmpty(m.BimiDomain) ? null : new BimiDto(m.BimiDomain, m.BimiSelector), Keywords.ForClient(m.Keywords),
+            m.MessageIdHeader is { } header && conversations?.TryGetValue((m.AccountId, header), out var id) == true ? id : null));
 
     private static (DateTimeOffset Date, long Id)? ParseCursor(string? value)
     {

@@ -28,6 +28,8 @@ const props = defineProps({
 	html: { type: String, required: true },
 	/** Keep the colours as sent (a white page) even when the theme is dark. */
 	original: { type: Boolean, default: false },
+	/** Fold the quoted earlier message at the end away behind "Show quoted text". */
+	foldQuotes: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['deceptive-link'])
@@ -44,12 +46,14 @@ let polling = 0
 const LIGHT_STYLE = `
 	html, body { background: #fff; color: #222; }
 	blockquote { border-left-color: #ccc; color: #555; }
+	details.sockless-quote > summary { background: #eee; color: #555; }
 `
 
 const darkStyle = () => `
 	html { color-scheme: dark; }
 	html, body { background: ${colors.background}; color: ${colors.text}; }
 	blockquote { border-left-color: #555; color: inherit; }
+	details.sockless-quote > summary { background: #3a3a3a; color: #bbb; }
 `
 
 const BASE_STYLE = `
@@ -59,7 +63,73 @@ const BASE_STYLE = `
 	a[data-sockless-link-leads]::after { content: " \\26A0\\FE0E"; color: #c9302c; text-decoration: none; display: inline-block; margin-inline-start: 2px; }
 	pre { white-space: pre-wrap; }
 	blockquote { margin: 0 0 0 8px; padding-left: 8px; border-left: 2px solid; }
+	details.sockless-quote { margin-top: 8px; }
+	details.sockless-quote > summary { display: inline-block; padding: 0 8px; border-radius: 8px; font-size: 12px; line-height: 18px; cursor: pointer; list-style: none; user-select: none; }
+	details.sockless-quote > summary::-webkit-details-marker { display: none; }
+	details.sockless-quote[open] > summary { margin-bottom: 8px; }
 `
+
+/** Where mail programs put the quoted earlier message: Gmail, Thunderbird, Outlook, Apple Mail and most others. */
+const QUOTE_STARTS = '.gmail_quote_container, .gmail_quote, .moz-cite-prefix, #divRplyFwdMsg, blockquote'
+
+/** The line before a quote that says who wrote it ("On Monday, Anna wrote:"), in some languages. */
+const ATTRIBUTION = /\b(wrote|writes|schrieb|a écrit|skrev|escribió|scrisse|schreef|napisał|kirjoitti|escreveu)\s*:?\s*$/i
+
+function meaningful(node) {
+	return node.nodeType === 3 ? node.textContent.trim() !== '' : node.nodeType === 1 && (node.textContent.trim() !== '' || !!node.querySelector?.('img'))
+}
+
+/** Whether nothing but white space follows the node, up to the end of the body. */
+function trailing(node, body) {
+	for (let n = node; n && n !== body; n = n.parentNode) {
+		for (let next = n.nextSibling; next; next = next.nextSibling) {
+			if (meaningful(next)) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+/**
+ * Folds the quoted message at the end of the text (with the line that says who wrote it) into a
+ * <details>, which opens without scripts. A quote with an answer below it is left alone: the
+ * answer would be hidden too.
+ */
+function foldQuote(doc) {
+	const body = doc.body
+	for (const candidate of body.querySelectorAll(QUOTE_STARTS)) {
+		// Its own content may follow it at its level (Gmail's and Outlook's markers start the quote).
+		const fromHere = trailing(candidate.matches('blockquote') ? candidate : candidate.parentNode, body)
+		if (!fromHere || (candidate.matches('blockquote') && candidate.parentNode.closest('blockquote'))) {
+			continue
+		}
+		let start = candidate
+		let previous = start.previousSibling
+		while (previous && !meaningful(previous) && previous.nodeName !== 'IMG') {
+			previous = previous.previousSibling
+		}
+		if (previous && previous.textContent.length < 400 && ATTRIBUTION.test(previous.textContent.trim())) {
+			start = previous
+		}
+		const details = doc.createElement('details')
+		details.className = 'sockless-quote'
+		const summary = doc.createElement('summary')
+		summary.textContent = '···'
+		summary.title = t('sockless_mail', 'Show quoted text')
+		details.append(summary)
+		start.before(details)
+		while (details.nextSibling) {
+			details.append(details.nextSibling)
+		}
+		// Only keep the fold when it hides something worth folding.
+		if (!meaningful(details)) {
+			details.replaceWith(...[...details.childNodes].slice(1))
+			continue
+		}
+		return
+	}
+}
 
 const srcdoc = computed(() => {
 	// DOMParser documents are inert: nothing runs or loads while we rewrite them.
@@ -73,6 +143,9 @@ const srcdoc = computed(() => {
 			shown: link.getAttribute('data-sockless-link-shows'),
 			host: link.getAttribute('data-sockless-link-leads'),
 		}))
+	}
+	if (props.foldQuotes) {
+		foldQuote(doc)
 	}
 	const base = doc.createElement('base')
 	base.setAttribute('target', '_blank')

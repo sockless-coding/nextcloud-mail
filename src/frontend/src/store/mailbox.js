@@ -1,5 +1,7 @@
 import { reactive } from 'vue'
 import { apiBase, apiGet, apiSend } from '../api.js'
+import { conversationCopies, dropFromConversation } from './conversation.js'
+import { dropMembers, memberCopies } from './conversationRows.js'
 import { dropHits, mergeFolderChanges, searchState } from './search.js'
 import { inUnifiedView, refreshUnified, unifiedState } from './unified.js'
 import { isExpanded, pruneFolders, rememberView, setExpanded } from './viewState.js'
@@ -404,6 +406,8 @@ export function messagesById(where, ids) {
 		...searchState.hits.filter(inFolder).map((h) => h.message),
 		...unifiedState.list.filter(inFolder).map((h) => h.message),
 		...(mailboxState.open.message && isOpen(where, wanted) ? [mailboxState.open.message] : []),
+		...conversationCopies(where, wanted),
+		...memberCopies(where, wanted),
 	]
 }
 
@@ -515,6 +519,8 @@ function removeFromList(where, messageIds) {
 	if (isOpen(where, ids)) {
 		closeMessage()
 	}
+	dropFromConversation(where, ids)
+	dropMembers(where, ids)
 	dropHits(messageIds, accountId, folderId)
 	const hitsAfterDrop = searchState.hits
 	const unifiedAfterDrop = unifiedState.list

@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import { conversationIdsOf } from './conversationRows.js'
 import { mailboxState } from './mailbox.js'
 
 /**
@@ -76,5 +77,11 @@ export function commandTargets() {
 		return selection.rows
 	}
 	const open = mailboxState.open
-	return open.message ? [{ accountId: open.accountId, folderId: open.folderId, message: open.message }] : []
+	if (!open.message) {
+		return []
+	}
+	const where = { accountId: open.accountId, folderId: open.folderId }
+	// In a list of conversations, the open message stands for its conversation in that folder.
+	const ids = conversationIdsOf(where, open.id)
+	return [{ ...where, message: open.message, ...(ids ? { ids } : {}) }]
 }

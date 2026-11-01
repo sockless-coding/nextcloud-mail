@@ -153,8 +153,10 @@ function fromServer(accountId, draft, extra = {}) {
  * @param {'reply'|'replyAll'|'forward'} mode what to do
  * @param {{accountId: string, folderId: string}} where the message's folder
  * @param {string} messageId the message
+ * @param {{addCc?: {name: string|null, address: string}[]}} options people to add to Cc (a reply all
+ *     that brings back those an earlier reply left out)
  */
-export async function composeReply(mode, where = openLocation(), messageId = mailboxState.open.id) {
+export async function composeReply(mode, where = openLocation(), messageId = mailboxState.open.id, { addCc = [] } = {}) {
 	if (composeInWindow({ mode, account: where.accountId, folder: where.folderId, message: messageId }) || busy()) {
 		return
 	}
@@ -167,7 +169,15 @@ export async function composeReply(mode, where = openLocation(), messageId = mai
 	}
 	// The quoted original's own images go along.
 	const html = await withImages(draft.html, draft.inlineImages, (partId) => partUrl(accountId, folderId, messageId, partId))
-	show(fromServer(accountId, { ...draft, html }))
+	show(fromServer(accountId, { ...draft, html, cc: withCc(draft, addCc) }))
+}
+
+/** The draft's Cc with the given people added, unless they are among its recipients already. */
+function withCc(draft, people) {
+	const present = `${draft.to},${draft.cc}`.toLowerCase()
+	const added = people.filter((p) => !present.includes(p.address.toLowerCase()))
+		.map((p) => (p.name ? `"${p.name.replace(/["\\]/g, '')}" <${p.address}>` : p.address))
+	return [draft.cc, ...added].filter(Boolean).join(', ')
 }
 
 /**

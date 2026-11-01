@@ -136,7 +136,6 @@ public sealed class AccountService(
         return deleted > 0;
     }
 
-    /// <summary>Sets the order; <paramref name="ids"/> must be exactly the user's accounts.</summary>
     /// <summary>
     /// How the account is shown (colour, badge, part of "All accounts"). Not a change of its
     /// settings: connections stay and UpdatedAt is left alone.
@@ -158,6 +157,21 @@ public sealed class AccountService(
         return account;
     }
 
+    /// <summary>Turns conversations on or off; like the appearance, not a change of the account's settings.</summary>
+    public async Task<MailAccount?> SetConversationsAsync(string userId, Guid id, bool enabled, CancellationToken ct)
+    {
+        var account = await GetAsync(userId, id, ct);
+        if (account is null)
+        {
+            return null;
+        }
+
+        account.Conversations = enabled;
+        await db.SaveChangesAsync(ct);
+        return account;
+    }
+
+    /// <summary>Sets the order; <paramref name="ids"/> must be exactly the user's accounts.</summary>
     public async Task<bool> ReorderAsync(string userId, IReadOnlyList<Guid> ids, CancellationToken ct)
     {
         var accounts = await Owned(userId).ToListAsync(ct);

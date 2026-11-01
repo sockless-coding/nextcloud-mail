@@ -68,6 +68,9 @@ namespace SocklessMail.Api.Data.Migrations
                         .HasMaxLength(7)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Conversations")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
@@ -589,6 +592,9 @@ namespace SocklessMail.Api.Data.Migrations
                     b.Property<long>("ChangeSeq")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("Date")
                         .HasColumnType("INTEGER");
 
@@ -606,9 +612,17 @@ namespace SocklessMail.Api.Data.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("MessageIdHeader")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("OwnerUserId")
                         .IsRequired()
                         .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ParentIdHeader")
+                        .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Preview")
@@ -634,11 +648,37 @@ namespace SocklessMail.Api.Data.Migrations
 
                     b.HasKey("FolderId", "Uid");
 
+                    b.HasIndex("ConversationId");
+
                     b.HasIndex("FolderId", "ChangeSeq");
 
                     b.HasIndex("FolderId", "Date");
 
                     b.ToTable("messages", (string)null);
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Sync.ConversationLink", b =>
+                {
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MessageIdHeader")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("AccountId", "MessageIdHeader");
+
+                    b.HasIndex("AccountId", "ConversationId");
+
+                    b.ToTable("conversation_links", (string)null);
                 });
 
             modelBuilder.Entity("SocklessMail.Api.Sync.RemovedMessage", b =>
@@ -887,6 +927,15 @@ namespace SocklessMail.Api.Data.Migrations
                     b.HasOne("SocklessMail.Api.Sync.CachedFolder", null)
                         .WithMany()
                         .HasForeignKey("FolderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SocklessMail.Api.Sync.ConversationLink", b =>
+                {
+                    b.HasOne("SocklessMail.Api.Accounts.MailAccount", null)
+                        .WithMany()
+                        .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

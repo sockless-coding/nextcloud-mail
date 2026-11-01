@@ -77,6 +77,8 @@ await page.getByRole('menuitem', { name: 'Reply', exact: true }).waitFor()
 check(true, 'right-click outside the selection: menu for that row alone')
 await page.keyboard.press('Escape')
 await page.keyboard.press('Escape')
+// The closing menu fades out over the rows; a click meanwhile lands on it.
+await until(async () => await page.locator('.v-popper__popper').count() === 0)
 
 step('reply from the menu')
 await rowMenuAction(item(third), 'Reply')

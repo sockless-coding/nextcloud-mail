@@ -51,7 +51,7 @@
 			id="sockless-settings-accounts"
 			:name="t('sockless_mail', 'Accounts')">
 			<p class="settings__hint">
-				{{ t('sockless_mail', 'Drag accounts to change their order. Accounts left out of All accounts keep their own folders.') }}
+				{{ t('sockless_mail', 'Drag accounts to change their order. Accounts left out of All accounts keep their own folders. Conversations group each message with its replies, wherever they are kept.') }}
 			</p>
 			<ul class="settings__accounts">
 				<li v-for="(account, index) in accountsState.accounts"
@@ -69,13 +69,22 @@
 						<span class="settings__account-name">{{ account.displayName }}</span>
 						<span class="settings__account-address">{{ account.emailAddress }}</span>
 					</span>
-					<NcCheckboxRadioSwitch type="switch"
-						:model-value="account.includeInUnified !== false"
-						:loading="saving === account.id"
-						:aria-label="t('sockless_mail', 'Show {name} in All accounts', { name: account.displayName })"
-						@update:model-value="(include) => setUnified(account, include)">
-						{{ t('sockless_mail', 'In All accounts') }}
-					</NcCheckboxRadioSwitch>
+					<span class="settings__switches">
+						<NcCheckboxRadioSwitch type="switch"
+							:model-value="account.includeInUnified !== false"
+							:loading="saving === `${account.id}:unified`"
+							:aria-label="t('sockless_mail', 'Show {name} in All accounts', { name: account.displayName })"
+							@update:model-value="(include) => setUnified(account, include)">
+							{{ t('sockless_mail', 'In All accounts') }}
+						</NcCheckboxRadioSwitch>
+						<NcCheckboxRadioSwitch type="switch"
+							:model-value="account.conversations === true"
+							:loading="saving === `${account.id}:conversations`"
+							:aria-label="t('sockless_mail', 'Show the mail of {name} as conversations', { name: account.displayName })"
+							@update:model-value="(enabled) => setGrouping(account, enabled)">
+							{{ t('sockless_mail', 'Conversations') }}
+						</NcCheckboxRadioSwitch>
+					</span>
 					<NcActions :aria-label="t('sockless_mail', 'Actions for {name}', { name: account.displayName })">
 						<NcActionButton close-after-click @click="dialogs.accountAppearance = account">
 							<template #icon>
@@ -113,7 +122,7 @@ import NcAppSettingsSection from '@nextcloud/vue/components/NcAppSettingsSection
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { ref } from 'vue'
-import { accountsState, setAppearance } from '../store/accounts.js'
+import { accountsState, setAppearance, setConversations } from '../store/accounts.js'
 import { dialogs } from '../store/actions.js'
 import { layout } from '../store/layout.js'
 import { moveAccountBy, unifiedAccountsChanged } from '../store/navigation.js'
@@ -129,15 +138,26 @@ const open = defineModel('open', { type: Boolean, default: false })
 
 const { dragStart, dragOver, drop, dragEnd, dragClasses } = useAccountDrag()
 
-/** The account whose "All accounts" switch is being saved. */
+/** The switch being saved: "<account id>:unified" or "<account id>:conversations". */
 const saving = ref(null)
 
 async function setUnified(account, includeInUnified) {
-	saving.value = account.id
+	saving.value = `${account.id}:unified`
 	try {
 		const { color, badgeText, badgeIcon } = account
 		await setAppearance(account.id, { color, badgeText, badgeIcon, includeInUnified })
 		unifiedAccountsChanged()
+	} catch (e) {
+		showError(t('sockless_mail', 'Could not save the change: {error}', { error: e.message }))
+	} finally {
+		saving.value = null
+	}
+}
+
+async function setGrouping(account, enabled) {
+	saving.value = `${account.id}:conversations`
+	try {
+		await setConversations(account.id, enabled)
 	} catch (e) {
 		showError(t('sockless_mail', 'Could not save the change: {error}', { error: e.message }))
 	} finally {
@@ -189,6 +209,12 @@ const FORMATS = [
 	gap: 10px;
 	padding: 6px 4px;
 	border-radius: var(--border-radius-element, 8px);
+}
+
+.settings__switches {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
 }
 
 .settings__account:hover {

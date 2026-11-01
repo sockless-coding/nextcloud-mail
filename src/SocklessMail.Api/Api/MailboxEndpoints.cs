@@ -24,6 +24,9 @@ public static class MailboxEndpoints
     private static readonly HashSet<string> InlineImageTypes =
         new(StringComparer.OrdinalIgnoreCase) { "image/png", "image/jpeg", "image/gif", "image/webp" };
 
+    /// <summary>Conversations one request may ask the members of (two pages of rows).</summary>
+    private const int MaxConversationRefs = 200;
+
     public static void MapMailboxEndpoints(this RouteGroupBuilder api)
     {
         var account = api.MapGroup("/accounts/{accountId:guid}").AddEndpointFilter<MailErrorFilter>();
@@ -69,6 +72,13 @@ public static class MailboxEndpoints
                 ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
             await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
                 ? Results.Ok(await mailbox.GetHeadersAsync(a, folderId, messageId, ct))
+                : NotFound());
+
+        account.MapGet("/folders/{folderId}/messages/{messageId}/conversation", async (
+                Guid accountId, string folderId, string messageId,
+                ClaimsPrincipal user, AccountService accounts, MailboxService mailbox, CancellationToken ct) =>
+            await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
+                ? Results.Ok(await mailbox.GetConversationAsync(a, folderId, messageId, ct))
                 : NotFound());
 
         // JSON for the source view; ?download=true is the whole message as an .eml file.
@@ -188,6 +198,41 @@ public static class MailboxEndpoints
 
             return Results.Ok(await cache.SearchAsync(user.GetNextcloudUserId(), terms, messageFilter,
                 Math.Clamp(limit ?? MailboxService.DefaultPageSize, 1, MailboxService.MaxPageSize), ct));
+        });
+
+        // For lists that show one row per conversation: each conversation's messages in the row's folder, from the cache.
+        api.MapPost("/conversations/members", async (
+            ConversationMembersInput input, ClaimsPrincipal user, AccountService accounts, FolderCache cache, FolderRoles roles, CancellationToken ct) =>
+        {
+            var items = input.Items ?? [];
+            if (items.Count > MaxConversationRefs)
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["items"] = [$"Ask for at most {MaxConversationRefs} conversations."] });
+            }
+
+            var userId = user.GetNextcloudUserId();
+            var result = new List<ConversationMembersDto>();
+            foreach (var group in items.GroupBy(i => i.AccountId))
+            {
+                // Someone else's account answers as if it had no such conversations.
+                if (await accounts.GetAsync(userId, group.Key, ct) is not { } account)
+                {
+                    continue;
+                }
+
+                var sent = roles.Find(account, anyAge: true)?.GetValueOrDefault("sent") is { } sentId && MailboxIds.FolderFullName(sentId) is { } name
+                    ? FolderCache.Key(name)
+                    : null;
+                foreach (var item in group.DistinctBy(i => (i.FolderId, i.ConversationId)))
+                {
+                    if (await cache.MembersAsync(account.Id, item.FolderId, item.ConversationId, sent, ct) is { } members)
+                    {
+                        result.Add(members);
+                    }
+                }
+            }
+
+            return Results.Ok(result);
         });
 
         // Unified folders (one special-use folder of every account) and smart folders (see UnifiedFolders).

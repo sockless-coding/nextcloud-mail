@@ -36,7 +36,8 @@ public sealed record MessageSummaryDto(
     long Size,
     string? Preview,
     BimiDto? Bimi,
-    string[] Keywords);
+    string[] Keywords,
+    Guid? ConversationId = null);
 
 /// <summary>
 /// Newest first by date. <see cref="NextBefore"/> is the cursor for the next (older) page; null at
@@ -157,3 +158,34 @@ public sealed record AccountError(Guid AccountId, string Error, string Message);
 
 /// <summary>A message as plain text, with its sender, date and Message-ID header (without the angle brackets).</summary>
 public sealed record MessageText(string Subject, MailboxAddress? From, DateTimeOffset Date, string Text, string? MessageId);
+
+/// <summary>One message of a conversation, in whichever folder of the account it is kept.</summary>
+/// <param name="FolderRole">The folder's special use ("sent", "archive", …); "inbox" for the inbox, null for others.</param>
+/// <param name="MessageIdHeader">Its Message-ID without angle brackets; null when it has none.</param>
+/// <param name="ParentIdHeader">The Message-ID of the message it replies to; null for none.</param>
+public sealed record ConversationMessageDto(
+    string FolderId,
+    string FolderName,
+    string? FolderRole,
+    MessageSummaryDto Message,
+    AddressDto[] Cc,
+    string? MessageIdHeader,
+    string? ParentIdHeader);
+
+/// <summary>A conversation, oldest first. <see cref="Truncated"/>: older messages were left out.</summary>
+public sealed record ConversationDto(IReadOnlyList<ConversationMessageDto> Messages, bool Truncated);
+
+/// <summary>A conversation whose messages in one folder a list wants (one row per conversation).</summary>
+public sealed record ConversationRef(Guid AccountId, string FolderId, Guid ConversationId);
+
+public sealed record ConversationMembersInput(IReadOnlyList<ConversationRef>? Items);
+
+/// <summary>One message of a conversation in a folder: what its row needs to sum up.</summary>
+public sealed record ConversationMemberDto(string Id, bool Seen, bool Flagged, bool Answered, bool HasAttachments, AddressDto[] From, DateTimeOffset Date);
+
+/// <summary>
+/// A conversation's messages in one folder, as cached, newest first (at most
+/// <see cref="Sync.FolderCache.MaxMembers"/>). <see cref="Replied"/>: the user answered in it (a
+/// message marked answered, or one in Sent).
+/// </summary>
+public sealed record ConversationMembersDto(Guid AccountId, string FolderId, Guid ConversationId, IReadOnlyList<ConversationMemberDto> Messages, bool Replied);

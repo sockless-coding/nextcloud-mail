@@ -127,7 +127,16 @@
 								:title="warningTooltip(listWarning(row.message))">
 								<NcIconSvgWrapper :path="mdiShieldAlertOutline" :size="16" inline :name="warningTitle(listWarning(row.message))" />
 							</span>
-							{{ sender(row.message) }}
+							<template v-if="row.conversation">
+								<span class="message-row__senders">{{ senders(row.conversation) }}</span>
+								<span class="message-row__count"
+									:title="n('sockless_mail', '{count} message in this conversation', '{count} messages in this conversation', row.conversation.count, { count: row.conversation.count })">
+									{{ row.conversation.count }}
+								</span>
+							</template>
+							<template v-else>
+								{{ sender(row.message) }}
+							</template>
 						</span>
 						<span class="message-row__date">{{ formatDate(row.message.date) }}</span>
 						<span class="message-row__subject">
@@ -146,19 +155,19 @@
 							<button class="message-row__action"
 								:aria-label="t('sockless_mail', 'Delete')"
 								:title="t('sockless_mail', 'Delete')"
-								@click="remove(row, [row.message.id])">
+								@click="remove(row, rowIds(row))">
 								<NcIconSvgWrapper :path="mdiDeleteOutline" :size="18" />
 							</button>
 							<button class="message-row__action"
 								:aria-label="row.message.seen ? t('sockless_mail', 'Mark as unread') : t('sockless_mail', 'Mark as read')"
 								:title="row.message.seen ? t('sockless_mail', 'Mark as unread') : t('sockless_mail', 'Mark as read')"
-								@click="toggleSeen(row, row.message)">
+								@click="setSeenRows([row], !row.message.seen)">
 								<NcIconSvgWrapper :path="row.message.seen ? mdiEmailOutline : mdiEmailOpenOutline" :size="18" />
 							</button>
 							<button class="message-row__action"
 								:aria-label="row.message.flagged ? t('sockless_mail', 'Remove flag') : t('sockless_mail', 'Flag')"
 								:title="row.message.flagged ? t('sockless_mail', 'Remove flag') : t('sockless_mail', 'Flag')"
-								@click="toggleFlagged(row, row.message)">
+								@click="toggleFlaggedRow(row)">
 								<NcIconSvgWrapper :path="row.message.flagged ? mdiFlagRemoveOutline : mdiFlagOutline" :size="18" />
 							</button>
 							<button class="message-row__action"
@@ -203,7 +212,8 @@ import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { bimiUrl } from '../bimi.js'
 import { accountColor, accountsState } from '../store/accounts.js'
-import { remove, toggleFlagged, toggleSeen } from '../store/actions.js'
+import { remove, setSeenRows, toggleFlaggedRow } from '../store/actions.js'
+import { forgetMembers, groupRows, loadMembers, rowIds } from '../store/conversationRows.js'
 import { layout, readingPane } from '../store/layout.js'
 import { loadMore, mailboxState, openMessage } from '../store/mailbox.js'
 import { openMessageWindow } from '../store/windows.js'
@@ -247,7 +257,7 @@ const view = computed(() => {
 })
 
 /** Every row carries its folder ({ accountId, folderId }), which is where its actions go. */
-const rows = computed(() => {
+const messageRows = computed(() => {
 	const hitKey = (h) => `${h.accountId}/${h.folderId}/${h.message.id}`
 	if (search.active) {
 		return search.hits.map((h) => ({
@@ -263,6 +273,30 @@ const rows = computed(() => {
 	}
 	const { accountId, folderId } = mailboxState.selected
 	return state.list.map((message) => ({ accountId, folderId, message, key: `${accountId}/${folderId}/${message.id}`, location: null }))
+})
+
+/**
+ * For accounts that show conversations, one row per conversation (store/conversationRows.js).
+ * Search results stay one row per message; filtered lists (smart and tag folders) group only
+ * what they list.
+ */
+const rows = computed(() => (search.active ? messageRows.value : groupRows(messageRows.value, !unifiedView.value?.filter)))
+
+// The folders' conversations, as far as the list does not show them yet; asked again when a poll changed the list.
+let lastToken = null
+watch(messageRows, (list) => {
+	if (search.active || unifiedView.value?.filter) {
+		return
+	}
+	const token = unifiedShown.value ? unified.token : state.token
+	loadMembers(list, token !== lastToken)
+	lastToken = token
+}, { immediate: true })
+watch(() => accountsState.accounts.map((a) => a.conversations).join(), () => {
+	forgetMembers()
+	if (!search.active && !unifiedView.value?.filter) {
+		loadMembers(messageRows.value, true)
+	}
 })
 
 watch(rows, (list) => pruneSelection(list))
@@ -344,7 +378,7 @@ function location(hit) {
 
 function isOpen(row) {
 	const open = mailboxState.open
-	return row.message.id === open.id && row.accountId === open.accountId && row.folderId === open.folderId
+	return rowIds(row).includes(open.id) && row.accountId === open.accountId && row.folderId === open.folderId
 }
 
 /** Opens the message where it is listed; the selected folder stays as it is. */
@@ -584,6 +618,21 @@ function formatDate(value) {
 function sender(message) {
 	const from = message.from[0]
 	return from ? (from.name || from.address) : t('sockless_mail', 'Unknown sender')
+}
+
+/** Who wrote in the conversation, oldest first: first names (or "me"), at most four. */
+function senders(conversation) {
+	const names = conversation.senders.map((s) => (s.me ? t('sockless_mail', 'me') : firstName(s)))
+	return names.length > 4 ? `${names.slice(0, 2).join(', ')} … ${names.slice(-2).join(', ')}` : names.join(', ')
+}
+
+function firstName(address) {
+	const name = (address.name || '').trim()
+	if (!name) {
+		return address.address.split('@')[0]
+	}
+	// "Last, First" puts the first name second.
+	return name.includes(',') ? name.split(',')[1].trim().split(/\s+/)[0] || name : name.split(/\s+/)[0]
 }
 
 function subjectOf(message) {
@@ -922,6 +971,25 @@ onBeforeUnmount(() => observer?.disconnect())
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.message-row__senders {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.message-row__count {
+	display: inline-block;
+	min-width: 18px;
+	margin-inline-start: 6px;
+	padding: 0 5px;
+	border-radius: 9px;
+	background: var(--color-background-dark);
+	color: var(--color-text-maxcontrast);
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 18px;
+	text-align: center;
 }
 
 .message-row__warning {

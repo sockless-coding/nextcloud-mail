@@ -106,6 +106,19 @@ public sealed partial class MailboxService(
         MailAccount account, string folderId, string? query, MessageFilter filter, uint? before, int limit, CancellationToken ct)
     {
         var page = await SearchServerAsync(account, folderId, query, filter, before, limit, ct);
+        if (page.Messages.Count > 0 && account.Conversations)
+        {
+            // Found on the server, grouped by what the cache knows.
+            var known = await cache.ConversationIdsAsync(account.Id, FullNameOf(folderId), page.UidValidity,
+                page.Messages.Select(m => MailboxIds.TryParseMessageId(m.Id, out _, out var uid) ? uid : 0).ToList(), ct);
+            page = page with
+            {
+                Messages = page.Messages
+                    .Select(m => MailboxIds.TryParseMessageId(m.Id, out _, out var uid) && known.TryGetValue(uid, out var id) ? m with { ConversationId = id } : m)
+                    .ToList(),
+            };
+        }
+
         if (page.Messages.Count == 0 || !(await tagIndex.StorageAsync(account.Id, ct)).IsAppKept())
         {
             return page;
@@ -211,10 +224,49 @@ public sealed partial class MailboxService(
         return roles.Remember(account, list);
     }
 
-    /// <summary>The folder's cache state, synced now unless an IDLE watcher already keeps it current.</summary>
-    private async Task<CachedFolder> CurrentStateAsync(MailAccount account, string folderId, string fullName, CancellationToken ct) =>
-        (watchers.IsCurrent(account.Id, fullName) ? await cache.FindAsync(account.Id, fullName, ct) : null)
-        ?? await SyncAsync(account, folderId, fullName, null, ct);
+    /// <summary>
+    /// The folder's cache state, synced now unless an IDLE watcher already keeps it current. For an
+    /// account with conversations, Sent is kept cached along with the inbox, so the user's replies
+    /// join their conversations.
+    /// </summary>
+    private async Task<CachedFolder> CurrentStateAsync(MailAccount account, string folderId, string fullName, CancellationToken ct)
+    {
+        var state = (watchers.IsCurrent(account.Id, fullName) ? await cache.FindAsync(account.Id, fullName, ct) : null)
+            ?? await SyncAsync(account, folderId, fullName, null, ct);
+        if (fullName == "INBOX" && account.Conversations)
+        {
+            await SyncSentAsync(account, ct);
+        }
+
+        return state;
+    }
+
+    /// <summary>Sent is synced along with the inbox at most this often.</summary>
+    private static readonly TimeSpan SentSyncInterval = TimeSpan.FromMinutes(1);
+
+    private async Task SyncSentAsync(MailAccount account, CancellationToken ct)
+    {
+        try
+        {
+            if ((await FolderRolesAsync(account, ct)).GetValueOrDefault("sent") is not { } sentId)
+            {
+                return;
+            }
+
+            var fullName = FullNameOf(sentId);
+            if (await cache.FindAsync(account.Id, fullName, ct) is { SyncedAt: { } at } && clock.GetUtcNow() - at < SentSyncInterval)
+            {
+                return;
+            }
+
+            await SyncAsync(account, sentId, fullName, null, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // The inbox is what was asked for; Sent catches up next time.
+            logger.LogWarning(e, "Syncing Sent of account {AccountId} for its conversations failed", account.Id);
+        }
+    }
 
     private async Task<CachedFolder> SyncAsync(
         MailAccount account, string folderId, string fullName, int? extend, CancellationToken ct)

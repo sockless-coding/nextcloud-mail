@@ -64,6 +64,7 @@ builder.Services.AddHostedService<ImapConnectionJanitor>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<MailboxService>();
 builder.Services.AddScoped<FolderCache>();
+builder.Services.AddScoped<ConversationIndex>();
 builder.Services.AddScoped<UnifiedFolders>();
 builder.Services.AddSingleton<FolderRoles>();
 builder.Services.AddSingleton(OAuthProviderCatalog.Default);

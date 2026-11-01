@@ -89,6 +89,31 @@ public sealed class CachedMessage
 
     /// <summary>Subject, names and addresses in <see cref="SearchTerms.Normalize"/>d form, for searching the cache.</summary>
     public required string SearchText { get; init; }
+
+    /// <summary>
+    /// The Message-ID header without angle brackets; "" when the message has none, null for rows
+    /// cached before conversations were, which syncs of accounts with conversations fill in.
+    /// </summary>
+    public string? MessageIdHeader { get; set; }
+
+    /// <summary>The message this one replies to (In-Reply-To, else the last of References); null for none.</summary>
+    public string? ParentIdHeader { get; set; }
+
+    /// <summary>The conversation the message belongs to (<see cref="ConversationIndex"/>); null until known.</summary>
+    public Guid? ConversationId { get; set; }
+}
+
+/// <summary>
+/// Which conversation a Message-ID belongs to, per account. Holds the ids of messages seen and of
+/// those they reference, so a reply links up with its ancestors even when they were never cached,
+/// and two conversations that turn out to be one are merged.
+/// </summary>
+public sealed class ConversationLink
+{
+    public Guid AccountId { get; init; }
+    public required string MessageIdHeader { get; init; }
+    public required string OwnerUserId { get; init; }
+    public Guid ConversationId { get; set; }
 }
 
 /// <summary>A message that disappeared from a cached folder, so polling clients can drop it too. Pruned after a day.</summary>

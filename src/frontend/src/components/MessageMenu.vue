@@ -108,7 +108,7 @@ import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { computed } from 'vue'
 import { askMoveRows, askTags, canMoveRows, createRuleFrom, dialogs, removeRows, setFlaggedRows, setSeenRows } from '../store/actions.js'
-import { composeReply } from '../store/compose.js'
+import { replyFrom } from '../store/conversation.js'
 import { emlUrl, mailboxState, openMessage } from '../store/mailbox.js'
 import { tasksState } from '../store/tasks.js'
 import { openMessageWindow } from '../store/windows.js'
@@ -144,7 +144,7 @@ function isOpen(row) {
 async function reply(mode) {
 	const row = single.value
 	try {
-		await composeReply(mode, { accountId: row.accountId, folderId: row.folderId }, row.message.id)
+		await replyFrom(mode, { accountId: row.accountId, folderId: row.folderId }, row.message.id)
 	} catch (e) {
 		showError(t('sockless_mail', 'Could not prepare the message: {error}', { error: e.message }))
 	}

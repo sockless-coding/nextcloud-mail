@@ -53,7 +53,7 @@ check(await chips(item()).filter({ hasText: urgent }).count() === 1, 'the row sh
 
 step('the reader shows it, T tags with a new tag')
 await item().click()
-const header = page.locator('.message-view__header')
+const header = page.locator('.message-view__title')
 await chips(header).filter({ hasText: urgent }).waitFor()
 check(true, 'the reader shows the chip')
 await page.locator('.message-view').click({ position: { x: 5, y: 5 } })

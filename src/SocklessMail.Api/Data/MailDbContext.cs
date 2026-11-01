@@ -31,6 +31,7 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
     public DbSet<CachedFolder> Folders => Set<CachedFolder>();
     public DbSet<CachedMessage> Messages => Set<CachedMessage>();
     public DbSet<RemovedMessage> RemovedMessages => Set<RemovedMessage>();
+    public DbSet<ConversationLink> ConversationLinks => Set<ConversationLink>();
 
     /// <summary>Instance-wide OAuth app registrations (admin settings); not user-owned, so not filtered.</summary>
     public DbSet<OAuthClient> OAuthClients => Set<OAuthClient>();
@@ -135,7 +136,22 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             message.Property(m => m.Preview).HasMaxLength(MessagePreview.MaxLength);
             message.Property(m => m.BimiDomain).HasMaxLength(253);
             message.Property(m => m.BimiSelector).HasMaxLength(63);
+            message.HasIndex(m => m.ConversationId);
+            message.Property(m => m.MessageIdHeader).HasMaxLength(ConversationIndex.MaxIdLength);
+            message.Property(m => m.ParentIdHeader).HasMaxLength(ConversationIndex.MaxIdLength);
             message.HasQueryFilter(m => m.OwnerUserId == _userId);
+        });
+
+        model.Entity<ConversationLink>(link =>
+        {
+            link.ToTable("conversation_links");
+            link.HasKey(l => new { l.AccountId, l.MessageIdHeader });
+            link.HasIndex(l => new { l.AccountId, l.ConversationId });
+            // Deleting an account drops its links with it.
+            link.HasOne<MailAccount>().WithMany().HasForeignKey(l => l.AccountId).OnDelete(DeleteBehavior.Cascade);
+            link.Property(l => l.OwnerUserId).HasMaxLength(64);
+            link.Property(l => l.MessageIdHeader).HasMaxLength(ConversationIndex.MaxIdLength);
+            link.HasQueryFilter(l => l.OwnerUserId == _userId);
         });
 
         model.Entity<RemovedMessage>(removed =>

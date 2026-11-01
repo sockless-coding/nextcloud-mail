@@ -1,7 +1,8 @@
 import { showError } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import { askTags, dialogs, removeRows, setFlaggedRows, setSeenRows } from './actions.js'
-import { composeNew, composeReply } from './compose.js'
+import { composeNew } from './compose.js'
+import { replyFrom } from './conversation.js'
 import { readingPane } from './layout.js'
 import { closeMessage, mailboxState } from './mailbox.js'
 import { commandTargets, endSelectionMode, selection } from './selection.js'
@@ -41,7 +42,7 @@ async function reply(mode) {
 		return
 	}
 	try {
-		await composeReply(mode)
+		await replyFrom(mode)
 	} catch (e) {
 		showError(t('sockless_mail', 'Could not prepare the message: {error}', { error: e.message }))
 	}

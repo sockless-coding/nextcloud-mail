@@ -2,6 +2,7 @@ import { showError, showSuccess } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
 import { reactive } from 'vue'
 import { accountsState } from './accounts.js'
+import { rowIds } from './conversationRows.js'
 import { createFolder, deleteFolder, deleteMessages, loadFolders, loadRawMessage, mailboxState, moveMessages, renameFolder, setFlags, setTags } from './mailbox.js'
 import { ruleFromMessage } from './rules.js'
 
@@ -67,6 +68,20 @@ export async function toggleFlagged(where, message) {
 }
 
 /**
+ * Flags a row, or takes the flag off: a conversation's newest message gets the flag, and every
+ * flagged message of it loses it.
+ */
+export async function toggleFlaggedRow(row) {
+	const flagged = !row.message.flagged
+	const ids = flagged ? [row.conversation?.newest.id ?? row.message.id] : rowIds(row)
+	try {
+		await setFlags(row, ids, { flagged })
+	} catch (e) {
+		fail(flagged ? t('sockless_mail', 'Flagging') : t('sockless_mail', 'Removing the flag'), e)
+	}
+}
+
+/**
  * Actions on several rows at once ({ accountId, folderId, message }, see selection.js); the
  * rows may come from different folders and accounts, so each folder gets its own request.
  */
@@ -77,7 +92,7 @@ function byFolder(rows) {
 		if (!groups.has(key)) {
 			groups.set(key, { where: { accountId: row.accountId, folderId: row.folderId }, ids: [] })
 		}
-		groups.get(key).ids.push(row.message.id)
+		groups.get(key).ids.push(...rowIds(row))
 	}
 	return [...groups.values()]
 }

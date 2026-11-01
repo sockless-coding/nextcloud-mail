@@ -61,6 +61,9 @@ public sealed class MailAccount
     /// <summary>Whether the account's folders are part of the "All accounts" views.</summary>
     public bool IncludeInUnified { get; set; } = true;
 
+    /// <summary>Whether the account's mail is grouped into conversations (threads).</summary>
+    public bool Conversations { get; set; }
+
     /// <summary>Where the account's tags are kept; learnt from the server when a message is first tagged.</summary>
     public TagStorage TagStorage { get; set; }
 
