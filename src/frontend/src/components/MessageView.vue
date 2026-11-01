@@ -72,6 +72,13 @@
 								@click="askTags([{ ...where, message }])">
 								<NcIconSvgWrapper :path="mdiTagOutline" :size="20" />
 							</button>
+							<button v-if="!windowMode"
+								class="message-view__icon-button"
+								:aria-label="t('sockless_mail', 'Open in new window')"
+								:title="t('sockless_mail', 'Open in new window')"
+								@click="openMessageWindow(where, message.id)">
+								<NcIconSvgWrapper :path="mdiOpenInNew" :size="20" />
+							</button>
 							<!-- In a dark theme the mail is recoloured; its original white page is one click away. -->
 							<button v-if="darkTheme"
 								class="message-view__icon-button"
@@ -266,7 +273,7 @@
 </template>
 
 <script setup>
-import { mdiAccountPlusOutline, mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiClipboardCheckOutline, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFilterPlusOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldAlertOutline, mdiTagOutline, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
+import { mdiAccountPlusOutline, mdiArrowLeft, mdiChevronDown, mdiChevronUp, mdiClipboardCheckOutline, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFilterPlusOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiOpenInNew, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldAlertOutline, mdiTagOutline, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -293,6 +300,7 @@ import { formatFileSize } from '../fileSize.js'
 import { messageWarning, reasonText, trustDomain, warningTitle } from '../store/senders.js'
 import { pageColors } from '../mailColors.js'
 import { closeMessage, emlUrl, mailboxState, openMessage, partUrl } from '../store/mailbox.js'
+import { openMessageWindow, windowMode } from '../store/windows.js'
 import DeceptiveLinkDialog from './DeceptiveLinkDialog.vue'
 import InvitationCard from './InvitationCard.vue'
 import MessageBody from './MessageBody.vue'

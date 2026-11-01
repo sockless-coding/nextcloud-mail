@@ -13,7 +13,10 @@
     "contacts": "node contacts.mjs",
     "calendar": "node calendar.mjs",
     "senders": "node senders.mjs",
-    "viewstate": "node viewstate.mjs"
+    "viewstate": "node viewstate.mjs",
+    "settings": "node settings.mjs",
+    "windows": "node windows.mjs",
+    "appearance": "node appearance.mjs"
   },
   "dependencies": {
     "playwright-core": "^1.64.1"

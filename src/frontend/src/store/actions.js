@@ -40,6 +40,10 @@ export const dialogs = reactive({
 	tags: false,
 	/** The send later presets. */
 	sendLaterPresets: false,
+	/** The settings dialog. */
+	settings: false,
+	/** The account whose colour, badge and "All accounts" choice are being changed. */
+	accountAppearance: null,
 })
 
 function fail(what, e) {

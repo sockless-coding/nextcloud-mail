@@ -1,4 +1,4 @@
-import { reactive } from 'vue'
+import { computed, reactive } from 'vue'
 import { apiGet, apiSend } from '../api.js'
 
 /**
@@ -92,20 +92,57 @@ export async function deleteAccount(id) {
  * @param {number} delta -1 or +1
  */
 export async function moveAccount(id, delta) {
-	const order = accountsState.accounts.map((a) => a.id)
-	const from = order.indexOf(id)
-	const to = from + delta
-	if (from < 0 || to < 0 || to >= order.length) {
+	const from = accountsState.accounts.findIndex((a) => a.id === id)
+	await moveAccountTo(id, from + delta)
+}
+
+/**
+ * Moves an account to a place in the list (dragging it there). Shown at once; put back when
+ * the server refuses.
+ *
+ * @param {string} id account id
+ * @param {number} to its new index
+ */
+export async function moveAccountTo(id, to) {
+	const previous = accountsState.accounts
+	const order = [...previous]
+	const from = order.findIndex((a) => a.id === id)
+	if (from < 0 || to < 0 || to >= order.length || to === from) {
 		return
 	}
 	order.splice(to, 0, order.splice(from, 1)[0])
+	accountsState.accounts = order
 	try {
-		await apiSend('PUT', '/accounts/order', { accountIds: order })
+		await apiSend('PUT', '/accounts/order', { accountIds: order.map((a) => a.id) })
+	} catch (e) {
+		accountsState.accounts = previous
+		rethrow(e)
+	}
+}
+
+/**
+ * How an account is shown: colour, badge (text or icon instead of the initials), and whether
+ * it is part of "All accounts".
+ *
+ * @param {string} id account id
+ * @param {{color: string|null, badgeText: string|null, badgeIcon: string|null, includeInUnified: boolean}} appearance what to show
+ */
+export async function setAppearance(id, appearance) {
+	try {
+		const account = await apiSend('PUT', `/accounts/${id}/appearance`, appearance)
+		const index = accountsState.accounts.findIndex((a) => a.id === id)
+		accountsState.accounts.splice(index, 1, account)
+		return account
 	} catch (e) {
 		rethrow(e)
 	}
-	accountsState.accounts = order.map((oid) => accountsState.accounts.find((a) => a.id === oid))
 }
+
+/** The accounts the "All accounts" views take in. */
+export const unifiedAccounts = computed(() => accountsState.accounts.filter((a) => a.includeInUnified !== false))
+
+/** "All accounts" is offered with at least two accounts in it. */
+export const unifiedAvailable = computed(() => unifiedAccounts.value.length > 1)
 
 /**
  * Tests unsaved settings. Without a password, the stored one of accountId is used.
@@ -125,12 +162,29 @@ export async function testConnection(input, accountId) {
 }
 
 /**
- * A colour per account for the account rail and the dots in mixed lists. Derived from the id, so
- * it stays the same across sessions and devices; all of them carry white text in both themes.
+ * A colour per account for the account rail and the dots in mixed lists: the one the user chose,
+ * or else one derived from the id, so it stays the same across sessions and devices. The derived
+ * ones all carry white text in both themes.
  */
-const ACCOUNT_COLORS = ['#0f62d6', '#1d7f52', '#c13a3a', '#7346c2', '#a85a0b', '#0e7584', '#a3306f', '#4f5d75']
+export const ACCOUNT_COLORS = ['#0f62d6', '#1d7f52', '#c13a3a', '#7346c2', '#a85a0b', '#0e7584', '#a3306f', '#4f5d75']
 
 export function accountColor(id) {
+	const chosen = accountsState.accounts.find((a) => a.id === id)?.color
+	return chosen || defaultColor(id)
+}
+
+/** Black or white, whichever reads better on the colour (WCAG relative luminance). */
+export function textColorOn(color) {
+	const channel = (i) => {
+		const c = parseInt(color.slice(1 + 2 * i, 3 + 2 * i), 16) / 255
+		return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+	}
+	const luminance = 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2)
+	// Contrast with white is (1.05) / (L + 0.05), with black (L + 0.05) / 0.05; equal at L ≈ 0.179.
+	return luminance > 0.179 ? '#000' : '#fff'
+}
+
+export function defaultColor(id) {
 	let hash = 0
 	for (const c of String(id)) {
 		hash = (hash * 31 + c.charCodeAt(0)) >>> 0

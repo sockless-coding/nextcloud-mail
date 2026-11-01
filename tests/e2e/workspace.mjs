@@ -68,8 +68,8 @@ await page.locator('.command-bar').getByRole('button', { name: 'Reply', exact: t
 check(await until(async () => await composer.getByLabel('Subject').isVisible()), 'replying while a draft is open shows the draft instead')
 check((await composer.getByLabel('Subject').inputValue()) === `Draft ${suffix}`, 'and keeps it')
 
-await composer.getByRole('button', { name: 'Pop out' }).click()
-check(await until(async () => (await composer.getAttribute('class')).includes('composer--expanded')), 'Pop out makes it large')
+await composer.getByRole('button', { name: 'Enlarge' }).click()
+check(await until(async () => (await composer.getAttribute('class')).includes('composer--expanded')), 'Enlarge makes it large')
 await composer.getByRole('button', { name: 'Dock' }).click()
 
 await composer.getByRole('button', { name: 'Discard' }).click()

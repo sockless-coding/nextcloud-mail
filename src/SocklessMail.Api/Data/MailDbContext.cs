@@ -86,6 +86,9 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             account.Property(a => a.OwnerUserId).HasMaxLength(64);
             account.Property(a => a.DisplayName).HasMaxLength(200);
             account.Property(a => a.SenderName).HasMaxLength(200);
+            account.Property(a => a.Color).HasMaxLength(7);
+            account.Property(a => a.BadgeText).HasMaxLength(AppearanceInput.MaxBadgeLength);
+            account.Property(a => a.BadgeIcon).HasMaxLength(32);
             account.Property(a => a.EmailAddress).HasMaxLength(320);
             account.Property(a => a.ImapHost).HasMaxLength(253);
             account.Property(a => a.SmtpHost).HasMaxLength(253);

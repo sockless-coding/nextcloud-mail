@@ -33,6 +33,44 @@ public sealed record ConnectionTestInput(
 
 public sealed record ReorderInput(IReadOnlyList<Guid> AccountIds);
 
+/// <summary>How the account is shown; none of it reaches the mail server. Empty values are cleared.</summary>
+public sealed record AppearanceInput(string? Color, string? BadgeText, string? BadgeIcon, bool IncludeInUnified = true)
+{
+    /// <summary>The icons the app offers (frontend accountIcons.js); anything else is refused.</summary>
+    public static readonly IReadOnlySet<string> Icons = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "briefcase", "home", "school", "heart", "star", "cart", "account", "accountGroup", "bank", "rocket",
+        "airplane", "music", "gamepad", "palette", "code", "book", "leaf", "paw", "coffee", "cog",
+        "shield", "flash", "earth", "email",
+    };
+
+    public const int MaxBadgeLength = 16;
+
+    /// <returns>Errors keyed by JSON field; empty when valid.</returns>
+    public Dictionary<string, string[]> Validate()
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (!string.IsNullOrEmpty(Color) && !System.Text.RegularExpressions.Regex.IsMatch(Color, "^#[0-9a-fA-F]{6}$"))
+        {
+            errors["color"] = ["Use a colour like #1a62d6."];
+        }
+
+        // Up to three characters as people see them (an emoji with modifiers is one), and a byte cap.
+        if (!string.IsNullOrEmpty(BadgeText)
+            && (BadgeText.Length > MaxBadgeLength || new System.Globalization.StringInfo(BadgeText.Trim()).LengthInTextElements > 3))
+        {
+            errors["badgeText"] = ["Use at most three characters."];
+        }
+
+        if (!string.IsNullOrEmpty(BadgeIcon) && !Icons.Contains(BadgeIcon))
+        {
+            errors["badgeIcon"] = ["Choose one of the offered icons."];
+        }
+
+        return errors;
+    }
+}
+
 /// <summary>What the API returns. Never contains the credential.</summary>
 public sealed record AccountDto(
     Guid Id,
@@ -44,14 +82,22 @@ public sealed record AccountDto(
     ServerSettings Imap,
     ServerSettings Smtp,
     int SortOrder,
-    TagStorage TagStorage)
+    TagStorage TagStorage,
+    string? Color,
+    string? BadgeText,
+    string? BadgeIcon,
+    bool IncludeInUnified)
 {
     public static AccountDto From(MailAccount a) => new(
         a.Id, a.DisplayName, a.SenderName, a.EmailAddress, a.Username, a.AuthMethod,
         new ServerSettings(a.ImapHost, a.ImapPort, a.ImapSecurity),
         new ServerSettings(a.SmtpHost, a.SmtpPort, a.SmtpSecurity),
         a.SortOrder,
-        a.TagStorage);
+        a.TagStorage,
+        a.Color,
+        a.BadgeText,
+        a.BadgeIcon,
+        a.IncludeInUnified);
 }
 
 public static class AccountValidation

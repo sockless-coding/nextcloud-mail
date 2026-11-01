@@ -8,6 +8,7 @@ import { ActionError, deleteMessages, loadFolders, mailboxState, messagesById, o
 import { searchState } from './search.js'
 import { formatSendTime } from './sendLater.js'
 import { unifiedState } from './unified.js'
+import { composeInWindow } from './windows.js'
 
 /**
  * The message being written. One composer at a time; it is rendered by App.vue whenever
@@ -55,7 +56,8 @@ function busy() {
 export const composerInUse = busy
 
 function show(draft) {
-	Object.assign(composer, { draft, minimized: false, saveStatus: 'idle', savedAt: null, saveError: '' })
+	// "Separate window" ends up here inside such a window, or when the browser blocked it.
+	Object.assign(composer, { draft, minimized: false, expanded: layout.composerSize !== 'small', saveStatus: 'idle', savedAt: null, saveError: '' })
 }
 
 /** Whether discarding the draft would lose anything the user typed or attached. */
@@ -109,10 +111,19 @@ function emptyDraft(accountId) {
 	}
 }
 
-/** New message from the selected account (in a unified view: the open message's, or the first one). */
-export function composeNew() {
-	const accountId = mailboxState.selected.accountId ?? mailboxState.open.accountId ?? accountsState.accounts[0]?.id
-	if (accountId && !busy()) {
+/**
+ * New message from the given account, or else the selected one (in a unified view: the open
+ * message's, or the first one).
+ *
+ * @param {string} [from] the account to send from
+ * @param {object} [options] inPage: here, even when the settings say "Separate window"
+ */
+export function composeNew(from, { inPage = false } = {}) {
+	const accountId = (typeof from === 'string' && from) || mailboxState.selected.accountId || mailboxState.open.accountId || accountsState.accounts[0]?.id
+	if (!accountId || (!inPage && composeInWindow({ mode: 'new', account: accountId }))) {
+		return
+	}
+	if (!busy()) {
 		show(emptyDraft(accountId))
 	}
 }
@@ -144,7 +155,7 @@ function fromServer(accountId, draft, extra = {}) {
  * @param {string} messageId the message
  */
 export async function composeReply(mode, where = openLocation(), messageId = mailboxState.open.id) {
-	if (busy()) {
+	if (composeInWindow({ mode, account: where.accountId, folder: where.folderId, message: messageId }) || busy()) {
 		return
 	}
 	const { accountId, folderId } = where
@@ -167,7 +178,7 @@ export async function composeReply(mode, where = openLocation(), messageId = mai
  * @param {string} messageId the draft
  */
 export async function composeEdit(where = openLocation(), messageId = mailboxState.open.id) {
-	if (busy()) {
+	if (composeInWindow({ mode: 'edit', account: where.accountId, folder: where.folderId, message: messageId }) || busy()) {
 		return
 	}
 	const { accountId, folderId } = where
@@ -181,8 +192,53 @@ export async function composeEdit(where = openLocation(), messageId = mailboxSta
 	show(fromServer(accountId, { ...draft, html }, { saved: { folderId, messageId } }))
 }
 
-/** Object URLs of the images shown in the editor, released when the composer closes. */
-let objectUrls = []
+/**
+ * Takes the message being written out of this window, for another one (windows.js): saved
+ * first, then copied, with the images shown in the text (object URLs of this window) as blobs.
+ * The composer here closes without deleting anything.
+ *
+ * @return {Promise<{draft: object, blobs: Map<string, Blob>}>} what adoptDraft takes
+ */
+export async function handOverDraft() {
+	await settleSaves()
+	if (hasContent()) {
+		await saveDraft()
+	}
+	const draft = JSON.parse(JSON.stringify(composer.draft))
+	const blobs = new Map()
+	for (const url of new Set(`${draft.html}${draft.initialHtml}`.match(/blob:[^"'\s)]+/g) ?? [])) {
+		// One this module did not make is shown broken there; the image itself is kept by its Content-ID.
+		if (objectUrls.has(url)) {
+			blobs.set(url, objectUrls.get(url))
+		}
+	}
+	await closeComposer('handedOver')
+	return { draft, blobs }
+}
+
+/**
+ * Continues a message handed over by another window (handOverDraft there).
+ *
+ * @param {{draft: object, blobs: Map<string, Blob>}} handover what the other window gave
+ */
+export async function adoptDraft({ draft, blobs }) {
+	// Blobs of the other window, copied into this one: its object URLs end with it.
+	for (const [url, blob] of blobs) {
+		const local = objectUrl(new Blob([await blob.arrayBuffer()], { type: blob.type }))
+		draft.html = draft.html.replaceAll(url, local)
+		draft.initialHtml = draft.initialHtml.replaceAll(url, local)
+	}
+	show({ ...draft, imageJobs: 0 })
+	if (draft.saved) {
+		Object.assign(composer, { saveStatus: 'saved', savedAt: new Date() })
+	}
+}
+
+/**
+ * Object URLs of the images shown in the editor, with their blobs (the page's CSP does not let
+ * fetch() read blob: URLs back); released when the composer closes.
+ */
+let objectUrls = new Map()
 
 /**
  * A URL showing the image in the editor for as long as the composer is open.
@@ -191,7 +247,7 @@ let objectUrls = []
  */
 export function objectUrl(blob) {
 	const url = URL.createObjectURL(blob)
-	objectUrls.push(url)
+	objectUrls.set(url, blob)
 	return url
 }
 
@@ -420,9 +476,10 @@ async function settleSaves() {
  * Closes the composer. "sent": the server already removed uploads and the saved draft.
  * "kept": the draft is saved first (and stays in Drafts); its uploads are inside it now.
  * "discarded": uploads and the saved copy are removed.
+ * "handedOver": nothing is removed; another window goes on with the draft (handOverDraft).
  * Returns false when keeping failed (the draft could not be saved); the composer stays open.
  *
- * @param {'sent'|'kept'|'discarded'} outcome what happened to the message
+ * @param {'sent'|'kept'|'discarded'|'handedOver'} outcome what happened to the message
  */
 export async function closeComposer(outcome) {
 	const draft = composer.draft
@@ -440,10 +497,11 @@ export async function closeComposer(outcome) {
 	await settleSaves()
 	Object.assign(composer, { draft: null, minimized: false, expanded: false, saveStatus: 'idle', savedAt: null, saveError: '' })
 	// After the editor is gone (it is unmounted with the draft).
-	const urls = objectUrls
-	objectUrls = []
+	const urls = [...objectUrls.keys()]
+	objectUrls = new Map()
 	window.setTimeout(() => urls.forEach((url) => URL.revokeObjectURL(url)))
-	if (outcome === 'sent') {
+	// Sent: the server removed them. Handed over: another window goes on with them.
+	if (outcome === 'sent' || outcome === 'handedOver') {
 		return true
 	}
 	for (const upload of [...draft.uploads, ...draft.images]) {

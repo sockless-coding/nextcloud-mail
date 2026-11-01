@@ -106,6 +106,22 @@ public sealed class UnifiedFoldersTests(DovecotFixture dovecot) : IDisposable
     }
 
     [Fact]
+    public async Task Accounts_left_out_of_all_accounts_are_not_listed()
+    {
+        var client = _app.ClientAs("unified-excluded");
+        await AddAccountAsync(client, dovecot, await MailboxWithAsync([("A1", Start)]));
+        var accountB = await AddAccountAsync(client, dovecot, await MailboxWithAsync([("B1", Start.AddHours(1))]));
+        Assert.Equal(["B1", "A1"], Subjects(await Json(await client.GetAsync("/api/unified/inbox/messages", Ct))));
+
+        var response = await client.PutAsJsonAsync($"/api/accounts/{accountB}/appearance", new { includeInUnified = false }, Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        Assert.Equal(["A1"], Subjects(await Json(await client.GetAsync("/api/unified/inbox/messages", Ct))));
+        // The account itself is still there.
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/accounts/{accountB}/folders", Ct)).StatusCode);
+    }
+
+    [Fact]
     public async Task Changes_in_any_inbox_are_reported_once()
     {
         var client = _app.ClientAs("unified-changes");

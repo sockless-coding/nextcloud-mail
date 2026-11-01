@@ -151,6 +151,47 @@ public sealed class AccountEndpointTests : IDisposable
         Assert.Equal(["C", "A", "B"], await Names());
     }
 
+    [Fact]
+    public async Task Appearance_is_saved_and_cleared_without_touching_the_settings()
+    {
+        var id = await CreateAsync(_alice);
+        var before = StoredAccount(id);
+        Assert.True(before.IncludeInUnified);
+
+        var response = await _alice.PutAsJsonAsync($"/api/accounts/{id}/appearance",
+            new { color = "#1A62D6", badgeText = " 💼 ", badgeIcon = (string?)null, includeInUnified = false }, Ct);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var json = await JsonAsync(response);
+        Assert.Equal("#1a62d6", json.GetProperty("color").GetString());
+        Assert.Equal("💼", json.GetProperty("badgeText").GetString());
+        Assert.False(json.GetProperty("includeInUnified").GetBoolean());
+        Assert.Equal(before.UpdatedAt, StoredAccount(id).UpdatedAt);
+
+        response = await _alice.PutAsJsonAsync($"/api/accounts/{id}/appearance",
+            new { color = "", badgeText = "", badgeIcon = "briefcase", includeInUnified = true }, Ct);
+        json = await JsonAsync(response);
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("color").ValueKind);
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("badgeText").ValueKind);
+        Assert.Equal("briefcase", json.GetProperty("badgeIcon").GetString());
+        Assert.True(json.GetProperty("includeInUnified").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData("color", "blue")]
+    [InlineData("color", "#12345")]
+    [InlineData("badgeText", "ABCD")]
+    [InlineData("badgeIcon", "not-an-icon")]
+    public async Task Invalid_appearance_is_refused(string field, string value)
+    {
+        var id = await CreateAsync(_alice);
+        var body = new Dictionary<string, object?> { ["color"] = null, ["badgeText"] = null, ["badgeIcon"] = null, ["includeInUnified"] = true, [field] = value };
+
+        var response = await _alice.PutAsJsonAsync($"/api/accounts/{id}/appearance", body, Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.True((await JsonAsync(response)).GetProperty("errors").TryGetProperty(field, out _));
+    }
+
     [Theory]
     [InlineData("missing")]
     [InlineData("duplicate")]

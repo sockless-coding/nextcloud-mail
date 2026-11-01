@@ -96,6 +96,7 @@
 						tabindex="0"
 						:aria-current="isOpen(row) ? 'true' : undefined"
 						@click="onClick(row, $event)"
+						@dblclick="onDoubleClick(row, $event)"
 						@keydown="onKey(row, index, $event)"
 						@pointerdown="startPress(row, $event)"
 						@pointerup="cancelPress"
@@ -205,6 +206,7 @@ import { accountColor, accountsState } from '../store/accounts.js'
 import { remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { layout, readingPane } from '../store/layout.js'
 import { loadMore, mailboxState, openMessage } from '../store/mailbox.js'
+import { openMessageWindow } from '../store/windows.js'
 import { filterTag, searchMore, searchState as search, setFilter } from '../store/search.js'
 import { checkSenders, listWarning, reasonText, warningTitle } from '../store/senders.js'
 import { clearSelection, endSelectionMode, extendSelection, isSelected, pruneSelection, selectRange, selection, toggleRow } from '../store/selection.js'
@@ -348,6 +350,14 @@ function isOpen(row) {
 /** Opens the message where it is listed; the selected folder stays as it is. */
 function open(row) {
 	openMessage(row, row.message.id)
+}
+
+/** Double-click opens the message in a window of its own, as in desktop mail programs. */
+function onDoubleClick(row, event) {
+	if (selection.mode || event.ctrlKey || event.metaKey || event.shiftKey || event.target.closest('.message-row__actions')) {
+		return
+	}
+	openMessageWindow(row, row.message.id)
 }
 
 /**

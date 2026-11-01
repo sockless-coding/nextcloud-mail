@@ -1,6 +1,19 @@
 <template>
 	<NcContent app-name="sockless_mail">
-		<div class="sm-shell">
+		<!-- A window of its own (store/windows.js): one message, or the composer. -->
+		<div v-if="windowMode" class="sm-shell sm-shell--window">
+			<div v-if="windowState.loading" class="sm-shell__state">
+				<NcLoadingIcon :size="64" />
+			</div>
+			<NcEmptyContent v-else-if="windowState.error"
+				class="sm-shell__state"
+				:name="windowMode.kind === 'message' ? t('sockless_mail', 'Could not open the message') : t('sockless_mail', 'Could not open the composer')"
+				:description="windowState.error" />
+			<main v-else-if="windowMode.kind === 'message'" class="sm-shell__window">
+				<MessageView v-if="mailboxState.open.id" />
+			</main>
+		</div>
+		<div v-else class="sm-shell">
 			<AccountRail />
 
 			<div v-if="accountsState.loading" class="sm-shell__state">
@@ -84,6 +97,13 @@
 
 		<OAuthSettingsDialog v-if="dialogs.oauthSettings" @close="dialogs.oauthSettings = false" />
 
+		<SettingsDialog v-model:open="dialogs.settings" />
+
+		<AccountAppearanceDialog v-if="dialogs.accountAppearance"
+			:key="dialogs.accountAppearance.id"
+			:account="dialogs.accountAppearance"
+			@close="dialogs.accountAppearance = null" />
+
 		<ShortcutsDialog v-if="dialogs.shortcuts" @close="dialogs.shortcuts = false" />
 
 		<TrustedSendersDialog v-if="dialogs.trustedSenders" @close="dialogs.trustedSenders = false" />
@@ -151,6 +171,7 @@ import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import AccountAppearanceDialog from './components/AccountAppearanceDialog.vue'
 import AccountDialog from './components/AccountDialog.vue'
 import AddContactDialog from './components/AddContactDialog.vue'
 import AccountRail from './components/AccountRail.vue'
@@ -162,6 +183,7 @@ import MessageList from './components/MessageList.vue'
 import MessageView from './components/MessageView.vue'
 import MoveDialog from './components/MoveDialog.vue'
 import OAuthSettingsDialog from './components/OAuthSettingsDialog.vue'
+import SettingsDialog from './components/SettingsDialog.vue'
 import RulesDialog from './components/RulesDialog.vue'
 import ScheduledList from './components/ScheduledList.vue'
 import ScheduledView from './components/ScheduledView.vue'
@@ -188,6 +210,7 @@ import { INBOX_ID, inUnifiedView, refreshUnified, viewOf } from './store/unified
 import { loadTagCounts, loadTags } from './store/tags.js'
 import { loadTasks } from './store/tasks.js'
 import { loadViewState } from './store/viewState.js'
+import { startWindow, windowMode, windowState } from './store/windows.js'
 
 /**
  * Without push (proxy mode, or the connection is down) new mail is found by polling: the open
@@ -370,11 +393,16 @@ function sendFilesFromUrl() {
 		showError(t('sockless_mail', 'Add a mail account first, then send the files from the Files app again.'))
 		return
 	}
-	composeNew()
+	composeNew(undefined, { inPage: true })
 	attachFileIds(fileIds)
 }
 
 onMounted(async () => {
+	if (windowMode) {
+		removeShortcuts = installShortcuts()
+		await startWindow()
+		return
+	}
 	// Not awaited: the mail view does not depend on it.
 	loadOAuthState()
 	// Whether to offer "Create task"; nothing waits for it.
@@ -419,6 +447,16 @@ onBeforeUnmount(() => {
 	overflow: hidden;
 	background: var(--color-main-background);
 	color: var(--color-main-text);
+}
+
+.sm-shell__window {
+	flex: 1;
+	min-width: 0;
+	overflow-y: auto;
+}
+
+.sm-shell__window .message-view {
+	margin-inline: auto;
 }
 
 .sm-shell__state {
@@ -558,5 +596,23 @@ onBeforeUnmount(() => {
 	min-width: 0;
 	min-height: 0;
 	opacity: 1;
+}
+
+/* A window of its own (store/windows.js): the message or composer fills it, without Nextcloud's header. */
+body.sm-window-mode {
+	--header-height: 0px;
+	--body-container-margin: 0px;
+	--body-container-radius: 0px;
+	--body-height: 100%;
+}
+
+body.sm-window-mode #content-vue {
+	height: 100%;
+	margin: 0;
+	border-radius: 0;
+}
+
+body.sm-window-mode #header {
+	display: none;
 }
 </style>

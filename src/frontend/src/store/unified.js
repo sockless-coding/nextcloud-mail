@@ -3,7 +3,7 @@ import { t } from '@nextcloud/l10n'
 import { reactive } from 'vue'
 import { apiGet } from '../api.js'
 import { USE_ICONS, USE_NAMES } from '../folderUses.js'
-import { accountsState } from './accounts.js'
+import { unifiedAccounts } from './accounts.js'
 import { closeMessage, hasPendingWrites, mailboxState, writeCounters } from './mailbox.js'
 import { mergeUnifiedChanges } from './search.js'
 import { tagsState, tagUnread } from './tags.js'
@@ -61,7 +61,7 @@ export function inUnifiedView(accountId, folderId) {
 		// A tag folder may hold any folder's mail.
 		return !view.accountId || view.accountId === accountId
 	}
-	return !!view && view.roles.some((use) => folderOfUse(accountId, use) === folderId)
+	return !!view && unifiedAccounts.value.some((a) => a.id === accountId) && view.roles.some((use) => folderOfUse(accountId, use) === folderId)
 }
 
 /** Whether the folder pane shows all accounts (a unified view, a tag folder or Scheduled across accounts). */
@@ -71,7 +71,7 @@ export function unifiedPaneShown() {
 
 /** Unified folders some account has, then the smart folders. */
 export function availableViews() {
-	return UNIFIED_VIEWS.filter((v) => v.filter || accountsState.accounts.some((a) => folderOfUse(a.id, v.id)))
+	return UNIFIED_VIEWS.filter((v) => v.filter || unifiedAccounts.value.some((a) => folderOfUse(a.id, v.id)))
 }
 
 /**
@@ -86,7 +86,7 @@ export function viewUnread(id) {
 	if (!view || view.filter === 'flagged') {
 		return 0
 	}
-	return accountsState.accounts.reduce((sum, account) => {
+	return unifiedAccounts.value.reduce((sum, account) => {
 		const folderId = folderOfUse(account.id, view.roles[0])
 		return sum + (mailboxState.folders[account.id]?.list.find((f) => f.id === folderId)?.unread ?? 0)
 	}, 0)

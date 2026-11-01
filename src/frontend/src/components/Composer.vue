@@ -1,10 +1,11 @@
 <template>
-	<div v-if="composer.expanded && !composer.minimized" class="composer-backdrop" />
+	<div v-if="composer.expanded && !composer.minimized && !windowMode" class="composer-backdrop" />
 	<!-- A window docked at the bottom, not a modal: the mailbox stays usable while writing.
 	     Escape and clicks elsewhere do nothing, so a half-written message cannot vanish by
-	     accident. Close keeps it (saved in Drafts); Send and Discard end it. -->
+	     accident. Close does what the settings say (keep it in Drafts, ask, or discard it);
+	     Send and Discard end it. -->
 	<section class="composer"
-		:class="{ 'composer--minimized': composer.minimized, 'composer--expanded': composer.expanded && !composer.minimized, 'composer--dropping': dropping }"
+		:class="{ 'composer--window': windowMode, 'composer--minimized': composer.minimized && !windowMode, 'composer--expanded': composer.expanded && !composer.minimized && !windowMode, 'composer--dropping': dropping }"
 		role="dialog"
 		aria-modal="false"
 		:aria-label="title"
@@ -14,28 +15,38 @@
 		@drop="onDrop"
 		@keydown.ctrl.enter.prevent="submit"
 		@keydown.meta.enter.prevent="submit">
-		<header class="composer__header" @dblclick="composer.minimized = !composer.minimized">
+		<header class="composer__header" @dblclick="!windowMode && (composer.minimized = !composer.minimized)">
 			<span class="composer__title">{{ composer.minimized && draft.subject ? draft.subject : title }}</span>
-			<button type="button"
+			<button v-if="!windowMode"
+				type="button"
 				class="composer__window-button"
 				:aria-label="composer.minimized ? t('sockless_mail', 'Restore') : t('sockless_mail', 'Minimize')"
 				:title="composer.minimized ? t('sockless_mail', 'Restore') : t('sockless_mail', 'Minimize')"
 				@click="composer.minimized = !composer.minimized">
 				<NcIconSvgWrapper :path="composer.minimized ? mdiWindowRestore : mdiWindowMinimize" :size="18" />
 			</button>
-			<button v-if="!composer.minimized"
+			<button v-if="!composer.minimized && !windowMode"
 				type="button"
 				class="composer__window-button"
-				:aria-label="composer.expanded ? t('sockless_mail', 'Dock') : t('sockless_mail', 'Pop out')"
-				:title="composer.expanded ? t('sockless_mail', 'Dock') : t('sockless_mail', 'Pop out')"
+				:disabled="uploading || sending"
+				:aria-label="t('sockless_mail', 'Open in a new window')"
+				:title="uploading ? t('sockless_mail', 'Open in a new window, once the uploads are done') : t('sockless_mail', 'Open in a new window')"
+				@click="popOutComposer">
+				<NcIconSvgWrapper :path="mdiOpenInNew" :size="18" />
+			</button>
+			<button v-if="!composer.minimized && !windowMode"
+				type="button"
+				class="composer__window-button"
+				:aria-label="composer.expanded ? t('sockless_mail', 'Dock') : t('sockless_mail', 'Enlarge')"
+				:title="composer.expanded ? t('sockless_mail', 'Dock') : t('sockless_mail', 'Enlarge')"
 				@click="composer.expanded = !composer.expanded">
 				<NcIconSvgWrapper :path="composer.expanded ? mdiArrowCollapse : mdiArrowExpand" :size="18" />
 			</button>
 			<button type="button"
 				class="composer__window-button"
 				:aria-label="t('sockless_mail', 'Close')"
-				:title="t('sockless_mail', 'Close and keep the draft')"
-				@click="closeKeeping">
+				:title="closeTitle"
+				@click="closeClicked">
 				<NcIconSvgWrapper :path="mdiClose" :size="18" />
 			</button>
 		</header>
@@ -239,10 +250,17 @@
 		:buttons="discardButtons"
 		:open="true"
 		@update:open="(open) => !open && discardClosed()" />
+
+	<NcDialog v-if="confirmClose"
+		:name="t('sockless_mail', 'Save this message as a draft?')"
+		:message="t('sockless_mail', 'Keep it in Drafts to continue later, or discard what you wrote and attached.')"
+		:buttons="closeButtons"
+		:open="true"
+		@update:open="(open) => !open && closeDialogClosed()" />
 </template>
 
 <script setup>
-import { mdiArrowCollapse, mdiArrowExpand, mdiCalendarClock, mdiClockOutline, mdiClose, mdiCogOutline, mdiDeleteOutline, mdiFolderOutline, mdiFormatLetterCase, mdiFormatText, mdiLinkVariant, mdiPaperclip, mdiSend, mdiSendClockOutline, mdiUndo, mdiUpload, mdiWindowMinimize, mdiWindowRestore } from '@mdi/js'
+import { mdiArrowCollapse, mdiArrowExpand, mdiCalendarClock, mdiClockOutline, mdiClose, mdiCogOutline, mdiDeleteOutline, mdiFolderOutline, mdiFormatLetterCase, mdiFormatText, mdiLinkVariant, mdiOpenInNew, mdiPaperclip, mdiSend, mdiSendClockOutline, mdiUndo, mdiUpload, mdiWindowMinimize, mdiWindowRestore } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { getCanonicalLocale, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -259,6 +277,7 @@ import { attach, closeComposer, composer, detach, hasContent, saveSoon, schedule
 import { attachFromFiles as pickAndAttach, createShareLinks } from '../store/files.js'
 import { layout } from '../store/layout.js'
 import { formatSendTime, offeredPresets } from '../store/sendLater.js'
+import { popOutComposer, windowMode } from '../store/windows.js'
 import RecipientInput from './RecipientInput.vue'
 import RichEditor from './RichEditor.vue'
 import SendLaterDialog from './SendLaterDialog.vue'
@@ -336,12 +355,59 @@ function plainTextClosed() {
 	}
 }
 
-/** Close keeps the message: saved in Drafts, to be continued from there. */
+/** Keeps the message: saved in Drafts, to be continued from there. */
 async function closeKeeping() {
 	if (!(await closeComposer('kept'))) {
 		showError(t('sockless_mail', 'The draft could not be saved: {error}', { error: composer.saveError }))
 	}
 }
+
+const closeTitle = computed(() => ({
+	keep: t('sockless_mail', 'Close and keep the draft'),
+	ask: t('sockless_mail', 'Close'),
+	discard: t('sockless_mail', 'Close and discard the message'),
+})[layout.composerClose] ?? t('sockless_mail', 'Close'))
+
+const confirmClose = ref(false)
+/** keep | discard | null (keep writing): the choice, acted on once the dialog has closed (see discardClosed). */
+let closeChosen = null
+
+/** The close button, as set in the settings. A message with nothing in it just closes. */
+async function closeClicked() {
+	if (!hasContent()) {
+		closeComposer('discarded')
+		return
+	}
+	if (layout.composerClose === 'discard') {
+		closeComposer('discarded')
+		return
+	}
+	if (layout.composerClose !== 'ask') {
+		closeKeeping()
+		return
+	}
+	if (confirmClose.value) {
+		confirmClose.value = false
+		await nextTick()
+	}
+	closeChosen = null
+	confirmClose.value = true
+}
+
+function closeDialogClosed() {
+	confirmClose.value = false
+	if (closeChosen === 'keep') {
+		closeKeeping()
+	} else if (closeChosen === 'discard') {
+		closeComposer('discarded')
+	}
+}
+
+const closeButtons = computed(() => [
+	{ label: t('sockless_mail', 'Keep writing') },
+	{ label: t('sockless_mail', 'Discard'), variant: 'error', callback: () => { closeChosen = 'discard' } },
+	{ label: t('sockless_mail', 'Save draft'), variant: 'primary', callback: () => { closeChosen = 'keep' } },
+])
 
 /** Leaving the page with unsaved changes asks first. */
 function beforeUnload(event) {
@@ -574,6 +640,21 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 	height: auto;
 	border-bottom: 1px solid var(--color-border);
 	border-radius: var(--border-radius-container, 12px);
+}
+
+/* A window of its own: the composer is all there is. */
+.composer--window {
+	inset: 0;
+	width: auto;
+	height: auto;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+}
+
+.composer__window-button:disabled {
+	opacity: 0.5;
+	cursor: default;
 }
 
 .composer--dropping {

@@ -96,8 +96,22 @@ Internals for people working on the app. Installing and configuring it is in the
      user does not send it twice. If the connection breaks during the SMTP transfer, the error
      says to check Sent first.
 - **The composer** is a window docked at the bottom right, not a modal dialog, so the mailbox
-  stays usable while writing. It can be minimised to its title bar, or popped out to a large
-  window. One message is written at a time: New message, reply or forward while a draft is open
+  stays usable while writing. It can be minimised to its title bar, or enlarged; Settings
+  choose the size it opens in (`layout.composerSize`, kept in the browser like the View menu).
+- **Separate windows** (`store/windows.js`) load the same page with a fragment saying what to
+  show: `#window=message&account=…&folder=…&message=…` or `#window=compose&mode=new|reply|replyAll|forward|edit|handover&…`.
+  App.vue then shows only the message or the composer, and a body class hides Nextcloud's
+  header; there is no polling or push in such a window. A message window closes when its
+  message is deleted or moved, a compose window when the message is sent, kept or discarded.
+  With the composer setting "In a separate window", New message, Reply, Forward and Continue
+  editing open one (straight from the click, so browsers allow it; when blocked, the composer
+  opens large in the page). **Open in a new window** in the composer moves the message being
+  written: it is saved, then copied into a slot on the window it was in
+  (`window.socklessMailHandovers`, read through `window.opener`, same origin), together with
+  the blobs of the images shown in the text, since the page's CSP keeps `fetch()` from reading
+  `blob:` URLs and the old window's object URLs end with it. That composer closes without
+  deleting uploads or the saved draft (`closeComposer('handedOver')`). Several messages can be
+  written at once this way, one per window. One message is written at a time: New message, reply or forward while a draft is open
   brings that draft back instead of replacing it.
   - Escape and clicking elsewhere do not close it, so a half-written message cannot vanish by
     accident. Send (also Ctrl+Enter) and Discard are the only ways out. Discard asks first when
@@ -139,7 +153,9 @@ Internals for people working on the app. Installing and configuring it is in the
   - **Drafts** are saved to the account's Drafts folder (created when there is none) 4 seconds
     after the last change: `PUT /api/accounts/{id}/drafts` appends the message flagged `\Draft`
     and `\Seen`, then removes the version it replaces. Addresses still being typed are kept as
-    written. Close (×) keeps the draft; Discard deletes it; sending removes it. A draft opened
+    written. Close (×) keeps the draft, asks, or deletes it, as set in Settings
+    (`layout.composerClose`; a message with nothing in it just closes); Discard deletes it after
+    asking; sending removes it. A draft opened
     in Drafts has **Continue editing**, which loads it back (`…/draft?mode=edit`): fields, text,
     attachments and threading as saved. While a draft is continued, each saved copy becomes the
     source of its attachments, so uploads move into it. Leaving the page with unsaved changes
@@ -257,8 +273,15 @@ Internals for people working on the app. Installing and configuring it is in the
   - While a filter is shown without words, polling keeps it current: new mail that passes the
     filter is added, removed mail leaves. A message that stops passing (read while the Unread
     filter is shown) stays until the filter is shown again, as in Outlook.
-- **All accounts** (shown with two or more accounts, and opened first then, on the unified
-  Inbox) replaces the folder tree with views across every account. `{view}` is one of:
+- **Account appearance** (`PUT /api/accounts/{id}/appearance`, apart from the account's
+  settings so connections stay and `UpdatedAt` is left alone): a colour (`#rrggbb`, else one
+  derived from the id), a badge of up to three characters or one of a fixed set of icon names
+  (`AppearanceInput.Icons`, matched by `accountIcons.js`), and `includeInUnified`. Set from the
+  Customize dialog (account menu, or right-click in the rail) and Settings → Accounts; the
+  order is changed by dragging in the rail or Settings (`PUT /api/accounts/order`).
+- **All accounts** (shown with two or more accounts in it, and opened first then, on the unified
+  Inbox) replaces the folder tree with views across every account the user has not left out
+  (`includeInUnified`; the server skips the others, the client leaves them out of the counts). `{view}` is one of:
   - unified folders `inbox`, `drafts`, `sent`, `archive`, `junk`, `trash`: that special-use folder
     of every account, from the header cache. An account's folder is the one its folder list shows
     for the use (RFC 6154 attributes, else common names), picked like the folder pane does. Which

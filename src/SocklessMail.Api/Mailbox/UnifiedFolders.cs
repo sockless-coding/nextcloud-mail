@@ -320,7 +320,8 @@ public sealed class UnifiedFolders(AccountService accounts, IServiceScopeFactory
         string userId, UnifiedView view, Func<MailboxService, FolderCache, Source, bool, CancellationToken, Task<T>> work, CancellationToken ct)
         where T : IPart
     {
-        var list = await accounts.ListAsync(userId, ct);
+        // Accounts the user left out of "All accounts" are not asked at all.
+        var list = (await accounts.ListAsync(userId, ct)).Where(a => a.IncludeInUnified).ToList();
         var parts = await Task.WhenAll(list.Select(async account =>
         {
             await using var scope = scopes.CreateUserScope(userId);

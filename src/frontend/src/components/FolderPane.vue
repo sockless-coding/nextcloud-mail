@@ -7,7 +7,7 @@
 				<div class="folder-pane__account-text">
 					<h2 class="folder-pane__account-name">{{ t('sockless_mail', 'All accounts') }}</h2>
 					<span class="folder-pane__account-address">
-						{{ n('sockless_mail', '{count} account', '{count} accounts', accountsState.accounts.length, { count: accountsState.accounts.length }) }}
+						{{ n('sockless_mail', '{count} account', '{count} accounts', unifiedAccounts.length, { count: unifiedAccounts.length }) }}
 					</span>
 				</div>
 			</header>
@@ -54,6 +54,12 @@
 							<NcIconSvgWrapper :path="mdiPencil" />
 						</template>
 						{{ t('sockless_mail', 'Edit account') }}
+					</NcActionButton>
+					<NcActionButton close-after-click @click="dialogs.accountAppearance = account">
+						<template #icon>
+							<NcIconSvgWrapper :path="mdiPaletteOutline" />
+						</template>
+						{{ t('sockless_mail', 'Customize…') }}
 					</NcActionButton>
 					<NcActionButton close-after-click @click="dialogs.rules = { account, draft: null }">
 						<template #icon>
@@ -124,14 +130,14 @@
 </template>
 
 <script setup>
-import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiDelete, mdiFilterCogOutline, mdiFolderPlusOutline, mdiInboxMultipleOutline, mdiPencil, mdiRefresh } from '@mdi/js'
+import { mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiDelete, mdiFilterCogOutline, mdiFolderPlusOutline, mdiInboxMultipleOutline, mdiPaletteOutline, mdiPencil, mdiRefresh } from '@mdi/js'
 import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { computed } from 'vue'
-import { accountColor, accountsState } from '../store/accounts.js'
+import { accountColor, accountsState, unifiedAccounts } from '../store/accounts.js'
 import { dialogs } from '../store/actions.js'
 import { loadFolders, mailboxState } from '../store/mailbox.js'
 import { currentAccount, moveAccountBy, newFolder, openUnified } from '../store/navigation.js'

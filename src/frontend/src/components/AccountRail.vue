@@ -1,6 +1,6 @@
 <template>
 	<nav class="account-rail" :aria-label="t('sockless_mail', 'Accounts')">
-		<button v-if="accountsState.accounts.length > 1"
+		<button v-if="unifiedAvailable"
 			class="account-rail__button account-rail__button--unified"
 			:class="{ 'account-rail__button--active': unifiedPaneShown() }"
 			:aria-label="t('sockless_mail', 'All accounts')"
@@ -10,16 +10,23 @@
 			<NcIconSvgWrapper :path="mdiInboxMultipleOutline" />
 			<span v-if="viewUnread('inbox')" class="account-rail__badge">{{ badge(viewUnread('inbox')) }}</span>
 		</button>
+		<!-- Drag an account to reorder; right-click to customize it. -->
 		<button v-for="account in accountsState.accounts"
 			:key="account.id"
 			class="account-rail__button account-rail__account"
-			:class="{ 'account-rail__button--active': isCurrent(account) }"
+			:class="{ 'account-rail__button--active': isCurrent(account), ...dragClasses(account, 'account-rail__account') }"
 			:style="{ '--account-color': accountColor(account.id) }"
 			:aria-label="account.displayName"
 			:aria-current="isCurrent(account) ? 'page' : undefined"
 			:title="`${account.displayName} · ${account.emailAddress}`"
-			@click="selectAccount(account)">
-			<span aria-hidden="true">{{ accountInitials(account) }}</span>
+			draggable="true"
+			@click="selectAccount(account)"
+			@contextmenu.prevent="dialogs.accountAppearance = account"
+			@dragstart="dragStart(account, $event)"
+			@dragover="dragOver(account, $event)"
+			@drop="drop"
+			@dragend="dragEnd">
+			<AccountBadge :account="account" />
 			<span v-if="inboxUnread(account.id)" class="account-rail__badge">{{ badge(inboxUnread(account.id)) }}</span>
 		</button>
 		<button class="account-rail__button account-rail__tool"
@@ -36,19 +43,29 @@
 			@click="dialogs.oauthSettings = true">
 			<NcIconSvgWrapper :path="mdiShieldAccountOutline" />
 		</button>
+		<button class="account-rail__button account-rail__tool"
+			:aria-label="t('sockless_mail', 'Settings')"
+			:title="t('sockless_mail', 'Settings')"
+			@click="dialogs.settings = true">
+			<NcIconSvgWrapper :path="mdiCogOutline" />
+		</button>
 	</nav>
 </template>
 
 <script setup>
-import { mdiInboxMultipleOutline, mdiPlus, mdiShieldAccountOutline } from '@mdi/js'
+import { mdiCogOutline, mdiInboxMultipleOutline, mdiPlus, mdiShieldAccountOutline } from '@mdi/js'
 import { t } from '@nextcloud/l10n'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
-import { accountColor, accountInitials, accountsState } from '../store/accounts.js'
+import { accountColor, accountsState, unifiedAvailable } from '../store/accounts.js'
 import { dialogs } from '../store/actions.js'
 import { mailboxState } from '../store/mailbox.js'
 import { inboxUnread, openUnified, selectAccount } from '../store/navigation.js'
 import { oauthState } from '../store/oauth.js'
 import { unifiedPaneShown, viewUnread } from '../store/unified.js'
+import AccountBadge from './AccountBadge.vue'
+import { useAccountDrag } from './accountDrag.js'
+
+const { dragStart, dragOver, drop, dragEnd, dragClasses } = useAccountDrag()
 
 function isCurrent(account) {
 	return mailboxState.selected.accountId === account.id
@@ -113,6 +130,29 @@ function badge(count) {
 .account-rail__account:hover,
 .account-rail__button--active {
 	border-radius: 10px;
+}
+
+.account-rail__account--dragged {
+	opacity: 0.4;
+}
+
+/* Where a dragged account would go: a line in the gap above or below. */
+.account-rail__account--drop-before::after,
+.account-rail__account--drop-after::after {
+	content: '';
+	position: absolute;
+	inset-inline: 2px;
+	height: 3px;
+	border-radius: 2px;
+	background: var(--color-primary-element);
+}
+
+.account-rail__account--drop-before::after {
+	top: -6px;
+}
+
+.account-rail__account--drop-after::after {
+	bottom: -6px;
 }
 
 .account-rail__button--unified {

@@ -1,6 +1,6 @@
 import { showError } from '@nextcloud/dialogs/toast'
 import { t } from '@nextcloud/l10n'
-import { accountsState, deleteAccount, moveAccount } from './accounts.js'
+import { accountsState, deleteAccount, moveAccount, unifiedAvailable } from './accounts.js'
 import { askNewFolder } from './actions.js'
 import { closeDrawer } from './layout.js'
 import { forgetAccount, loadFolders, mailboxState, selectFolder } from './mailbox.js'
@@ -50,7 +50,7 @@ export async function openStartView() {
 	const account = last?.accountId && accounts.find((a) => a.id === last.accountId)
 	if (account) {
 		await selectAccount(account)
-	} else if (accounts.length > 1) {
+	} else if (unifiedAvailable.value) {
 		openUnified(last?.unified && viewOf(last.unified) ? last.unified : 'inbox')
 	} else if (accounts.length) {
 		await selectAccount(accounts[0])
@@ -117,11 +117,27 @@ export async function removeAccount(account) {
 	}
 	// Show something else than the empty space the account left.
 	if (!mailboxState.selected.unified && !mailboxState.selected.scheduled && !mailboxState.selected.accountId) {
-		if (accountsState.accounts.length > 1) {
+		if (unifiedAvailable.value) {
 			openUnified()
 		} else if (accountsState.accounts.length) {
 			await selectAccount(accountsState.accounts[0])
 		}
+	}
+}
+
+/**
+ * After an account was taken into or left out of "All accounts": a unified view on screen is
+ * reloaded, or, with fewer than two accounts left in it, gives way to the first account.
+ */
+export async function unifiedAccountsChanged() {
+	const { selected } = mailboxState
+	if (!selected.unified || selected.accountId) {
+		return
+	}
+	if (unifiedAvailable.value) {
+		await showUnified(selected.unified)
+	} else if (accountsState.accounts.length) {
+		await selectAccount(accountsState.accounts[0])
 	}
 }
 

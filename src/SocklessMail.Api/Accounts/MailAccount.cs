@@ -49,6 +49,18 @@ public sealed class MailAccount
     /// <summary>A <see cref="MailCredential"/>, encrypted by <see cref="CredentialProtector"/>.</summary>
     public required string ProtectedCredential { get; set; }
 
+    /// <summary>The account's colour in the rail and lists, "#rrggbb"; null picks one from the id.</summary>
+    public string? Color { get; set; }
+
+    /// <summary>A few characters (an emoji, too) shown for the account instead of its initials.</summary>
+    public string? BadgeText { get; set; }
+
+    /// <summary>An icon shown for the account instead of its initials (a name from the app's set).</summary>
+    public string? BadgeIcon { get; set; }
+
+    /// <summary>Whether the account's folders are part of the "All accounts" views.</summary>
+    public bool IncludeInUnified { get; set; } = true;
+
     /// <summary>Where the account's tags are kept; learnt from the server when a message is first tagged.</summary>
     public TagStorage TagStorage { get; set; }
 

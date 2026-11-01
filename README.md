@@ -21,16 +21,18 @@ Nextcloud and are signed in by their Nextcloud session. Mail is handled with Mai
 
 **Reading**
 - A layout like desktop mail programs: an account rail with a colour and unread count per
-  account, a folder pane, a command bar, and a message list grouped by day with a line of each
+  account (colour, icon or a few characters of your choice; drag to reorder), a folder pane, a command bar, and a message list grouped by day with a line of each
   message's text. The reading pane sits on the right, at the bottom, or is off.
 - Hover actions, a right-click menu, multi-select and quick filters (Unread, Flagged,
   Attachments). Outlook's keyboard shortcuts.
 - Sanitized message view with remote images blocked by default, attachments, raw headers,
-  message source and `.eml` download.
+  message source and `.eml` download. Double-click a message (or use Open in new window) to
+  read it in a window of its own.
 - Message lists come from a local header cache kept in sync with QRESYNC/CONDSTORE. New mail
   arrives through IMAP IDLE and is pushed to the browser.
 - With several accounts, **All accounts** shows unified folders (every account's Inbox, Drafts,
-  Sent, Archive, Junk or Trash in one list) and the smart folders Unread and Flagged.
+  Sent, Archive, Junk or Trash in one list) and the smart folders Unread and Flagged. Each
+  account can be left out of them.
 - Search in the open folder on the server (message text included), or across all accounts from
   the cache.
 - The app remembers expanded folders and the last open folder per account, on the server or in
@@ -38,7 +40,9 @@ Nextcloud and are signed in by their Nextcloud session. Mail is handled with Mai
 
 **Writing**
 - A composer window docked at the bottom, with rich-text editing or plain text, and drafts saved
-  while writing.
+  while writing. It can move to a window of its own at any time. **Settings** (gear in the
+  account rail) choose whether new messages open small, large or in a separate window, and
+  whether closing one keeps it as a draft, asks, or discards it.
 - Images in the text: paste them (also with content copied from web pages), drag them in or
   insert them from this device or Files, then size and describe them. They go out as inline
   parts, as from desktop mail programs, and replies and forwards keep the original's.
@@ -441,6 +445,9 @@ node accounts.mjs    # one script per area; see the list below
 | `images.mjs` | images pasted, dropped and inserted, scaled down, image menu, continued draft, received inline |
 | `images-sources.mjs` | pasted web content with images, copying from a shown message, quoted images in a reply, insert from Files |
 | `workspace.mjs` | sender details, attachment cards, composer window, recipient chips, shortcuts |
+| `settings.mjs` | Settings: the size new messages open in, what the composer's Close does |
+| `appearance.mjs` | account colour and badge, order by dragging (rail, Settings), accounts left out of All accounts |
+| `windows.mjs` | messages read in their own window, a message being written moved to a window, writing in windows by default |
 | `layout.mjs` | multi-select, reading pane and density, folder pane |
 | `viewstate.mjs` | remembered folders and last view |
 | `filters.mjs` | previews and quick filters, in a folder and in the unified inbox |

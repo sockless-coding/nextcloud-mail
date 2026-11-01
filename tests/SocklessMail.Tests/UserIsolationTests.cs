@@ -44,6 +44,7 @@ public sealed class UserIsolationTests : IDisposable
         "PUT /api/accounts/{id}",
         "DELETE /api/accounts/{id}",
         "POST /api/accounts/{id}/test",
+        "PUT /api/accounts/{id}/appearance",
         "POST /api/accounts/test (accountId)",
     ];
 
@@ -60,6 +61,7 @@ public sealed class UserIsolationTests : IDisposable
             "PUT /api/accounts/{id}" => await client.PutAsJsonAsync($"/api/accounts/{id}", Input("Hijacked", "bobs password"), Ct),
             "DELETE /api/accounts/{id}" => await client.DeleteAsync($"/api/accounts/{id}", Ct),
             "POST /api/accounts/{id}/test" => await client.PostAsync($"/api/accounts/{id}/test", null, Ct),
+            "PUT /api/accounts/{id}/appearance" => await client.PutAsJsonAsync($"/api/accounts/{id}/appearance", new { color = "#000000", includeInUnified = false }, Ct),
             _ => await client.PostAsJsonAsync("/api/accounts/test", Input(password: null, accountId: id), Ct),
         };
 

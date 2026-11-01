@@ -57,6 +57,18 @@ public static class AccountEndpoints
         accounts.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal user, AccountService service, CancellationToken ct) =>
             await service.DeleteAsync(user.GetNextcloudUserId(), id, ct) ? Results.NoContent() : NotFound());
 
+        accounts.MapPut("/{id:guid}/appearance", async (Guid id, AppearanceInput input, ClaimsPrincipal user, AccountService service, CancellationToken ct) =>
+        {
+            if (input.Validate() is { Count: > 0 } errors)
+            {
+                return Results.ValidationProblem(errors);
+            }
+
+            return await service.SetAppearanceAsync(user.GetNextcloudUserId(), id, input, ct) is { } account
+                ? Results.Ok(AccountDto.From(account))
+                : NotFound();
+        });
+
         accounts.MapPut("/order", async (ReorderInput input, ClaimsPrincipal user, AccountService service, CancellationToken ct) =>
             await service.ReorderAsync(user.GetNextcloudUserId(), input.AccountIds ?? [], ct)
                 ? Results.NoContent()

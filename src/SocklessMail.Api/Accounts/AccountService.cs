@@ -137,6 +137,27 @@ public sealed class AccountService(
     }
 
     /// <summary>Sets the order; <paramref name="ids"/> must be exactly the user's accounts.</summary>
+    /// <summary>
+    /// How the account is shown (colour, badge, part of "All accounts"). Not a change of its
+    /// settings: connections stay and UpdatedAt is left alone.
+    /// </summary>
+    public async Task<MailAccount?> SetAppearanceAsync(string userId, Guid id, AppearanceInput input, CancellationToken ct)
+    {
+        var account = await GetAsync(userId, id, ct);
+        if (account is null)
+        {
+            return null;
+        }
+
+        static string? OrNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        account.Color = OrNull(input.Color)?.ToLowerInvariant();
+        account.BadgeText = OrNull(input.BadgeText);
+        account.BadgeIcon = OrNull(input.BadgeIcon);
+        account.IncludeInUnified = input.IncludeInUnified;
+        await db.SaveChangesAsync(ct);
+        return account;
+    }
+
     public async Task<bool> ReorderAsync(string userId, IReadOnlyList<Guid> ids, CancellationToken ct)
     {
         var accounts = await Owned(userId).ToListAsync(ct);

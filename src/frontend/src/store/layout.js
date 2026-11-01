@@ -1,7 +1,7 @@
 import { computed, reactive, watch } from 'vue'
 
 /**
- * View preferences (reading pane, density, folder pane, pane sizes, rich or plain text, sender logos) and the
+ * View preferences (reading pane, density, folder pane, pane sizes, rich or plain text, composer size and close button, sender logos) and the
  * window width they depend on. Kept in the browser's localStorage, per Nextcloud user: several users can share a
  * browser, and the head element names the logged-in one. Storage may be unavailable (private
  * windows, blocked site data); the defaults apply then.
@@ -20,6 +20,10 @@ const DEFAULTS = {
 	listHeight: 45,
 	/** How new messages are written: html (rich text) or text. */
 	composeFormat: 'html',
+	/** How the composer opens: small (docked at the bottom) or large. */
+	composerSize: 'small',
+	/** What the composer's close button does: keep (as a draft), ask, or discard. */
+	composerClose: 'keep',
 	/** Show senders' brand logos (BIMI) in place of their initials. */
 	senderLogos: true,
 	/** Warn about look-alike sender domains and the like (store/senders.js). */

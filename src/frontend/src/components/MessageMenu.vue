@@ -14,6 +14,12 @@
 					</template>
 					{{ t('sockless_mail', 'Open') }}
 				</NcActionButton>
+				<NcActionButton close-after-click @click="openMessageWindow(single, single.message.id)">
+					<template #icon>
+						<NcIconSvgWrapper :path="mdiOpenInNew" />
+					</template>
+					{{ t('sockless_mail', 'Open in new window') }}
+				</NcActionButton>
 				<NcActionButton v-for="mode in REPLIES"
 					:key="mode.id"
 					close-after-click
@@ -92,7 +98,7 @@
 </template>
 
 <script setup>
-import { mdiAccountPlusOutline, mdiClipboardCheckOutline, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFilterPlusOutline, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiReply, mdiReplyAll, mdiShare, mdiTagOutline } from '@mdi/js'
+import { mdiAccountPlusOutline, mdiClipboardCheckOutline, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFilterPlusOutline, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderMoveOutline, mdiOpenInNew, mdiReply, mdiReplyAll, mdiShare, mdiTagOutline } from '@mdi/js'
 import { showError } from '@nextcloud/dialogs/toast'
 import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -105,6 +111,7 @@ import { askMoveRows, askTags, canMoveRows, createRuleFrom, dialogs, removeRows,
 import { composeReply } from '../store/compose.js'
 import { emlUrl, mailboxState, openMessage } from '../store/mailbox.js'
 import { tasksState } from '../store/tasks.js'
+import { openMessageWindow } from '../store/windows.js'
 
 const props = defineProps({
 	/** The rows ({ accountId, folderId, message }) the menu acts on: one, or a selection. */
