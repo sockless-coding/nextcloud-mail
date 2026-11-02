@@ -65,7 +65,7 @@ public sealed class KeySharingTests : IDisposable
         using var buffer = new MemoryStream();
         await message.WriteToAsync(buffer, Ct);
         var raw = Encoding.ASCII.GetString(buffer.ToArray());
-        Assert.All(raw.Split("\r\n").TakeWhile(l => l.Length > 0), line => Assert.True(line.Length <= 998));
+        Assert.All(raw.Split('\n').Select(l => l.TrimEnd('\r')).TakeWhile(l => l.Length > 0), line => Assert.True(line.Length <= 998));
         buffer.Position = 0;
         var parsed = KeySharing.ParseAutocrypt((await MimeMessage.LoadAsync(buffer, Ct)).Headers[KeySharing.AutocryptHeader]!)!.Value;
         Assert.Equal("alice@example.com", parsed.Address);
