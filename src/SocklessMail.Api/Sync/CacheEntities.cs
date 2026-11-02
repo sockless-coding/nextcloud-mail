@@ -64,8 +64,14 @@ public sealed class CachedMessage
     public required AddressDto[] From { get; init; }
     public required AddressDto[] To { get; init; }
     public DateTimeOffset Date { get; init; }
-    public bool HasAttachments { get; init; }
+    public bool HasAttachments { get; set; }
     public long Size { get; init; }
+
+    /// <summary>
+    /// "encrypted", "signed" or "" (<see cref="Crypto.SecurityParts.Kind"/>); null for rows cached
+    /// before it was, which syncs fill in along with previews.
+    /// </summary>
+    public string? Security { get; set; }
 
     /// <summary>System flags only (\Seen, \Flagged, \Answered, \Deleted, \Draft); keywords are in <see cref="Keywords"/>.</summary>
     public MessageFlags Flags { get; set; }

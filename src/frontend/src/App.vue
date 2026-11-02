@@ -90,6 +90,8 @@
 
 		<Composer v-if="composer.draft" />
 
+		<UnlockKeyDialog v-if="unlockPrompt.keys" />
+
 		<AccountDialog v-if="dialogs.accountForm"
 			:account="dialogs.accountForm.account"
 			@saved="accountSaved"
@@ -177,6 +179,7 @@ import AddContactDialog from './components/AddContactDialog.vue'
 import AccountRail from './components/AccountRail.vue'
 import CommandBar from './components/CommandBar.vue'
 import Composer from './components/Composer.vue'
+import UnlockKeyDialog from './components/UnlockKeyDialog.vue'
 import FolderNameDialog from './components/FolderNameDialog.vue'
 import FolderPane from './components/FolderPane.vue'
 import MessageList from './components/MessageList.vue'
@@ -197,6 +200,7 @@ import { accountsState, loadAccounts } from './store/accounts.js'
 import { dialogs, removeFolder, removePermanently } from './store/actions.js'
 import { assistantTaskChanged, loadAssistant } from './store/assistant.js'
 import { composeNew, composer } from './store/compose.js'
+import { unlockPrompt } from './store/crypto.js'
 import { inboxChanged, inboxesSeen, startBadge } from './store/badge.js'
 import { attachFileIds, takeFileIdsFromUrl } from './store/files.js'
 import { closeDrawer, folderPaneShown, layout, readingPane, viewport } from './store/layout.js'

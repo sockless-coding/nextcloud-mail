@@ -74,6 +74,55 @@ Messages scheduled to be sent later are encrypted with the same key ring (purpos
 scheduled message), as files under `scheduled/`. One that can no longer be decrypted is not sent:
 it shows as failed.
 
+## Encryption keys
+
+Private OpenPGP keys and S/MIME certificates are kept as imported: still encrypted with their own
+passphrase or PKCS#12 password, and encrypted again with the app's key ring (purpose bound to the
+key id). A copy of the volume alone therefore does not open them. The passphrase has to be
+guessed as well, unless the key was imported without one.
+
+Decryption happens **on the server**. This is not end-to-end encryption against the server or
+its administrator:
+- While a key is unlocked, its passphrase is held in the app's memory. That lasts until it goes
+  unused for 30 minutes, the user locks their keys, or the app restarts. Someone who controls the
+  running container can read it, and so can read the user's encrypted mail.
+- Decrypted messages are kept in memory for 2 minutes, for their images and attachments. They
+  are never written to disk or to the database.
+- Decrypted text is not cached for lists or search, not given to rules, and not sent to the
+  Assistant, whose provider may be an outside service.
+
+Nothing is fetched to check a signature: no key servers, and no CRL or OCSP for S/MIME. S/MIME
+chains are built against the container's root certificates and the certificates the user
+imported. A signature is reported intact or not separately from whether its certificate is
+trusted. Whether the key belongs to the From address is reported separately too, so a valid
+signature from another address is not shown as the sender's.
+
+The API never returns private keys. Exports contain only the public key or certificate.
+
+**Sending**: encrypted mail is encrypted to the sender's own key too, and encrypted drafts only
+to it. Signing needs the private key unlocked; encrypting needs only public keys. Decrypted
+attachments and images of an encrypted message are refused in an unencrypted message or draft.
+
+**Finding recipients' keys** reveals whom the user writes to:
+- The recipient's domain (WKD) and keys.openpgp.org see the address being looked up. The composer
+  therefore looks only while Encrypt is on.
+- Those requests go through the same address policy as remote images, so a recipient's domain
+  cannot point the app at the local network. Answers are capped at 256 KiB.
+- A key is taken only if it names the address it was found for.
+- Keys found are kept and listed with their source, and can be deleted.
+- S/MIME certificates are taken from signed mail only when the chain is trusted and the
+  certificate names the From address.
+
+**Autocrypt** trusts on first use. A forged message can bring a key for an address the user has
+no key for yet, and from then on mail encrypted to that address would be readable by the forger.
+To limit that:
+- The key must name the From address, and the message must not have failed DMARC.
+- An Autocrypt key never replaces a key the user already has.
+- Kept keys are listed as "From an Autocrypt header", and can be compared (fingerprint) or deleted.
+
+**Publishing** on keys.openpgp.org happens only on the user's request. Only the public key is
+sent, and the key server publishes an address only after its owner opens the link it mails.
+
 ## Displaying mail
 
 Message HTML is attacker-controlled, and it is displayed inside the Nextcloud origin. There are

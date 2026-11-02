@@ -181,7 +181,8 @@ public sealed class TagFolders(MailDbContext db, AccountService accounts, Mailbo
         new MessageSummaryDto(
             MailboxIds.MessageId(m.UidValidity, m.Uid), m.Subject, m.From, m.To, m.Date, m.Seen, m.Flagged, m.Answered, m.HasAttachments,
             m.Size, m.Preview, string.IsNullOrEmpty(m.BimiDomain) ? null : new BimiDto(m.BimiDomain, m.BimiSelector), Keywords.ForClient(m.Keywords),
-            m.MessageIdHeader is { } header && conversations?.TryGetValue((m.AccountId, header), out var id) == true ? id : null));
+            m.MessageIdHeader is { } header && conversations?.TryGetValue((m.AccountId, header), out var id) == true ? id : null,
+            Crypto.SecurityParts.ForClient(m.Security)));
 
     private static (DateTimeOffset Date, long Id)? ParseCursor(string? value)
     {

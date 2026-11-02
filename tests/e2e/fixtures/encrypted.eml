@@ -1,0 +1,42 @@
+From: Bob <bob@example.org>
+Date: Mon, 02 Nov 2026 20:37:07 +0100
+Subject: ...
+Message-Id: <68BVH9D9QUU4.Z6KEGW7TO4GD1@ws>
+To: alice@example.test
+MIME-Version: 1.0
+Content-Type: multipart/encrypted; boundary="=-IDNvtUmrUoFUDrGM7u4DCQ==";
+	protocol="application/pgp-encrypted"
+
+--=-IDNvtUmrUoFUDrGM7u4DCQ==
+Content-Type: application/pgp-encrypted
+Content-Disposition: attachment
+Content-Transfer-Encoding: 7bit
+
+Version: 1
+
+--=-IDNvtUmrUoFUDrGM7u4DCQ==
+Content-Type: application/octet-stream
+Content-Disposition: attachment
+
+-----BEGIN PGP MESSAGE-----
+
+hQGMA6UVT/JPHN4FAQv/Q4mZepAv1yz9mEpEWzCyFTaXFCm4hwiD1FQZdt7dZVjH
+Q+SKmcQNE2Awaol/Pgk3mCwnrhlvv0o+ZK3E/DWmR4Ie0AVGA6OzPcqTOqXv2k3d
++xdW7zKmEDi/0Dr69GjAcyiyJ2qGFX7Zs73Rf5IZCxPexD22z4hq72dq0rtYGtHh
+EMT1/lVS+ZhMmYstfFe63TCMer1GigTD60rJcloCjT7Lz5Qt72kIH6SFTNq/g0Ls
+5pGRDioOXp4X+v0B3rvQvnC1+rbaKuxYEKEM+GJ4++/BEWl3nib8Zrwc+37LHTRq
+zEqDOuAzaB/q6STjg2itHrwyQoqndnSKMDdLov48Q5//hb9XYBlaWk17UccsEtMh
+I54T3JK+pdMcPNhDt49gKCSDYgIAAiYb+ktRplW9DVzb1xOHSXkZrTMktwKBFnQh
+ysVpAUIc5echSyNW4Tdx+fWPeMDmYg0xFjdPBKw+3R+cW/wFh0TvfgcAVcFzT8cZ
+lIlrKfmX3BRms2+64Fw/0sCIAeKrLm3JXV/qdjM6R+9GE2K6I9woA5LJ+6qS1sXb
+NnTvnKkmkAM0ev11JQy+e5sX693uoiyo2vpGQXpOaWFM98pg+J7G4ouCBRWnUR1V
+a/hLNh2GusvD5/IMoi19V/H3ubEfdb7gHt8BxMBq3Ha60xccrBGTBbGSlEn6lbgO
+vOFUhYOHaMKqhSw+EiBe12Z8M4X/K5+rIZw72PvmZU+BbVX44sbhHoR5woWOAdWK
+kS83LxlhDgPHhedZxrEY9Yi9eQbCYCYwVAZg6pL8KXpHgHmAbGYTrtaJRj7gASmN
+d67lrlDw9O6lhhLDdlVHyLfgUefMopBskpYqnrbkTN8KDuwBWOuLLXTAKf9W6cOd
+F7gq6D5rrdA44XnvZGgwZKXGYOS34WgjcOBSrIO9+ZNzd4230bK0dfeCJGqB51EO
+PJsuVYaVFbtqEA==
+=Q27y
+-----END PGP MESSAGE-----
+
+--=-IDNvtUmrUoFUDrGM7u4DCQ==--

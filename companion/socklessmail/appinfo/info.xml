@@ -10,7 +10,7 @@ It shows the same mail page at /apps/socklessmail/ instead of AppAPI's /apps/app
 and points the Sockless Mail entry of the app menu there. From that address the browser can install it as an app
 (named and pictured like the External App), which then shows the unread count on its icon. Everything else, including the mail page itself, still comes from the External App.]]></description>
 	<!-- Same version as the External App (appinfo/info.xml at the repository root). -->
-	<version>0.46.0</version>
+	<version>0.50.0</version>
 	<licence>MIT</licence>
 	<author>Jimmy Everling</author>
 	<namespace>SocklessMail</namespace>

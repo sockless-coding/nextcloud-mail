@@ -6,6 +6,7 @@ using MimeKit;
 using MimeKit.Utils;
 using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Compose;
+using SocklessMail.Api.Crypto;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Sync;
 
@@ -22,25 +23,54 @@ public sealed partial class MailboxService
 
     /// <summary>The fields a message is built from, sent or saved as a draft.</summary>
     private sealed record MessageFields(
-        string? To, string? Cc, string? Bcc, string? Subject, string? Text, string? Html, IReadOnlyList<string>? AttachmentIds, SendSource? Source);
+        string? To, string? Cc, string? Bcc, string? Subject, string? Text, string? Html, IReadOnlyList<string>? AttachmentIds, SendSource? Source,
+        SecurityInput? Security);
 
-    private sealed record ComposedMessage(MimeMessage Message, IReadOnlyList<UploadedAttachment> Uploads, int Recipients);
+    /// <param name="PlainAttachments">For an encrypted draft: its attachments as they will be found once it is decrypted.</param>
+    private sealed record ComposedMessage(MimeMessage Message, IReadOnlyList<UploadedAttachment> Uploads, int Recipients, AttachmentDto[]? PlainAttachments = null);
 
     public Task<DraftDto> GetDraftAsync(MailAccount account, string folderId, string messageId, ReplyMode mode, CancellationToken ct) =>
         Run(account, async (client, token) =>
         {
             var (folder, uid) = await OpenMessageAsync(client, folderId, messageId, token);
-            var summary = await FetchOneAsync(folder, uid, FolderCache.ListItems & ~MessageSummaryItems.PreviewText, token);
+            var summary = await FetchOneAsync(folder, uid,
+                new FetchRequest(FolderCache.ListItems & ~MessageSummaryItems.PreviewText, [OutgoingSecurity.DraftHeader]), token);
             var envelope = summary.Envelope ?? new Envelope();
-            var (text, html) = await BodiesAsync(folder, uid, summary, token);
-            var attachments = summary.Attachments.Select(ToAttachmentDto).ToArray();
+            string text, html;
+            AttachmentDto[] attachments;
+            // Content-ID → (part id, type) of the parts the HTML may show.
+            Dictionary<string, (string PartId, string MimeType)> parts;
+            SecurityInput? security = null;
+            var subjectOfSource = envelope.Subject;
+
+            var (shape, kind) = SecureShapeOf(summary.Body);
+            if (shape == SecureShape.Encrypted && (summary.Size ?? 0) <= MessageSecurity.MaxBytes)
+            {
+                // Answering encrypted mail quotes what it says; the answer starts out encrypted too.
+                var opened = await OpenSecureAsync(account, folderId, messageId, folder, uid, token);
+                var body = opened.Body ?? throw Unopened(opened.Security);
+                (text, html) = BodiesOf(body);
+                var view = ViewOf(body);
+                attachments = view.Attachments;
+                subjectOfSource = view.Subject ?? subjectOfSource;
+                parts = SecureLeaves(body)
+                    .Where(l => !string.IsNullOrEmpty(l.Entity.ContentId))
+                    .GroupBy(l => l.Entity.ContentId!.Trim().Trim('<', '>'), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => (g.First().Id, g.First().Entity.ContentType.MimeType.ToLowerInvariant()), StringComparer.OrdinalIgnoreCase);
+                security = new SecurityInput(true, false, opened.Security.Encryption?.Kind ?? kind);
+            }
+            else
+            {
+                (text, html) = await BodiesAsync(folder, uid, summary, token);
+                attachments = summary.Attachments.Select(ToAttachmentDto).ToArray();
+                parts = InlinePartsOf(summary).ToDictionary(p => p.Key, p => (MailboxIds.PartId(p.Value.PartSpecifier), p.Value.ContentType.MimeType.ToLowerInvariant()), StringComparer.OrdinalIgnoreCase);
+            }
 
             // The images the HTML shows from the message's own parts; the editor shows them, and
             // sending takes them from this message again (see LoadSourceAsync).
-            var parts = InlinePartsOf(summary);
             var images = OutgoingHtml.ContentIds(OutgoingHtml.SanitizeWithImages(html))
-                .Where(cid => parts.TryGetValue(cid, out var part) && OutgoingHtml.InlineImageTypes.Contains(part.ContentType.MimeType))
-                .Select(cid => new InlineImageDto(cid, MailboxIds.PartId(parts[cid].PartSpecifier)))
+                .Where(cid => parts.TryGetValue(cid, out var part) && OutgoingHtml.InlineImageTypes.Contains(part.MimeType))
+                .Select(cid => new InlineImageDto(cid, parts[cid].PartId))
                 .ToArray();
             var shown = images.Select(i => i.ContentId).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -55,7 +85,8 @@ public sealed partial class MailboxService
                     OutgoingHtml.KeepImages(OutgoingHtml.SanitizeWithImages(html), shown),
                     attachments,
                     new DraftSource(folderId, messageId, mode),
-                    images);
+                    images,
+                    OutgoingSecurity.FromHeader(summary.Headers?[OutgoingSecurity.DraftHeader]) ?? security);
             }
 
             var (to, cc) = ReplyBuilder.Recipients(mode, envelope.From, envelope.ReplyTo, envelope.To, envelope.Cc, account.EmailAddress);
@@ -64,13 +95,27 @@ public sealed partial class MailboxService
                 to.ToString(),
                 cc.ToString(),
                 "",
-                ReplyBuilder.Subject(mode, envelope.Subject),
-                ReplyBuilder.QuotedText(mode, date, envelope.From, envelope.To, envelope.Cc, envelope.Subject, text),
-                OutgoingHtml.Quote(mode, date, envelope.From, envelope.To, envelope.Cc, envelope.Subject, html, shown),
+                ReplyBuilder.Subject(mode, subjectOfSource),
+                ReplyBuilder.QuotedText(mode, date, envelope.From, envelope.To, envelope.Cc, subjectOfSource, text),
+                OutgoingHtml.Quote(mode, date, envelope.From, envelope.To, envelope.Cc, subjectOfSource, html, shown),
                 mode == ReplyMode.Forward ? attachments : [],
                 new DraftSource(folderId, messageId, mode),
-                images);
+                images,
+                security);
         }, ct);
+
+    /// <summary>Why an encrypted message could not be opened to answer it: a locked key (to unlock), or no key at all.</summary>
+    private static Exception Unopened(MessageSecurityDto security) => security.Encryption is { Status: "locked" } locked
+        ? new MessageProtectionException("key_locked", "Unlock your key to read the message you are answering.", keys: locked.Keys)
+        : new MailboxValidationException("source", "The encrypted message cannot be decrypted with your keys.");
+
+    /// <summary>Like <see cref="BodiesAsync"/>, for a decrypted message.</summary>
+    private static (string Text, string Html) BodiesOf(MimeEntity body)
+    {
+        var text = FindBody(body, html: false)?.Text;
+        var html = FindBody(body, html: true)?.Text;
+        return (text ?? (html is null ? "" : ReplyBuilder.HtmlToText(html)), html ?? OutgoingHtml.FromText(text ?? ""));
+    }
 
     /// <summary>A message's parts with a Content-ID (by it, without brackets): what its HTML can show inline.</summary>
     private static Dictionary<string, BodyPartBasic> InlinePartsOf(IMessageSummary summary) =>
@@ -134,7 +179,7 @@ public sealed partial class MailboxService
         }, ct, retry: false);
 
     private static MessageFields FieldsOf(SendInput input) =>
-        new(input.To, input.Cc, input.Bcc, input.Subject, input.Text, input.Html, input.AttachmentIds, input.Source);
+        new(input.To, input.Cc, input.Bcc, input.Subject, input.Text, input.Html, input.AttachmentIds, input.Source, input.Security);
 
     private void DeleteUploads(MailAccount account, ComposedMessage composed)
     {
@@ -180,7 +225,7 @@ public sealed partial class MailboxService
     public async Task<SaveDraftResult> SaveDraftAsync(MailAccount account, SaveDraftInput input, CancellationToken ct)
     {
         var composed = await ComposeAsync(account,
-            new MessageFields(input.To, input.Cc, input.Bcc, input.Subject, input.Text, input.Html, input.AttachmentIds, input.Source),
+            new MessageFields(input.To, input.Cc, input.Bcc, input.Subject, input.Text, input.Html, input.AttachmentIds, input.Source, input.Security),
             draft: true, ct);
         var editing = input.Source is { Mode: ReplyMode.Edit };
 
@@ -196,8 +241,8 @@ public sealed partial class MailboxService
             // Without UIDPLUS the server does not say where the message went.
             uid ??= (await drafts.SearchAsync(SearchQuery.HeaderContains("Message-ID", composed.Message.MessageId!), token)).Cast<UniqueId?>().LastOrDefault();
 
-            AttachmentDto[]? parts = null;
-            if (editing && uid is { } id)
+            var parts = editing ? composed.PlainAttachments : null;
+            if (editing && parts is null && uid is { } id)
             {
                 var summary = await FetchOneAsync(drafts, id, MessageSummaryItems.UniqueId | MessageSummaryItems.BodyStructure, token);
                 parts = summary.Attachments.Select(ToAttachmentDto).ToArray();
@@ -384,6 +429,7 @@ public sealed partial class MailboxService
         }
 
         var streams = new List<Stream>();
+        AttachmentDto[]? plainAttachments;
         try
         {
             long total = 0;
@@ -427,6 +473,24 @@ public sealed partial class MailboxService
             }
 
             message.Body = builder.ToMessageBody();
+            var encrypt = input.Security?.Encrypt ?? false;
+            if (original is { Encrypted: true } && !encrypt && (original.ForwardedParts.Count > 0 || original.InlineParts.Count > 0))
+            {
+                throw new MessageProtectionException("encryption_required",
+                    "Attachments and images of an encrypted message can only be sent or saved encrypted. Turn on Encrypt, or remove them.");
+            }
+
+            plainAttachments = draft && encrypt ? ViewOf(message.Body).Attachments : null;
+            if (!draft)
+            {
+                await keySharing.AddAutocryptAsync(account.OwnerUserId, message, ct);
+            }
+
+            if (input.Security is { Any: true } security)
+            {
+                // The uploads' streams are still open: the body is written out while protecting it.
+                await outgoing.ProtectAsync(account.OwnerUserId, message, security, draft, ct);
+            }
         }
         finally
         {
@@ -436,7 +500,7 @@ public sealed partial class MailboxService
             }
         }
 
-        return new ComposedMessage(message, [.. uploaded, .. inlineUploads.Select(i => i.Upload)], recipients);
+        return new ComposedMessage(message, [.. uploaded, .. inlineUploads.Select(i => i.Upload)], recipients, plainAttachments);
     }
 
     /// <summary>Parsed addresses, or for a draft whose field does not parse yet, the text as written.</summary>
@@ -545,9 +609,10 @@ public sealed partial class MailboxService
     private sealed record ForwardedPart(MimeEntity Entity, long Size);
 
     /// <param name="InlineParts">The source's parts the new HTML shows, by Content-ID.</param>
+    /// <param name="Encrypted">The source is encrypted: its parts here are decrypted.</param>
     private sealed record SourceMessage(
         string? MessageId, string? InReplyTo, IReadOnlyList<string> References, IReadOnlyList<ForwardedPart> ForwardedParts,
-        IReadOnlyDictionary<string, ForwardedPart> InlineParts);
+        IReadOnlyDictionary<string, ForwardedPart> InlineParts, bool Encrypted = false);
 
     private Task<SourceMessage> LoadSourceAsync(
         MailAccount account, SendSource source, IReadOnlyList<string> forwardPartIds, IReadOnlyList<string> inlineContentIds, CancellationToken ct) =>
@@ -555,7 +620,12 @@ public sealed partial class MailboxService
         {
             var (folder, uid) = await OpenMessageAsync(client, source.FolderId, source.MessageId, token);
             var summary = await FetchOneAsync(folder, uid,
-                MessageSummaryItems.UniqueId | MessageSummaryItems.Envelope | MessageSummaryItems.References | MessageSummaryItems.BodyStructure, token);
+                MessageSummaryItems.UniqueId | MessageSummaryItems.Envelope | MessageSummaryItems.References | MessageSummaryItems.BodyStructure
+                | MessageSummaryItems.Size, token);
+            if (SecureShapeOf(summary.Body).Shape == SecureShape.Encrypted && (summary.Size ?? 0) <= MessageSecurity.MaxBytes)
+            {
+                return await LoadSecureSourceAsync(account, source, summary, folder, uid, forwardPartIds, inlineContentIds, token);
+            }
 
             var parts = new List<ForwardedPart>();
             foreach (var partId in forwardPartIds.Distinct())
@@ -598,6 +668,60 @@ public sealed partial class MailboxService
                 parts,
                 inline);
         }, ct);
+
+    /// <summary>The source's decrypted parts: attachments by "c" id, images by Content-ID. Each a copy, as the opened message is shared.</summary>
+    private async Task<SourceMessage> LoadSecureSourceAsync(
+        MailAccount account, SendSource source, IMessageSummary summary, IMailFolder folder, UniqueId uid,
+        IReadOnlyList<string> forwardPartIds, IReadOnlyList<string> inlineContentIds, CancellationToken ct)
+    {
+        var opened = await OpenSecureAsync(account, source.FolderId, source.MessageId, folder, uid, ct);
+        var body = opened.Body ?? throw Unopened(opened.Security);
+        var leaves = SecureLeaves(body).ToList();
+
+        var parts = new List<ForwardedPart>();
+        foreach (var partId in forwardPartIds.Distinct())
+        {
+            var leaf = leaves.FirstOrDefault(l => l.Id == partId && (l.Entity.IsAttachment || l.Entity is MessagePart));
+            if (leaf.Entity is null)
+            {
+                throw new MailboxValidationException("source", "An attachment of the forwarded message no longer exists.");
+            }
+
+            var entity = await CopyAsync(leaf.Entity, ct);
+            if (entity is MimePart mime)
+            {
+                var name = FileNameOf(leaf.Entity, partId);
+                mime.FileName = name;
+                mime.ContentDisposition ??= new ContentDisposition(ContentDisposition.Attachment);
+                mime.ContentDisposition.FileName = name;
+            }
+
+            parts.Add(new ForwardedPart(entity, DecodedSize(leaf.Entity) ?? 0));
+        }
+
+        var inline = new Dictionary<string, ForwardedPart>(StringComparer.OrdinalIgnoreCase);
+        foreach (var contentId in inlineContentIds)
+        {
+            var leaf = leaves.FirstOrDefault(l => l.Entity is MimePart && string.Equals(l.Entity.ContentId?.Trim().Trim('<', '>'), contentId, StringComparison.OrdinalIgnoreCase));
+            if (leaf.Entity is MimePart && OutgoingHtml.InlineImageTypes.Contains(leaf.Entity.ContentType.MimeType.ToLowerInvariant())
+                && await CopyAsync(leaf.Entity, ct) is MimePart image)
+            {
+                image.ContentId = contentId;
+                image.ContentDisposition ??= new ContentDisposition(ContentDisposition.Inline);
+                inline[contentId] = new ForwardedPart(image, DecodedSize(leaf.Entity) ?? 0);
+            }
+        }
+
+        return new SourceMessage(summary.Envelope?.MessageId, summary.Envelope?.InReplyTo, summary.References?.ToList() ?? [], parts, inline, Encrypted: true);
+    }
+
+    private static async Task<MimeEntity> CopyAsync(MimeEntity entity, CancellationToken ct)
+    {
+        using var buffer = new MemoryStream();
+        await entity.WriteToAsync(buffer, ct);
+        buffer.Position = 0;
+        return await MimeEntity.LoadAsync(buffer, ct);
+    }
 
     /// <summary>What a message says, as plain text, with who sent it and when (for a task made from it).</summary>
     public Task<MessageText> GetMessageTextAsync(MailAccount account, string folderId, string messageId, CancellationToken ct) =>

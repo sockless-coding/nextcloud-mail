@@ -135,6 +135,8 @@
 				</li>
 			</ul>
 
+			<ComposerSecurity :draft="draft" />
+
 			<NcNoteCard v-if="errors.attachmentIds" type="error" :text="errors.attachmentIds" />
 			<NcNoteCard v-if="generalError" type="error" :text="generalError" />
 		</div>
@@ -210,6 +212,32 @@
 					</template>
 					{{ t('sockless_mail', 'Share link from Files') }}
 				</NcActionButton>
+			</NcActions>
+			<NcActions variant="tertiary"
+				class="composer__security"
+				:class="{ 'composer__security--on': draft.security.encrypt || draft.security.sign }"
+				:title="securityTitle"
+				:aria-label="t('sockless_mail', 'Encryption and signature')">
+				<template #icon>
+					<NcIconSvgWrapper :path="draft.security.encrypt ? mdiLockOutline : draft.security.sign ? mdiCertificateOutline : mdiLockOpenVariantOutline" />
+				</template>
+				<NcActionCheckbox :model-value="draft.security.encrypt" @update:model-value="setEncrypt">
+					{{ t('sockless_mail', 'Encrypt') }}
+				</NcActionCheckbox>
+				<NcActionCheckbox v-model="draft.security.sign">
+					{{ t('sockless_mail', 'Sign') }}
+				</NcActionCheckbox>
+				<NcActionSeparator />
+				<NcActionRadio v-model="draft.security.kind" value="openpgp" name="composer-security-kind">
+					OpenPGP
+				</NcActionRadio>
+				<NcActionRadio v-model="draft.security.kind" value="smime" name="composer-security-kind">
+					S/MIME
+				</NcActionRadio>
+				<NcActionSeparator v-if="draft.security.kind === 'openpgp'" />
+				<NcActionCheckbox v-if="draft.security.kind === 'openpgp'" v-model="draft.security.attachKey">
+					{{ t('sockless_mail', 'Attach my public key') }}
+				</NcActionCheckbox>
 			</NcActions>
 			<!-- Icon only: with its name the footer no longer fits a docked composer. -->
 			<NcActions v-if="assistantState.write || assistantState.rewrite.length"
@@ -296,10 +324,12 @@
 </template>
 
 <script setup>
-import { mdiArrowCollapse, mdiArrowExpand, mdiCalendarClock, mdiClockOutline, mdiClose, mdiCogOutline, mdiDeleteOutline, mdiEmoticonHappyOutline, mdiFolderOutline, mdiFormatLetterCase, mdiFormatText, mdiLinkVariant, mdiOpenInNew, mdiPaperclip, mdiPencilOutline, mdiSend, mdiSendClockOutline, mdiSpellcheck, mdiTextShort, mdiTranslate, mdiUndo, mdiUpload, mdiWindowMinimize, mdiWindowRestore } from '@mdi/js'
+import { mdiArrowCollapse, mdiArrowExpand, mdiCalendarClock, mdiCertificateOutline, mdiLockOpenVariantOutline, mdiLockOutline, mdiClockOutline, mdiClose, mdiCogOutline, mdiDeleteOutline, mdiEmoticonHappyOutline, mdiFolderOutline, mdiFormatLetterCase, mdiFormatText, mdiLinkVariant, mdiOpenInNew, mdiPaperclip, mdiPencilOutline, mdiSend, mdiSendClockOutline, mdiSpellcheck, mdiTextShort, mdiTranslate, mdiUndo, mdiUpload, mdiWindowMinimize, mdiWindowRestore } from '@mdi/js'
 import { showError, showWarning } from '@nextcloud/dialogs/toast'
 import { getCanonicalLocale, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
+import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -312,12 +342,14 @@ import { accountsState } from '../store/accounts.js'
 import { dialogs } from '../store/actions.js'
 import { assistantState } from '../store/assistant.js'
 import { attach, closeComposer, composer, detach, hasContent, saveSoon, scheduleSend, send, textToHtml, uploadsPending } from '../store/compose.js'
+import { UnlockCancelled } from '../store/crypto.js'
 import { attachFromFiles as pickAndAttach, createShareLinks } from '../store/files.js'
 import { layout } from '../store/layout.js'
 import { formatSendTime, offeredPresets } from '../store/sendLater.js'
 import { popOutComposer, windowMode } from '../store/windows.js'
 import AssistantComposeDialog from './AssistantComposeDialog.vue'
 import AssistantIcon from './AssistantIcon.vue'
+import ComposerSecurity from './ComposerSecurity.vue'
 import RecipientInput from './RecipientInput.vue'
 import RichEditor from './RichEditor.vue'
 import SendLaterDialog from './SendLaterDialog.vue'
@@ -348,8 +380,34 @@ const saveText = computed(() => ({
 })[composer.saveStatus] ?? '')
 
 // What the user changes, not what saving writes back (saved copy, source, attachments).
-watch(() => [draft.accountId, draft.to, draft.cc, draft.bcc, draft.subject, draft.format, draft.html, draft.text, draft.forwarded.map((a) => a.include).join()],
-	() => saveSoon())
+watch(() => [draft.accountId, draft.to, draft.cc, draft.bcc, draft.subject, draft.format, draft.html, draft.text, draft.forwarded.map((a) => a.include).join(),
+	JSON.stringify(draft.security)],
+() => saveSoon())
+
+const securityTitle = computed(() => {
+	const kind = draft.security.kind === 'smime' ? 'S/MIME' : 'OpenPGP'
+	const options = { escape: false, sanitize: false }
+	if (draft.security.encrypt && draft.security.sign) {
+		return t('sockless_mail', 'Encrypted and signed ({kind})', { kind }, undefined, options)
+	}
+	if (draft.security.encrypt) {
+		return t('sockless_mail', 'Encrypted ({kind})', { kind }, undefined, options)
+	}
+	return draft.security.sign ? t('sockless_mail', 'Signed ({kind})', { kind }, undefined, options) : t('sockless_mail', 'Not encrypted')
+})
+
+/**
+ * An answer to encrypted mail quotes it: sending that unencrypted asks first.
+ *
+ * @param {boolean} encrypt the new choice
+ */
+function setEncrypt(encrypt) {
+	if (!encrypt && draft.sourceEncrypted
+		&& !window.confirm(t('sockless_mail', 'The message you are answering was encrypted, and yours quotes it. Send it unencrypted anyway?'))) {
+		return
+	}
+	draft.security.encrypt = encrypt
+}
 
 /**
  * The editor rewrites loaded HTML in its own form (<b> becomes <strong>, a trailing paragraph is
@@ -587,6 +645,9 @@ async function submit(sendAt) {
 		await (sendAt instanceof Date ? scheduleSend(sendAt) : send())
 		closeComposer('sent')
 	} catch (e) {
+		if (e instanceof UnlockCancelled) {
+			return
+		}
 		const { sendAt: timeError, ...fieldErrors } = e.fieldErrors ?? {}
 		errors.value = fieldErrors
 		if (errors.value.cc || errors.value.bcc) {
@@ -1023,6 +1084,10 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 
 .composer__editor {
 	min-height: 220px;
+}
+
+.composer__security--on :deep(.button-vue) {
+	color: var(--color-primary-element);
 }
 
 .composer__status {

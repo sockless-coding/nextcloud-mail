@@ -103,7 +103,15 @@ public sealed class NextcloudContacts(NextcloudClient nextcloud, ILogger<Nextclo
     }
 
     /// <summary>Adds an address to an existing contact, keeping everything else in the card as it was.</summary>
-    public async Task AddEmailAsync(string userId, string contactId, string email, CancellationToken ct)
+    public Task AddEmailAsync(string userId, string contactId, string email, CancellationToken ct) =>
+        UpdateAsync(userId, contactId, text => VCard.Parse(text).Emails.Contains(email, StringComparer.OrdinalIgnoreCase) ? null : VCard.AddEmail(text, email), ct);
+
+    /// <summary>Adds a public key or certificate (KEY) to an existing contact; nothing when it has it already.</summary>
+    public Task AddKeyAsync(string userId, string contactId, byte[] key, bool certificate, CancellationToken ct) =>
+        UpdateAsync(userId, contactId, text => VCard.AddKey(text, key, certificate), ct);
+
+    /// <summary>Reads a card, changes its text (null: nothing to change) and writes it back unless someone changed it meanwhile.</summary>
+    private async Task UpdateAsync(string userId, string contactId, Func<string, string?> change, CancellationToken ct)
     {
         var (bookId, cardName) = SplitId(contactId);
         string text;
@@ -121,14 +129,14 @@ public sealed class NextcloudContacts(NextcloudClient nextcloud, ILogger<Nextclo
             etag = response.Headers.ETag;
         }
 
-        if (VCard.Parse(text).Emails.Contains(email, StringComparer.OrdinalIgnoreCase))
+        if (change(text) is not { } changed)
         {
             return;
         }
 
         using var put = new HttpRequestMessage(HttpMethod.Put, CardUrl(userId, bookId, cardName))
         {
-            Content = new StringContent(VCard.AddEmail(text, email), Encoding.UTF8, "text/vcard"),
+            Content = new StringContent(changed, Encoding.UTF8, "text/vcard"),
         };
         if (etag is not null)
         {

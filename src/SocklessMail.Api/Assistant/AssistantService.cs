@@ -235,6 +235,12 @@ public sealed partial class AssistantService(
         }
 
         var message = await mailbox.GetMessageAsync(account, folderId, messageId, false, ct);
+        if (message.Security?.Encryption is not null)
+        {
+            // What was decrypted stays here; the provider may be outside this server.
+            throw new AssistantException("encrypted", "Encrypted messages are not given to the Assistant.", StatusCodes.Status409Conflict);
+        }
+
         var raw = await mailbox.GetHeadersAsync(account, folderId, messageId, ct);
         var headers = HeaderList.Load(new MemoryStream(Encoding.UTF8.GetBytes(raw.Headers)), ct);
         var language = input.Language is { Length: > 0 and <= 40 } l && LanguageName().IsMatch(l) ? l : "English";

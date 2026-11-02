@@ -6,6 +6,7 @@ using MimeKit.Text;
 using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Bimi;
 using SocklessMail.Api.Compose;
+using SocklessMail.Api.Crypto;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Sync;
 using SocklessMail.Api.OAuth;
@@ -30,7 +31,7 @@ public sealed partial class MailboxService(
     ImapConnections imap, MailLogins logins, ImageProxyTokens proxyTokens,
     MailServerConnector connector, AttachmentUploads uploads, FolderCache cache, SyncLocks syncLocks,
     MailboxWatchers watchers, RuleEngine rules, BimiSenders bimi, FolderRoles roles, SenderChecks senderChecks, TagIndex tagIndex, TagStore tagStore, OutlookCategories outlook,
-    TimeProvider clock, ILogger<MailboxService> logger)
+    MessageSecurity security, DecryptedMessages decrypted, OutgoingSecurity outgoing, KeySharing keySharing, TimeProvider clock, ILogger<MailboxService> logger)
 {
     public const int DefaultPageSize = 50;
     public const int MaxPageSize = 100;
@@ -178,7 +179,7 @@ public sealed partial class MailboxService(
                 var batch = matches.Skip(read).Take(limit - kept.Count).ToList();
                 read += batch.Count;
                 var structures = await folder.FetchAsync(batch, MessageSummaryItems.UniqueId | MessageSummaryItems.BodyStructure, token);
-                kept.AddRange(structures.Where(s => s.Attachments.Any()));
+                kept.AddRange(structures.Where(Crypto.SecurityParts.HasAttachments));
             }
 
             var withAttachments = kept.Count == 0 ? [] : await folder.FetchAsync(kept.Select(s => s.UniqueId).ToList(), FolderCache.ListRequest(), token);
@@ -310,36 +311,77 @@ public sealed partial class MailboxService(
 
     public async Task<MessageDto> GetMessageAsync(MailAccount account, string folderId, string messageId, bool allowRemote, CancellationToken ct)
     {
-        var (message, dmarcFailed, links) = await Run(account, async (client, token) =>
+        var (message, dmarcFailed, links, autocrypt) = await Run(account, async (client, token) =>
         {
             var (folder, uid) = await OpenMessageAsync(client, folderId, messageId, token);
             // The view shows the text itself, not a preview of it.
-            var summary = await FetchOneAsync(folder, uid, FolderCache.ListRequest(FolderCache.ListItems & ~MessageSummaryItems.PreviewText), token);
+            var summary = await FetchOneAsync(folder, uid,
+                new FetchRequest(FolderCache.ListItems & ~MessageSummaryItems.PreviewText, [.. BimiSenders.Headers, KeySharing.AutocryptHeader]), token);
+
+            string PartPath(string partId) =>
+                $"accounts/{account.Id}/folders/{folderId}/messages/{messageId}/parts/{partId}";
 
             var html = "";
-            BodyPartText? bodyPart = summary.HtmlBody ?? summary.TextBody;
-            if (bodyPart is not null && await FetchPartAsync(folder, uid, bodyPart, token) is TextPart text)
+            AttachmentDto[] attachments;
+            CalendarPartDto[] calendarParts;
+            IReadOnlyDictionary<string, string> inline;
+            MessageSecurityDto? securityResult = null;
+            string? innerSubject = null;
+            var (shape, kind) = SecureShapeOf(summary.Body);
+            if (shape != SecureShape.None && (summary.Size ?? 0) <= MessageSecurity.MaxBytes)
             {
-                html = text.IsHtml ? text.Text : PlainTextToHtml(text);
+                var opened = await OpenSecureAsync(account, folderId, messageId, folder, uid, token);
+                securityResult = opened.Security;
+                var view = opened.Body is { } body ? ViewOf(body) : new SecureView("", new Dictionary<string, string>(), [], [], null);
+                html = view.Html;
+                inline = view.InlineParts;
+                attachments = view.Attachments;
+                calendarParts = view.CalendarParts;
+                innerSubject = view.Subject;
             }
+            else
+            {
+                if (shape != SecureShape.None)
+                {
+                    securityResult = TooLarge(shape, kind);
+                }
 
-            string PartPath(BodyPartBasic part) =>
-                $"accounts/{account.Id}/folders/{folderId}/messages/{messageId}/parts/{MailboxIds.PartId(part.PartSpecifier)}";
+                BodyPartText? bodyPart = summary.HtmlBody ?? summary.TextBody;
+                if (bodyPart is not null && await FetchPartAsync(folder, uid, bodyPart, token) is TextPart text)
+                {
+                    if (text.IsPlain && MessageSecurity.HasInlinePgp(text.Text))
+                    {
+                        var from = summary.Envelope?.From.Mailboxes.Select(m => m.Address) ?? [];
+                        var (opened, inlineSecurity) = await security.OpenInlineAsync(account.OwnerUserId, text.Text, from, token);
+                        if (inlineSecurity is not null)
+                        {
+                            securityResult = inlineSecurity;
+                            text = new TextPart(text.ContentType.MediaSubtype) { Text = opened };
+                        }
+                    }
 
-            var inline = LeafParts(summary.Body)
-                .Where(p => !string.IsNullOrEmpty(p.ContentId))
-                .GroupBy(p => p.ContentId!.Trim('<', '>'), StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(g => g.Key, g => PartPath(g.First()), StringComparer.OrdinalIgnoreCase);
+                    html = text.IsHtml ? text.Text : PlainTextToHtml(text);
+                }
+
+                inline = LeafParts(summary.Body)
+                    .Where(p => !string.IsNullOrEmpty(p.ContentId))
+                    .GroupBy(p => p.ContentId!.Trim('<', '>'), StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(g => g.Key, g => MailboxIds.PartId(g.First().PartSpecifier), StringComparer.OrdinalIgnoreCase);
+                attachments = summary.Attachments.Select(ToAttachmentDto).ToArray();
+                calendarParts = LeafParts(summary.Body).Where(IsCalendarPart)
+                    .Select(p => new CalendarPartDto(MailboxIds.PartId(p.PartSpecifier), p.ContentType.Parameters["method"]?.Trim().ToUpperInvariant()))
+                    .ToArray();
+            }
 
             var sanitized = MessageHtmlSanitizer.Sanitize(
                 html,
-                cid => inline.GetValueOrDefault(cid),
+                cid => inline.TryGetValue(cid, out var partId) ? PartPath(partId) : null,
                 allowRemote ? url => $"image-proxy?token={proxyTokens.Create(account.OwnerUserId, url)}" : null);
 
             var envelope = summary.Envelope ?? new Envelope();
             return (new MessageDto(
                 messageId,
-                envelope.Subject ?? "",
+                innerSubject ?? envelope.Subject ?? "",
                 AddressDto.From(envelope.From),
                 AddressDto.From(envelope.To),
                 AddressDto.From(envelope.Cc),
@@ -350,13 +392,12 @@ public sealed partial class MailboxService(
                 sanitized.Html,
                 sanitized.HasRemoteContent,
                 allowRemote,
-                summary.Attachments.Select(ToAttachmentDto).ToArray(),
+                attachments,
                 bimi.Find(summary),
-                LeafParts(summary.Body).Where(IsCalendarPart)
-                    .Select(p => new CalendarPartDto(MailboxIds.PartId(p.PartSpecifier), p.ContentType.Parameters["method"]?.Trim().ToUpperInvariant()))
-                    .ToArray(),
+                calendarParts,
                 null,
-                Tags.Keywords.ForClient(summary.Keywords)), bimi.FailedDmarc(envelope.From, summary.Headers), sanitized.LinkMismatches);
+                Tags.Keywords.ForClient(summary.Keywords),
+                securityResult), bimi.FailedDmarc(envelope.From, summary.Headers), sanitized.LinkMismatches, summary.Headers?[KeySharing.AutocryptHeader]);
         }, ct);
 
         if ((await tagIndex.StorageAsync(account.Id, ct)).IsAppKept()
@@ -366,17 +407,41 @@ public sealed partial class MailboxService(
             message = message with { Keywords = Tags.Keywords.ForClient(local.GetValueOrDefault(uid)) };
         }
 
+        try
+        {
+            // The sender's key, for answering encrypted (Autocrypt; only a first key per address).
+            await keySharing.TakeAutocryptAsync(account.OwnerUserId, autocrypt, InternetAddressList.TryParse(string.Join(", ", message.From.Select(f => f.Address)), out var from) ? from : null, dmarcFailed, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger.LogWarning("Keeping the Autocrypt key of a message failed ({ExceptionType})", e.GetType().Name);
+        }
+
         return message with { SenderWarning = await senderChecks.CheckMessageAsync(account.OwnerUserId, message.From, message.ReplyTo, dmarcFailed, links, ct) };
     }
 
     /// <summary>Calendar data travels as text/calendar (iMIP), sometimes as application/ics or just an .ics file.</summary>
-    private static bool IsCalendarPart(BodyPartBasic part) =>
-        part.ContentType.IsMimeType("text", "calendar") || part.ContentType.IsMimeType("application", "ics")
-        || (part.FileName ?? part.ContentType.Name ?? "").EndsWith(".ics", StringComparison.OrdinalIgnoreCase);
+    private static bool IsCalendarPart(BodyPartBasic part) => IsCalendarPart(part.ContentType, part.FileName);
+
+    private static bool IsCalendarPart(ContentType type, string? fileName) =>
+        type.IsMimeType("text", "calendar") || type.IsMimeType("application", "ics")
+        || (fileName ?? type.Name ?? "").EndsWith(".ics", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The text of a calendar part (at most <see cref="MaxCalendarBytes"/>).</summary>
-    public Task<string> GetCalendarTextAsync(MailAccount account, string folderId, string messageId, string partId, CancellationToken ct) =>
-        Run(account, async (client, token) =>
+    public async Task<string> GetCalendarTextAsync(MailAccount account, string folderId, string messageId, string partId, CancellationToken ct)
+    {
+        if (IsSecurePartId(partId))
+        {
+            var entity = await SecurePartAsync(account, folderId, messageId, partId, ct);
+            if (entity is not MimePart { Content: not null } calendar || !IsCalendarPart(calendar.ContentType, calendar.FileName))
+            {
+                throw new MailboxNotFoundException("The calendar part");
+            }
+
+            return await CalendarTextAsync(calendar, ct);
+        }
+
+        return await Run(account, async (client, token) =>
         {
             var (folder, uid) = await OpenMessageAsync(client, folderId, messageId, token);
             var summary = await FetchOneAsync(folder, uid, MessageSummaryItems.UniqueId | MessageSummaryItems.BodyStructure, token);
@@ -393,16 +458,22 @@ public sealed partial class MailboxService(
                 throw new MailboxNotFoundException("The calendar part");
             }
 
-            using var buffer = new MemoryStream();
-            await mime.Content.DecodeToAsync(buffer, token);
-            if (buffer.Length > MaxCalendarBytes)
-            {
-                throw new MailboxValidationException("partId", "The calendar data is too large.");
-            }
-
-            // A text part decodes its charset; an application/ics file is UTF-8 by definition.
-            return mime is TextPart text ? text.Text : System.Text.Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+            return await CalendarTextAsync(mime, token);
         }, ct);
+    }
+
+    private static async Task<string> CalendarTextAsync(MimePart mime, CancellationToken ct)
+    {
+        using var buffer = new MemoryStream();
+        await mime.Content!.DecodeToAsync(buffer, ct);
+        if (buffer.Length > MaxCalendarBytes)
+        {
+            throw new MailboxValidationException("partId", "The calendar data is too large.");
+        }
+
+        // A text part decodes its charset; an application/ics file is UTF-8 by definition.
+        return mime is TextPart text ? text.Text : System.Text.Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+    }
 
     public const int MaxCalendarBytes = 1024 * 1024;
 
@@ -412,8 +483,14 @@ public sealed partial class MailboxService(
         part.ContentType.MimeType.ToLowerInvariant(),
         part.Octets > 0 ? part.Octets : null);
 
-    public Task<PartContent> GetPartAsync(MailAccount account, string folderId, string messageId, string partId, CancellationToken ct) =>
-        Run(account, async (client, token) =>
+    public async Task<PartContent> GetPartAsync(MailAccount account, string folderId, string messageId, string partId, CancellationToken ct)
+    {
+        if (IsSecurePartId(partId))
+        {
+            return SecurePartContent(partId, await SecurePartAsync(account, folderId, messageId, partId, ct));
+        }
+
+        return await Run(account, async (client, token) =>
         {
             var (folder, uid) = await OpenMessageAsync(client, folderId, messageId, token);
             var summary = await FetchOneAsync(folder, uid, MessageSummaryItems.UniqueId | MessageSummaryItems.BodyStructure, token);
@@ -433,6 +510,7 @@ public sealed partial class MailboxService(
                 _ => throw new MailboxNotFoundException("The message part"),
             };
         }, ct);
+    }
 
     /// <param name="retry">Repeat on a fresh connection if the pooled one turned out dead; only for operations safe to repeat.</param>
     private async Task<T> Run<T>(MailAccount account, Func<ImapClient, CancellationToken, Task<T>> action, CancellationToken ct, bool retry = true) =>
@@ -548,12 +626,14 @@ public sealed partial class MailboxService(
         return converter.Convert(text.Text);
     }
 
-    private static string FileNameOf(BodyPartBasic part)
+    private static string FileNameOf(BodyPartBasic part) =>
+        CleanFileName(part.FileName ?? part.ContentType.Name, part is BodyPartMessage, MailboxIds.PartId(part.PartSpecifier));
+
+    private static string CleanFileName(string? name, bool isMessage, string partId)
     {
-        var name = part.FileName ?? part.ContentType.Name;
         if (string.IsNullOrWhiteSpace(name))
         {
-            name = part is BodyPartMessage ? "message.eml" : $"part-{MailboxIds.PartId(part.PartSpecifier)}";
+            name = isMessage ? "message.eml" : $"part-{partId}";
         }
 
         // Never trust a sender's file name as a path.
@@ -573,11 +653,12 @@ public sealed partial class MailboxService(
         s.Flags?.HasFlag(MessageFlags.Seen) ?? false,
         s.Flags?.HasFlag(MessageFlags.Flagged) ?? false,
         s.Flags?.HasFlag(MessageFlags.Answered) ?? false,
-        s.Attachments.Any(),
+        Crypto.SecurityParts.HasAttachments(s),
         (long)(s.Size ?? 0),
         MessagePreview.Normalize(s.PreviewText),
         bimi.Find(s),
-        Tags.Keywords.ForClient(s.Keywords));
+        Tags.Keywords.ForClient(s.Keywords),
+        Security: Crypto.SecurityParts.ForClient(Crypto.SecurityParts.Kind(s)));
 
     private static FolderDto ToDto(IMailFolder f)
     {

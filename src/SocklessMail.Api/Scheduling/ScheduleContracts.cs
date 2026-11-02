@@ -1,4 +1,5 @@
 using SocklessMail.Api.Compose;
+using SocklessMail.Api.Crypto;
 using SocklessMail.Api.Mailbox;
 
 namespace SocklessMail.Api.Scheduling;
@@ -14,9 +15,10 @@ public sealed record ScheduleInput(
     IReadOnlyList<string>? AttachmentIds,
     SendSource? Source,
     string? Html = null,
-    SavedDraftRef? Draft = null)
+    SavedDraftRef? Draft = null,
+    SecurityInput? Security = null)
 {
-    public SendInput ToSendInput() => new(To, Cc, Bcc, Subject, Text, AttachmentIds, Source, Html, Draft);
+    public SendInput ToSendInput() => new(To, Cc, Bcc, Subject, Text, AttachmentIds, Source, Html, Draft, Security);
 }
 
 public sealed record RescheduleInput(DateTimeOffset? SendAt);

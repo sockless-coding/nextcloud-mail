@@ -84,6 +84,10 @@ public sealed class TaggedMessage
     public bool Flagged { get; set; }
     public bool Answered { get; set; }
     public bool HasAttachments { get; set; }
+
+    /// <summary>"encrypted", "signed", "" or null (not known yet), as on <see cref="Sync.CachedMessage.Security"/>.</summary>
+    public string? Security { get; set; }
+
     public long Size { get; set; }
     public string? Preview { get; set; }
     public string? BimiDomain { get; set; }

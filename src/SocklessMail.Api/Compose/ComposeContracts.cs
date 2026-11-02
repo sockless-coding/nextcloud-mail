@@ -1,3 +1,4 @@
+using SocklessMail.Api.Crypto;
 using SocklessMail.Api.Mailbox;
 
 namespace SocklessMail.Api.Compose;
@@ -20,10 +21,12 @@ public sealed record DraftSource(string FolderId, string MessageId, ReplyMode Mo
 /// would type them ("Ann &lt;ann@example.com&gt;, bob@example.com"). <see cref="Html"/> is the
 /// same content for the rich-text editor (see <see cref="OutgoingHtml"/>); its images refer to
 /// parts of the source by Content-ID, which <see cref="InlineImages"/> lists to show them.
+/// <see cref="Security"/> is what the composer should start with: encrypted for an answer to
+/// encrypted mail, or what a continued draft was saved with.
 /// </summary>
 public sealed record DraftDto(
     string To, string Cc, string Bcc, string Subject, string Text, string Html, AttachmentDto[] ForwardedAttachments, DraftSource Source,
-    InlineImageDto[] InlineImages);
+    InlineImageDto[] InlineImages, SecurityInput? Security = null);
 
 /// <summary>An image in a draft's HTML (<c>src="cid:ContentId"</c>) and the part of the source holding it.</summary>
 public sealed record InlineImageDto(string ContentId, string PartId);
@@ -48,7 +51,8 @@ public sealed record SendInput(
     IReadOnlyList<string>? AttachmentIds,
     SendSource? Source,
     string? Html = null,
-    SavedDraftRef? Draft = null);
+    SavedDraftRef? Draft = null,
+    SecurityInput? Security = null);
 
 /// <summary>
 /// A draft to save, built like <see cref="SendInput"/> but nothing is required and addresses may
@@ -64,7 +68,8 @@ public sealed record SaveDraftInput(
     string? Html,
     IReadOnlyList<string>? AttachmentIds,
     SendSource? Source,
-    SavedDraftRef? Replaces);
+    SavedDraftRef? Replaces,
+    SecurityInput? Security = null);
 
 /// <summary>
 /// Where the draft was saved. <see cref="MessageId"/> is null when the server did not say

@@ -4,6 +4,7 @@ using MailKit;
 using MailKit.Net.Imap;
 using SocklessMail.Api.Accounts;
 using SocklessMail.Api.AppApi;
+using SocklessMail.Api.Crypto;
 using SocklessMail.Api.Mail;
 using SocklessMail.Api.Mailbox;
 using SocklessMail.Api.OAuth;
@@ -294,6 +295,10 @@ public static class MailboxEndpoints
             catch (MailboxValidationException e)
             {
                 return Results.ValidationProblem(new Dictionary<string, string[]> { [e.Field] = [e.Message] });
+            }
+            catch (MessageProtectionException e)
+            {
+                return Results.Json(new { error = e.Code, message = e.Message, addresses = e.Addresses, keys = e.Keys }, statusCode: StatusCodes.Status409Conflict);
             }
             catch (MailboxConflictException e)
             {

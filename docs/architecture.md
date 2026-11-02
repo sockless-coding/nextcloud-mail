@@ -68,6 +68,104 @@ Internals for people working on the app. Installing and configuring it is in the
     discarded so they cannot overwrite the newer local state.
   - After a move or delete, the counts and the target folder (if shown) are reloaded.
 
+## Encrypted and signed mail
+
+`Crypto/` reads and writes OpenPGP (RFC 3156 PGP/MIME, inline PGP for reading) and S/MIME
+(RFC 8551) mail with MimeKit and BouncyCastle.
+
+- **Keys** (`CryptoKey`, table `crypto_keys`) belong to the Nextcloud user, not to an account. A
+  key serves every account whose address it names.
+  - Own keys keep their private part as imported: the binary OpenPGP secret key ring, or the
+    PKCS#12 file. That is still protected by the key's own passphrase, and is additionally
+    encrypted with the app's key ring (`KeySecrets`).
+  - Correspondents' keys and certificates are public only.
+  - Fingerprints: the OpenPGP v4 fingerprint of the primary key, or the SHA-256 of a certificate.
+    They are unique per user and kind. Importing the private key of a known public key adds it
+    to that row.
+  - New OpenPGP keys are RSA-3072 (a certify/sign primary key and an encryption subkey), with an
+    AES-256 S2K passphrase of at least 8 characters, valid 1–10 years or without expiry.
+- **Unlocking**: `KeyUnlocks` keeps the passphrases of unlocked keys in memory, each until it
+  goes unused for 30 minutes, the user locks their keys, or the app restarts. Keys without a
+  passphrase are always usable.
+- **Detecting** uses BODYSTRUCTURE: `multipart/encrypted`, `multipart/signed` and
+  `application/pkcs7-mime` at the root. Such a message is fetched whole (`BODY.PEEK[]`, at most
+  25 MiB) and opened by `MessageSecurity`, which undoes up to four layers (encryption, signing,
+  compression):
+  - Before decrypting, the recipients (OpenPGP key ids, CMS recipient infos) are matched with
+    the user's keys. The result is `decrypted`, `locked` (with the keys to unlock), `no_key`,
+    `too_large` or `failed`.
+  - Each signature is `valid`, `untrusted` (S/MIME chain not trusted or expired), `unknown_key`
+    (with the OpenPGP key id), `bad` or `not_checked`, plus whether the signer's key or
+    certificate names the From address.
+  - Plain-text bodies with `-----BEGIN PGP MESSAGE-----` or `-----BEGIN PGP SIGNED MESSAGE-----`
+    are opened inline: the block is replaced by its text.
+  - The protected `Subject` of a body marked `protected-headers` replaces the outer placeholder.
+- **The reader** gets `security` in the message. Parts of an opened message have ids starting
+  with `c` and their path in the decrypted tree (`c1.2`; `c0` for a single part), because the
+  server's part numbers only reach the ciphertext. Part and calendar requests with such ids open
+  the message again. `DecryptedMessages` keeps opened messages in memory for 2 minutes (at most
+  32, each up to 10 MiB) so inline images and attachments do not decrypt it once each. Locking
+  or deleting keys empties it for the user.
+- **Not affected**: list previews, search, rules, tags and the Assistant see only what the server
+  sees. The ciphertext and signature parts do not count as attachments (`SecurityParts`).
+- **Lists** mark encrypted and signed mail: the cache keeps `Security` per message
+  ("encrypted", "signed" or "") from the BODYSTRUCTURE at the top of the message, so a
+  signature inside the encryption shows only once opened. Rows cached before it are filled in
+  with the preview backfill, which also corrects their attachment flag.
+- **Sending** (`OutgoingSecurity`): `SendInput`, `SaveDraftInput` and `ScheduleInput` take
+  `security` (`encrypt`, `sign`, `kind`: `openpgp` or `smime`, `attachKey`). The finished body
+  is replaced by its protected form: `multipart/encrypted` (signed inside when signing),
+  `multipart/signed`, or `application/pkcs7-mime` around a `multipart/signed`. It is encrypted to
+  every To, Cc and Bcc address and to the sender, so the copy in Sent stays readable. Headers
+  stay as they are.
+  - Refusals are 409 with `error`: `missing_keys` (with `addresses`), `key_locked` (with
+    `keys`; encrypting needs only public keys, signing an unlocked private key), `no_own_key`,
+    `encryption_required` (decrypted attachments or images of an encrypted source going out
+    unencrypted).
+  - Drafts are encrypted to the sender only and carry `X-Sockless-Security` (the composer's
+    choices), which continuing the draft gives back as `security`.
+  - Answering, forwarding or continuing encrypted mail (`GetDraftAsync`, `LoadSourceAsync`)
+    opens it like the reader does: a locked key is a 409 `key_locked`. The answer's `security`
+    starts encrypted with the source's standard. Its attachments and images are copies of the
+    decrypted parts (`c` ids).
+  - Scheduled messages are protected when they are scheduled.
+- **Finding keys** (`KeyDirectory`, `POST /api/crypto/recipients` with `addresses` and
+  `search`): the newest usable key kept for each address (not expired or revoked, able to
+  encrypt). With `search`, for addresses without an OpenPGP key, it then looks at:
+  - KEY properties of the user's contacts (data URIs, vCard 3 inline base64; links are not
+    fetched);
+  - the recipient's domain, through WKD (advanced method, then direct);
+  - keys.openpgp.org (`/vks/v1/by-email/`).
+
+  The web lookups (`PublicKeyFinder`) go through the address policy, take at most 256 KiB, and
+  remember misses for an hour. A key found is kept only if one of its user ids names the
+  address. Kept keys record their source (`KeySources`). The composer searches only while
+  Encrypt is on.
+- **Sharing keys** (`KeySharing`):
+  - Outgoing messages, drafts excepted, get an `Autocrypt` header (`addr`, `keydata`: the
+    sender's newest usable own OpenPGP public key). It is folded by hand and sits outside the
+    encryption.
+  - Opening a message reads its `Autocrypt` header. Its key is kept (source `autocrypt`) only
+    when its `addr` is the single From address, the message did not fail DMARC, the key names
+    that address, and the user has no OpenPGP key for it yet (trust on first use: a header never
+    replaces a key).
+  - `POST …/messages/{id}/parts/{partId}/import-key` imports an attached key (`.asc`,
+    `application/pgp-keys`, certificates) like an uploaded file. Private keys are refused there.
+  - `POST /api/crypto/keys/{id}/contact` adds the key as a vCard KEY to the first writable
+    contact with its address, or makes a contact. vCard 4 gets a data URI, vCard 3 inline
+    base64; the rest of the card is kept as it was.
+  - `POST /api/crypto/keys/{id}/publish` (own OpenPGP keys only) uploads the public key to
+    keys.openpgp.org (`/vks/v1/upload`) and asks it to confirm each unpublished address
+    (`/vks/v1/request-verify`). The answer gives each address's state.
+- **Certificates of signed mail**: an S/MIME signature that is valid (trusted chain) and whose
+  certificate names the From address keeps that certificate (source `message`), to encrypt
+  answers. Self-signed and untrusted ones are not kept, so a forged certificate cannot take the
+  place of a colleague's.
+- **API**: `GET /api/crypto/keys`, `POST /api/crypto/keys/import` (`text`, or `data` as base64,
+  and `passphrase`), `POST /api/crypto/keys/generate`, `GET /api/crypto/keys/{id}/public`
+  (armoured `.asc` or PEM), `POST /api/crypto/keys/{id}/unlock`, `POST /api/crypto/keys/lock`,
+  `DELETE /api/crypto/keys/{id}`.
+
 ## Writing
 
 - **Writing** happens in four steps:

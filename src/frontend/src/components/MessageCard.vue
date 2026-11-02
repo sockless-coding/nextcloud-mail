@@ -205,7 +205,7 @@
 				</p>
 			</div>
 			<div class="message-view__warning-buttons">
-				<NcButton v-if="assistantState.checkScam && !scamChecked" variant="secondary" @click="checkScam(where, message.id)">
+				<NcButton v-if="assistantState.checkScam && !scamChecked && !encrypted" variant="secondary" @click="checkScam(where, message.id)">
 					<template #icon>
 						<AssistantIcon :size="20" />
 					</template>
@@ -217,6 +217,8 @@
 			</div>
 		</section>
 
+		<MessageSecurity :security="message.security" @reload="emit('reload')" />
+
 		<div v-if="message.hasRemoteContent && !message.remoteContentAllowed" class="message-view__notice" role="status">
 			<NcIconSvgWrapper :path="mdiImageOffOutline" :size="18" inline />
 			<span>{{ t('sockless_mail', 'Remote images are blocked to protect your privacy.') }}</span>
@@ -225,9 +227,12 @@
 			</button>
 		</div>
 
-		<AssistantScamCheck :where="where" :message-id="message.id" />
-		<AssistantSummary :where="where" :message-id="message.id" />
-		<AssistantTranslation :where="where" :message-id="message.id" />
+		<!-- Decrypted text never goes to the Assistant (its provider may be outside this server). -->
+		<template v-if="!encrypted">
+			<AssistantScamCheck :where="where" :message-id="message.id" />
+			<AssistantSummary :where="where" :message-id="message.id" />
+			<AssistantTranslation :where="where" :message-id="message.id" />
+		</template>
 
 		<InvitationCard v-if="calendarPart"
 			:key="`${message.id}/${calendarPart.partId}`"
@@ -271,6 +276,14 @@
 						@click="saveToFiles([attachment])">
 						<NcIconSvgWrapper :path="mdiFolderDownloadOutline" :size="18" />
 					</button>
+					<button v-if="isKeyAttachment(attachment)"
+						type="button"
+						class="message-view__save"
+						:aria-label="t('sockless_mail', 'Import {name} as a key', { name: attachment.fileName })"
+						:title="t('sockless_mail', 'Import key')"
+						@click="importKey(attachment)">
+						<NcIconSvgWrapper :path="mdiKeyPlus" :size="18" />
+					</button>
 				</li>
 			</ul>
 		</section>
@@ -297,8 +310,8 @@
 </template>
 
 <script setup>
-import { mdiAccountPlusOutline, mdiChevronDown, mdiChevronUp, mdiClipboardCheckOutline, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFilterPlusOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiOpenInNew, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldAlertOutline, mdiShieldSearch, mdiTagOutline, mdiTextBoxOutline, mdiTranslate, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
-import { showError } from '@nextcloud/dialogs/toast'
+import { mdiAccountPlusOutline, mdiChevronDown, mdiChevronUp, mdiClipboardCheckOutline, mdiCodeTags, mdiDeleteOutline, mdiDownload, mdiEmailOpenOutline, mdiEmailOutline, mdiFileCodeOutline, mdiFilterPlusOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiFolderDownloadOutline, mdiFolderMoveOutline, mdiImageOffOutline, mdiKeyPlus, mdiOpenInNew, mdiPencilOutline, mdiReply, mdiReplyAll, mdiShare, mdiShieldAlertOutline, mdiShieldSearch, mdiTagOutline, mdiTextBoxOutline, mdiTranslate, mdiWeatherNight, mdiWhiteBalanceSunny } from '@mdi/js'
+import { showError, showSuccess } from '@nextcloud/dialogs/toast'
 import { n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionLink from '@nextcloud/vue/components/NcActionLink'
@@ -314,6 +327,7 @@ import { accountsState } from '../store/accounts.js'
 import { askMove, askTags, createRuleFrom, dialogs, remove, toggleFlagged, toggleSeen } from '../store/actions.js'
 import { assistantState, checkScam, scamChecks, summarize, summaryKey, translateMessage } from '../store/assistant.js'
 import { composeEdit } from '../store/compose.js'
+import { errorText, importAttachedKey, isKeyAttachment } from '../store/crypto.js'
 import { replyFrom } from '../store/conversation.js'
 import { primaryCalendarPart } from '../store/calendar.js'
 import { saveAttachmentsToFiles } from '../store/files.js'
@@ -331,6 +345,7 @@ import AssistantTranslation from './AssistantTranslation.vue'
 import DeceptiveLinkDialog from './DeceptiveLinkDialog.vue'
 import InvitationCard from './InvitationCard.vue'
 import MessageBody from './MessageBody.vue'
+import MessageSecurity from './MessageSecurity.vue'
 import MessageSourceDialog from './MessageSourceDialog.vue'
 import TagChips from './TagChips.vue'
 
@@ -349,7 +364,7 @@ const props = defineProps({
 	foldQuotes: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['collapse', 'show-images'])
+const emit = defineEmits(['collapse', 'show-images', 'reload'])
 
 const REPLIES = [
 	{ id: 'reply', icon: mdiReply, label: t('sockless_mail', 'Reply') },
@@ -418,7 +433,9 @@ const detailRows = computed(() => {
 
 /** The Assistant's menu: what it can do for a message here (the cards above the text show the answers). */
 const canTranslate = computed(() => assistantState.rewrite.includes('translate') && assistantState.languages.length > 0)
-const assistantMenu = computed(() => assistantState.summarize || canTranslate.value || assistantState.checkScam)
+/** Encrypted mail: what it says stays out of the Assistant. */
+const encrypted = computed(() => !!message.value.security?.encryption)
+const assistantMenu = computed(() => !encrypted.value && (assistantState.summarize || canTranslate.value || assistantState.checkScam))
 const scamChecked = computed(() => !!scamChecks[summaryKey(where.value, message.value.id)])
 
 const calendarPart = computed(() => primaryCalendarPart(message.value.calendarParts ?? []))
@@ -431,6 +448,17 @@ async function reply(mode) {
 		await replyFrom(mode, where.value, message.value.id)
 	} catch (e) {
 		showError(t('sockless_mail', 'Could not prepare the message: {error}', { error: e.message }))
+	}
+}
+
+async function importKey(attachment) {
+	try {
+		const result = await importAttachedKey(where.value, message.value.id, attachment.partId)
+		const keys = [...result.added, ...result.updated]
+		showSuccess(n('sockless_mail', 'Imported the key for {addresses}', 'Imported {count} keys', keys.length,
+			{ count: keys.length, addresses: keys[0]?.addresses.join(', ') || keys[0]?.fingerprint }, { escape: false, sanitize: false }))
+	} catch (e) {
+		showError(t('sockless_mail', 'Could not import the key: {error}', { error: errorText(e) }, undefined, { escape: false, sanitize: false }))
 	}
 }
 

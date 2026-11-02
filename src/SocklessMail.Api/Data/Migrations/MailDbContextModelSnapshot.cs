@@ -226,6 +226,70 @@ namespace SocklessMail.Api.Data.Migrations
                     b.ToTable("bimi_lookups", (string)null);
                 });
 
+            modelBuilder.Entity("SocklessMail.Api.Crypto.CryptoKey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AddedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Addresses")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("HasPassphrase")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ProtectedSecret")
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("PublicData")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("import");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId", "Kind", "Fingerprint")
+                        .IsUnique();
+
+                    b.ToTable("crypto_keys", (string)null);
+                });
+
             modelBuilder.Entity("SocklessMail.Api.Data.AppSetting", b =>
                 {
                     b.Property<string>("Key")
@@ -640,6 +704,10 @@ namespace SocklessMail.Api.Data.Migrations
                         .HasMaxLength(4000)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Security")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("Size")
                         .HasColumnType("INTEGER");
 
@@ -846,6 +914,10 @@ namespace SocklessMail.Api.Data.Migrations
 
                     b.Property<string>("Preview")
                         .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Security")
+                        .HasMaxLength(16)
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("Seen")

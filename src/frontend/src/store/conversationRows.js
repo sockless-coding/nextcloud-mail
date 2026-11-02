@@ -98,6 +98,8 @@ function summarize({ row, key, listed }, wholeFolder) {
 			flagged: messages.some((m) => m.flagged),
 			answered: !!members?.replied || messages.some((m) => m.answered),
 			hasAttachments: messages.some((m) => m.hasAttachments),
+			// Members may carry no security of their own (ConversationMemberDto): the newest's then.
+			security: messages.some((m) => m.security === 'encrypted') ? 'encrypted' : newest.security,
 		},
 		conversation: { count: messages.length, unread, senders, newest },
 	}

@@ -77,6 +77,10 @@
 					<strong class="conversation__sender">{{ senderOf(entry) }}</strong>
 					<span class="conversation__preview">{{ entry.message.preview }}</span>
 					<NcIconSvgWrapper v-if="entry.message.hasAttachments" :path="mdiPaperclip" :size="16" :name="t('sockless_mail', 'Has attachments')" />
+					<NcIconSvgWrapper v-if="entry.message.security"
+						:path="entry.message.security === 'encrypted' ? mdiLockOutline : mdiCertificateOutline"
+						:size="16"
+						:name="entry.message.security === 'encrypted' ? t('sockless_mail', 'Encrypted') : t('sockless_mail', 'Signed')" />
 					<span class="conversation__date">
 						<NcDateTime :timestamp="Date.parse(entry.message.date)" :format="{ dateStyle: 'medium', timeStyle: 'short' }" :relative-time="false" />
 					</span>
@@ -97,7 +101,8 @@
 						collapsible
 						fold-quotes
 						@collapse="collapseEntry(entry)"
-						@show-images="showImages(entry)" />
+						@show-images="showImages(entry)"
+						@reload="reload(entry)" />
 				</template>
 			</li>
 		</ol>
@@ -115,7 +120,7 @@
 </template>
 
 <script setup>
-import { mdiArrowDown, mdiFolderOutline, mdiPaperclip, mdiReply } from '@mdi/js'
+import { mdiArrowDown, mdiCertificateOutline, mdiFolderOutline, mdiLockOutline, mdiPaperclip, mdiReply } from '@mdi/js'
 import { getCanonicalLocale, n, t } from '@nextcloud/l10n'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
 import NcDateTime from '@nextcloud/vue/components/NcDateTime'
@@ -124,7 +129,7 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { bimiUrl } from '../bimi.js'
 import {
-	collapseAll, collapseEntry, conversationState, expandAll, expandEntry, focusEntry, fromMe, isOpenEntry, participantChanges,
+	collapseAll, collapseEntry, conversationState, expandAll, expandEntry, focusEntry, fromMe, isOpenEntry, participantChanges, reloadEntry,
 } from '../store/conversation.js'
 import { mailboxState, openMessage } from '../store/mailbox.js'
 import MessageCard from './MessageCard.vue'
@@ -253,6 +258,16 @@ function showImages(entry) {
 		openMessage(entry.where, entry.message.id, true)
 	} else {
 		expandEntry(entry, true)
+	}
+}
+
+/** Again, as shown now (after a key was unlocked). */
+function reload(entry) {
+	const remote = fullOf(entry)?.remoteContentAllowed ?? false
+	if (isOpenEntry(entry)) {
+		openMessage(entry.where, entry.message.id, remote)
+	} else {
+		reloadEntry(entry, remote)
 	}
 }
 

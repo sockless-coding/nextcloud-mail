@@ -329,6 +329,9 @@ export class ActionError extends Error {
 		super(data?.message ?? Object.values(fieldErrors)[0] ?? (e?.response ? `HTTP ${e.response.status}` : String(e?.message ?? e)))
 		this.code = data?.error ?? (e?.response?.status === 400 ? 'invalid' : 'failed')
 		this.fieldErrors = fieldErrors
+		/** For encryption refusals: the addresses without a key, the keys to unlock. */
+		this.addresses = data?.addresses ?? []
+		this.keys = data?.keys ?? []
 	}
 }
 

@@ -73,6 +73,24 @@ Nextcloud and are signed in by their Nextcloud session. Mail is handled with Mai
   grammar, shorten it, make it clearer, translate it, or rewrite it as told. Answers show in a
   preview first. Only offered when a provider is set up, and only run when the user asks.
 
+**Encryption**
+- Reads OpenPGP (PGP/MIME and inline PGP) and S/MIME mail: encrypted messages are decrypted with
+  the user's own key, and signatures are checked and shown with the signer and whether the key
+  belongs to the sender.
+- Sends signed and/or encrypted mail with either standard (the lock menu in the composer). The
+  composer shows which recipients have a key; keys are looked for in Contacts, the recipient's
+  domain (Web Key Directory) and keys.openpgp.org, and kept. Answers to encrypted mail start out
+  encrypted, and encrypted drafts stay encrypted in Drafts. The sender's OpenPGP public key can
+  be attached.
+- Keys travel with mail: outgoing mail carries the sender's OpenPGP key in an Autocrypt header,
+  a sender's first Autocrypt key is kept, and keys attached to mail import with one click.
+- **Settings → Encryption**: import OpenPGP keys, PKCS#12 files and certificates, create an
+  OpenPGP key, download the public key, unlock and lock private keys, save a key into the
+  matching contact, and publish an own key on keys.openpgp.org (only when asked; the key server
+  then mails a confirmation link).
+- Private keys stay on the server, protected by their passphrase and the app's key ring. A key
+  unlocked with its passphrase stays usable for 30 minutes after its last use.
+
 **Safety**
 - Senders whose domain imitates a known one, or was registered only recently, get a warning.
 - Links whose text shows another domain than they lead to ask before opening.
@@ -323,6 +341,25 @@ In short (details in [docs/security.md](docs/security.md)):
 - Message parts are held in memory while they are served, so very large attachments cost
   memory in proportion to their size.
 - Scheduled messages are not on the mail server, so other mail programs do not see them.
+
+**Encryption**
+- Encrypted mail hides only the body: the subject and addresses stay readable, as with most
+  mail programs. Encrypted mail with a hidden subject shows "..." in the list until it is opened.
+- Attachments and images of an encrypted message can only be forwarded encrypted. Quoted text
+  is not checked: turning encryption off in an answer to encrypted mail only asks first.
+- Encrypting tells every recipient how many keys the message is for, Bcc recipients included.
+- Signatures are checked against keys the user keeps. Keys of signed mail are not collected
+  automatically, except S/MIME certificates from a trusted authority for the sender's own
+  address and a sender's first Autocrypt key.
+- Autocrypt is supported at its simplest: no gossip headers, no setup messages, and
+  `prefer-encrypt` is not used to turn encryption on. Every outgoing message from an address with
+  an own OpenPGP key carries that key in the Autocrypt header (a few kB).
+- The Scheduled view does not show the text of an encrypted scheduled message.
+- S/MIME certificates are checked against the container's root certificates. Revocation is not
+  checked.
+- Message lists do not mark encrypted mail, and search does not find its text. The Assistant is
+  not offered for encrypted mail.
+- Messages over 25 MB are not decrypted or checked.
 
 **Nextcloud integration**
 - Share links from the composer are public and read-only, with Nextcloud's default expiry. A

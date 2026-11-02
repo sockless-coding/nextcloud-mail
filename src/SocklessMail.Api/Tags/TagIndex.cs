@@ -99,7 +99,8 @@ public sealed class TagIndex(MailDbContext db, TimeProvider clock)
             row.Seen = summary.Flags?.HasFlag(MessageFlags.Seen) ?? false;
             row.Flagged = summary.Flags?.HasFlag(MessageFlags.Flagged) ?? false;
             row.Answered = summary.Flags?.HasFlag(MessageFlags.Answered) ?? false;
-            row.HasAttachments = summary.Attachments.Any();
+            row.HasAttachments = Crypto.SecurityParts.HasAttachments(summary);
+            row.Security = summary.Body is null ? row.Security : Crypto.SecurityParts.Kind(summary);
             row.Size = (long)(summary.Size ?? 0);
             row.Preview = summary.PreviewText is null ? row.Preview : MessagePreview.Normalize(summary.PreviewText);
             row.BimiDomain = sender?.Domain ?? "";

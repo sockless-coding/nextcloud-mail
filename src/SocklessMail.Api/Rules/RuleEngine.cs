@@ -340,7 +340,7 @@ public sealed class RuleEngine(
             envelope?.Subject ?? "",
             name => headers is null ? [] : headers.Where(h => h.Field.Equals(name, StringComparison.OrdinalIgnoreCase)).Select(h => h.Value).ToList(),
             summary.Size ?? 0,
-            summary.Attachments.Any());
+            Crypto.SecurityParts.HasAttachments(summary));
     }
 
     /// <summary>

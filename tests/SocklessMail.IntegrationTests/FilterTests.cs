@@ -148,6 +148,38 @@ public sealed class FilterTests(GreenMailFixture greenMail, DovecotFixture dovec
     }
 
     [Fact]
+    public async Task Rows_cached_before_signatures_were_marked_get_marked_on_the_next_sync()
+    {
+        var user = DovecotFixture.NewUser();
+        using (var imap = await dovecot.ConnectAsync(user))
+        {
+            // The structure is what counts here, not whether the signature is good.
+            var raw = "From: signer@example.test\r\nTo: x@example.test\r\nSubject: Signed old row\r\nMIME-Version: 1.0\r\n"
+                      + "Content-Type: multipart/signed; protocol=\"application/pgp-signature\"; micalg=pgp-sha256; boundary=\"s\"\r\n\r\n"
+                      + "--s\r\nContent-Type: text/plain\r\n\r\nSigned text\r\n"
+                      + "--s\r\nContent-Type: application/pgp-signature; name=\"signature.asc\"\r\nContent-Disposition: attachment; filename=\"signature.asc\"\r\n\r\n"
+                      + "-----BEGIN PGP SIGNATURE-----\r\n\r\nAAAA\r\n-----END PGP SIGNATURE-----\r\n--s--\r\n";
+            await imap.Inbox.AppendAsync(MimeKit.MimeMessage.Load(new MemoryStream(System.Text.Encoding.ASCII.GetBytes(raw)), Ct), MessageFlags.None, Ct);
+        }
+
+        var client = _app.ClientAs("backfill-security");
+        var account = await AddAsync(client, "dovecot", user);
+        await Json(await client.GetAsync($"/api/accounts/{account}/folders/{Inbox}/messages", Ct));
+
+        // As if cached by an older version: not known, and the signature counted as an attachment.
+        using (var scope = _app.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<MailDbContext>().Messages.IgnoreQueryFilters()
+                .Where(m => m.OwnerUserId == "backfill-security")
+                .ExecuteUpdateAsync(s => s.SetProperty(m => m.Security, (string?)null).SetProperty(m => m.HasAttachments, true), Ct);
+        }
+
+        var row = (await Json(await client.GetAsync($"/api/accounts/{account}/folders/{Inbox}/messages", Ct))).GetProperty("messages")[0];
+        Assert.Equal("signed", row.GetProperty("security").GetString());
+        Assert.False(row.GetProperty("hasAttachments").GetBoolean());
+    }
+
+    [Fact]
     public async Task All_inboxes_are_filtered_on_the_servers_and_merged_by_date()
     {
         // Unread messages in both inboxes, interleaved by date, plus read ones that must not show.

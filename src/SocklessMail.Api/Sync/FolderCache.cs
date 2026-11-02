@@ -94,6 +94,9 @@ public sealed class FolderCache(
         public readonly HashSet<uint> Removals = [];
         public readonly Dictionary<uint, string> Previews = [];
 
+        /// <summary>For rows filled in with their previews: encrypted/signed and attachments, from the same structure.</summary>
+        public readonly Dictionary<uint, (string Security, bool HasAttachments)> Structure = [];
+
         /// <summary>BIMI verdicts for rows cached without one; null means none, which no client needs to hear about.</summary>
         public readonly Dictionary<uint, BimiDto?> Bimi = [];
 
@@ -518,7 +521,8 @@ public sealed class FolderCache(
         m.Preview,
         string.IsNullOrEmpty(m.BimiDomain) ? null : new BimiDto(m.BimiDomain, m.BimiSelector),
         Keywords.ForClient(m.Keywords),
-        m.ConversationId);
+        m.ConversationId,
+        Crypto.SecurityParts.ForClient(m.Security));
 
     /// <summary>At most this many messages of a conversation in one folder are summed up for its row.</summary>
     public const int MaxMembers = 200;
@@ -763,7 +767,7 @@ public sealed class FolderCache(
         }
 
         var missing = await db.Messages.AsNoTracking()
-            .Where(m => m.FolderId == state.Id && m.Preview == null)
+            .Where(m => m.FolderId == state.Id && (m.Preview == null || m.Security == null))
             .OrderByDescending(m => m.Uid)
             .Select(m => m.Uid)
             .Take(PreviewBackfill)
@@ -780,6 +784,7 @@ public sealed class FolderCache(
         foreach (var summary in summaries)
         {
             plan.Previews[summary.UniqueId.Id] = MessagePreview.Normalize(summary.PreviewText);
+            plan.Structure[summary.UniqueId.Id] = (Crypto.SecurityParts.Kind(summary), Crypto.SecurityParts.HasAttachments(summary));
         }
     }
 
@@ -945,9 +950,14 @@ public sealed class FolderCache(
 
         foreach (var (uid, preview) in plan.Previews)
         {
-            await db.Messages
-                .Where(m => m.FolderId == state.Id && m.Uid == uid)
-                .ExecuteUpdateAsync(s => s.SetProperty(m => m.Preview, preview).SetProperty(m => m.ChangeSeq, seq), ct);
+            var rows = db.Messages.Where(m => m.FolderId == state.Id && m.Uid == uid);
+            await (plan.Structure.TryGetValue(uid, out var structure)
+                ? rows.ExecuteUpdateAsync(s => s
+                    .SetProperty(m => m.Preview, preview)
+                    .SetProperty(m => m.Security, structure.Security)
+                    .SetProperty(m => m.HasAttachments, structure.HasAttachments)
+                    .SetProperty(m => m.ChangeSeq, seq), ct)
+                : rows.ExecuteUpdateAsync(s => s.SetProperty(m => m.Preview, preview).SetProperty(m => m.ChangeSeq, seq), ct));
         }
 
         foreach (var (uid, sender) in plan.Bimi)
@@ -1100,7 +1110,8 @@ public sealed class FolderCache(
             To = to,
             SearchText = SearchText(subject, from.Concat(to)),
             Date = s.Envelope?.Date ?? s.InternalDate ?? DateTimeOffset.UnixEpoch,
-            HasAttachments = s.Attachments.Any(),
+            HasAttachments = Crypto.SecurityParts.HasAttachments(s),
+            Security = Crypto.SecurityParts.Kind(s),
             Size = (long)(s.Size ?? 0),
             Preview = MessagePreview.Normalize(s.PreviewText),
             BimiDomain = sender?.Domain ?? "",

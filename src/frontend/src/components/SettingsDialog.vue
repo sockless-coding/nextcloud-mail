@@ -157,6 +157,10 @@
 				</li>
 			</ul>
 		</NcAppSettingsSection>
+
+		<NcAppSettingsSection id="sockless-settings-encryption" :name="t('sockless_mail', 'Encryption')">
+			<EncryptionSettings />
+		</NcAppSettingsSection>
 	</NcAppSettingsDialog>
 </template>
 
@@ -179,6 +183,7 @@ import { layout } from '../store/layout.js'
 import { moveAccountBy, unifiedAccountsChanged } from '../store/navigation.js'
 import { notificationState, setDesktopNotifications, testNotification } from '../store/notifications.js'
 import AccountBadge from './AccountBadge.vue'
+import EncryptionSettings from './EncryptionSettings.vue'
 import { useAccountDrag } from './accountDrag.js'
 
 /**

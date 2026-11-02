@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SocklessMail.Api.Accounts;
 using SocklessMail.Api.Bimi;
+using SocklessMail.Api.Crypto;
 using SocklessMail.Api.Mailbox;
 using SocklessMail.Api.OAuth;
 using SocklessMail.Api.Rules;
@@ -66,6 +67,8 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
     public DbSet<ScheduledMessage> ScheduledMessages => Set<ScheduledMessage>();
 
     public DbSet<SendLaterPresetList> SendLaterPresets => Set<SendLaterPresetList>();
+
+    public DbSet<CryptoKey> CryptoKeys => Set<CryptoKey>();
 
     // SQLite cannot order or compare DateTimeOffset natively; store UTC ticks.
     private static readonly ValueConverter<DateTimeOffset, long> UtcTicks =
@@ -134,6 +137,7 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             message.Property(m => m.Keywords).HasMaxLength(Keywords.MaxStoredLength);
             message.Property(m => m.SearchText).HasMaxLength(4000);
             message.Property(m => m.Preview).HasMaxLength(MessagePreview.MaxLength);
+            message.Property(m => m.Security).HasMaxLength(16);
             message.Property(m => m.BimiDomain).HasMaxLength(253);
             message.Property(m => m.BimiSelector).HasMaxLength(63);
             message.HasIndex(m => m.ConversationId);
@@ -310,6 +314,7 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             tagged.Property(m => m.To).HasConversion(Addresses, AddressComparer);
             tagged.Property(m => m.Date).HasConversion(UtcTicks);
             tagged.Property(m => m.Preview).HasMaxLength(MessagePreview.MaxLength);
+            tagged.Property(m => m.Security).HasMaxLength(16);
             tagged.Property(m => m.BimiDomain).HasMaxLength(253);
             tagged.Property(m => m.BimiSelector).HasMaxLength(63);
             tagged.Property(m => m.UpdatedAt).HasConversion(UtcTicks);
@@ -364,6 +369,25 @@ public sealed class MailDbContext(DbContextOptions<MailDbContext> options, ICurr
             presets.Property(p => p.Presets).HasMaxLength(20000);
             presets.Property(p => p.UpdatedAt).HasConversion(UtcTicks);
             presets.HasQueryFilter(p => p.OwnerUserId == _userId);
+        });
+
+        model.Entity<CryptoKey>(key =>
+        {
+            key.ToTable("crypto_keys");
+            key.HasKey(k => k.Id);
+            key.HasIndex(k => new { k.OwnerUserId, k.Kind, k.Fingerprint }).IsUnique();
+            key.Property(k => k.OwnerUserId).HasMaxLength(64);
+            key.Property(k => k.Kind).HasConversion<string>().HasMaxLength(16);
+            key.Property(k => k.Fingerprint).HasMaxLength(64);
+            key.Property(k => k.Addresses).HasMaxLength(20000);
+            key.Property(k => k.Name).HasMaxLength(1000);
+            key.Property(k => k.Source).HasMaxLength(16).HasDefaultValue(KeySources.Import);
+            key.Property(k => k.CreatedAt).HasConversion(UtcTicks);
+            key.Property(k => k.ExpiresAt).HasConversion(UtcTicks);
+            key.Property(k => k.AddedAt).HasConversion(UtcTicks);
+            key.Ignore(k => k.IsOwn);
+            key.Ignore(k => k.AddressList);
+            key.HasQueryFilter(k => k.OwnerUserId == _userId);
         });
     }
 }

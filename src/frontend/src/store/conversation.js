@@ -131,6 +131,13 @@ export function expandEntry(entry, allowRemote = false) {
 	loadEntry(entry, allowRemote)
 }
 
+/** Fetches an expanded message again, e.g. once the key it is encrypted to was unlocked. */
+export function reloadEntry(entry, allowRemote = false) {
+	if (!entry.loading) {
+		loadEntry(entry, allowRemote)
+	}
+}
+
 export function collapseEntry(entry) {
 	entry.expanded = false
 }

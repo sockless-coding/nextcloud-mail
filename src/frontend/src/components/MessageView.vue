@@ -27,7 +27,8 @@
 			<MessageCard v-else
 				:where="where"
 				:message="message"
-				@show-images="openMessage(where, message.id, true)" />
+				@show-images="openMessage(where, message.id, true)"
+				@reload="openMessage(where, message.id, message.remoteContentAllowed)" />
 		</article>
 	</div>
 </template>

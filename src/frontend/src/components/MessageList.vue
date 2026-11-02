@@ -143,6 +143,11 @@
 							<NcIconSvgWrapper v-if="row.message.flagged" :path="mdiFlag" :size="16" class="message-row__flag" :name="t('sockless_mail', 'Flagged')" />
 							<NcIconSvgWrapper v-if="row.message.answered" :path="mdiReply" :size="16" :name="t('sockless_mail', 'Answered')" />
 							<NcIconSvgWrapper v-if="row.message.hasAttachments" :path="mdiPaperclip" :size="16" :name="t('sockless_mail', 'Has attachments')" />
+							<NcIconSvgWrapper v-if="row.message.security"
+								:path="row.message.security === 'encrypted' ? mdiLockOutline : mdiCertificateOutline"
+								:size="16"
+								class="message-row__security"
+								:name="row.message.security === 'encrypted' ? t('sockless_mail', 'Encrypted') : t('sockless_mail', 'Signed')" />
 							<span class="message-row__subject-text">{{ subjectOf(row.message) }}</span>
 							<TagChips :tags="tagsOf(row.message)" :max="3" small />
 						</span>
@@ -199,7 +204,7 @@
 </template>
 
 <script setup>
-import { mdiCheck, mdiCheckboxMultipleMarkedCircleOutline, mdiDeleteOutline, mdiDotsHorizontal, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiMagnify, mdiPaperclip, mdiReply, mdiShieldAlertOutline, mdiTagOutline } from '@mdi/js'
+import { mdiCertificateOutline, mdiCheck, mdiCheckboxMultipleMarkedCircleOutline, mdiDeleteOutline, mdiDotsHorizontal, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiLockOutline, mdiMagnify, mdiPaperclip, mdiReply, mdiShieldAlertOutline, mdiTagOutline } from '@mdi/js'
 import { getCanonicalLocale, getFirstDay, n, t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -1028,6 +1033,10 @@ onBeforeUnmount(() => observer?.disconnect())
 
 .message-row__subject .message-row__flag {
 	color: var(--color-error-text);
+}
+
+.message-row__subject .message-row__security {
+	color: var(--color-primary-element);
 }
 
 .message-row__subject-text {

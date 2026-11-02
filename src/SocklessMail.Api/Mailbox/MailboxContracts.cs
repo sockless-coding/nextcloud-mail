@@ -2,6 +2,7 @@ using System.Buffers.Text;
 using System.Text;
 using MimeKit;
 using SocklessMail.Api.Bimi;
+using SocklessMail.Api.Crypto;
 using SocklessMail.Api.Senders;
 
 namespace SocklessMail.Api.Mailbox;
@@ -37,7 +38,8 @@ public sealed record MessageSummaryDto(
     string? Preview,
     BimiDto? Bimi,
     string[] Keywords,
-    Guid? ConversationId = null);
+    Guid? ConversationId = null,
+    string? Security = null);
 
 /// <summary>
 /// Newest first by date. <see cref="NextBefore"/> is the cursor for the next (older) page; null at
@@ -70,7 +72,8 @@ public sealed record MessageDto(
     BimiDto? Bimi,
     CalendarPartDto[] CalendarParts,
     SenderWarning? SenderWarning,
-    string[] Keywords);
+    string[] Keywords,
+    MessageSecurityDto? Security = null);
 
 /// <summary>The message's header block exactly as the server has it, folded lines and encoded words included.</summary>
 public sealed record MessageHeadersDto(string Headers);

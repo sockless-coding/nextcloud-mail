@@ -3,6 +3,7 @@ import { t } from '@nextcloud/l10n'
 import { reactive } from 'vue'
 import { apiBase, apiGet, apiGetBlob, apiSend, apiUpload } from '../api.js'
 import { accountsState } from './accounts.js'
+import { UnlockCancelled, withUnlockedKey } from './crypto.js'
 import { layout } from './layout.js'
 import { ActionError, deleteMessages, loadFolders, mailboxState, messagesById, openLocation, partUrl, refreshMessages } from './mailbox.js'
 import { searchState } from './search.js'
@@ -108,6 +109,10 @@ function emptyDraft(accountId) {
 		images: [],
 		imageJobs: 0,
 		saved: null,
+		/** Sign and/or encrypt it, with OpenPGP or S/MIME; attach the sender's OpenPGP public key. */
+		security: { encrypt: false, sign: false, kind: 'openpgp', attachKey: false },
+		/** Answering encrypted mail: turning encryption off asks first. */
+		sourceEncrypted: false,
 	}
 }
 
@@ -142,6 +147,8 @@ function fromServer(accountId, draft, extra = {}) {
 		initialText: draft.text,
 		source: draft.source,
 		forwarded: draft.forwardedAttachments.map((a) => ({ ...a, include: true })),
+		security: { encrypt: false, sign: false, kind: 'openpgp', attachKey: false, ...(draft.security ?? {}) },
+		sourceEncrypted: !!draft.security?.encrypt && draft.source?.mode !== 'edit',
 		...extra,
 	}
 }
@@ -161,15 +168,38 @@ export async function composeReply(mode, where = openLocation(), messageId = mai
 		return
 	}
 	const { accountId, folderId } = where
-	let draft
-	try {
-		draft = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages/${messageId}/draft?mode=${mode}`)
-	} catch (e) {
-		throw new ActionError(e)
+	const draft = await loadDraft(`/accounts/${accountId}/folders/${folderId}/messages/${messageId}/draft?mode=${mode}`,
+		t('sockless_mail', 'The message you are answering is encrypted. Unlock your key to quote it.'))
+	if (!draft) {
+		return
 	}
 	// The quoted original's own images go along.
 	const html = await withImages(draft.html, draft.inlineImages, (partId) => partUrl(accountId, folderId, messageId, partId))
 	show(fromServer(accountId, { ...draft, html, cc: withCc(draft, addCc) }))
+}
+
+/**
+ * A prefilled message from the server; an encrypted source asks for the key's passphrase first.
+ * Null when the user closed that dialog.
+ *
+ * @param {string} path the draft endpoint
+ * @param {string} reason why the key is needed
+ */
+async function loadDraft(path, reason) {
+	try {
+		return await withUnlockedKey(async () => {
+			try {
+				return await apiGet(path)
+			} catch (e) {
+				throw new ActionError(e)
+			}
+		}, reason)
+	} catch (e) {
+		if (e instanceof UnlockCancelled) {
+			return null
+		}
+		throw e
+	}
 }
 
 /** The draft's Cc with the given people added, unless they are among its recipients already. */
@@ -192,11 +222,10 @@ export async function composeEdit(where = openLocation(), messageId = mailboxSta
 		return
 	}
 	const { accountId, folderId } = where
-	let draft
-	try {
-		draft = await apiGet(`/accounts/${accountId}/folders/${folderId}/messages/${messageId}/draft?mode=edit`)
-	} catch (e) {
-		throw new ActionError(e)
+	const draft = await loadDraft(`/accounts/${accountId}/folders/${folderId}/messages/${messageId}/draft?mode=edit`,
+		t('sockless_mail', 'This draft is encrypted. Unlock your key to continue it.'))
+	if (!draft) {
+		return
 	}
 	const html = await withImages(draft.html, draft.inlineImages, (partId) => partUrl(accountId, folderId, messageId, partId))
 	show(fromServer(accountId, { ...draft, html }, { saved: { folderId, messageId } }))
@@ -410,6 +439,7 @@ function payload(draft) {
 			...draft.source,
 			forwardPartIds: draft.forwarded.filter((a) => a.include).map((a) => a.partId),
 		},
+		security: draft.security,
 	}
 }
 
@@ -555,14 +585,16 @@ async function submitDraft(draft, path, extra) {
 		throw new Error(t('sockless_mail', 'Wait until all attachments and images are uploaded.'))
 	}
 	await settleSaves()
-	try {
-		return await apiSend('POST', path, { ...payload(draft), draft: draft.saved, ...extra })
-	} catch (e) {
-		if (e?.response?.status === 429) {
-			throw new Error(t('sockless_mail', 'You have sent many messages in a short time. Wait a few minutes and try again.'))
+	return withUnlockedKey(async () => {
+		try {
+			return await apiSend('POST', path, { ...payload(draft), draft: draft.saved, ...extra })
+		} catch (e) {
+			if (e?.response?.status === 429) {
+				throw new Error(t('sockless_mail', 'You have sent many messages in a short time. Wait a few minutes and try again.'))
+			}
+			throw new ActionError(e)
 		}
-		throw new ActionError(e)
-	}
+	}, t('sockless_mail', 'Unlock your key to sign this message.'))
 }
 
 /**

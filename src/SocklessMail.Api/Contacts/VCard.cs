@@ -7,13 +7,15 @@ namespace SocklessMail.Api.Contacts;
 /// existing card insert lines into the original text, so everything this class does not know
 /// (photos, addresses, custom properties) stays exactly as it was.
 /// </summary>
-public sealed record VCard(string? Uid, string Name, IReadOnlyList<string> Emails, IReadOnlyList<string> Groups, string? Organization)
+/// <param name="Keys">Public keys or certificates in KEY properties (vCard 4 data: URIs, vCard 3 inline base64), as bytes; linked ones are not fetched.</param>
+public sealed record VCard(string? Uid, string Name, IReadOnlyList<string> Emails, IReadOnlyList<string> Groups, string? Organization, IReadOnlyList<byte[]>? Keys = null)
 {
     public static VCard Parse(string text)
     {
         string? uid = null, fn = null, n = null, org = null;
         var emails = new List<string>();
         var groups = new List<string>();
+        var keys = new List<byte[]>();
         foreach (var (name, value) in Properties(text))
         {
             switch (name)
@@ -43,6 +45,9 @@ public sealed record VCard(string? Uid, string Name, IReadOnlyList<string> Email
                     }
 
                     break;
+                case "KEY" when KeyData(value) is { } key:
+                    keys.Add(key);
+                    break;
                 case "CATEGORIES":
                     foreach (var group in SplitEscaped(value, ',').Select(Unescape).Select(g => g.Trim()))
                     {
@@ -57,7 +62,38 @@ public sealed record VCard(string? Uid, string Name, IReadOnlyList<string> Email
         }
 
         var display = !string.IsNullOrWhiteSpace(fn) ? fn.Trim() : !string.IsNullOrWhiteSpace(n) ? n : org ?? "";
-        return new VCard(uid, display, emails, groups, string.IsNullOrWhiteSpace(org) ? null : org.Trim());
+        return new VCard(uid, display, emails, groups, string.IsNullOrWhiteSpace(org) ? null : org.Trim(), keys);
+    }
+
+    /// <summary>A KEY value's bytes: "data:…;base64,…" (vCard 4) or bare base64 (vCard 3, ENCODING=b); null for links and anything else.</summary>
+    private static byte[]? KeyData(string value)
+    {
+        var data = value.Trim();
+        if (data.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            var comma = data.IndexOf(',');
+            if (comma < 0 || !data[..comma].Contains(";base64", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            data = data[(comma + 1)..];
+        }
+        else if (data.Contains(':'))
+        {
+            // A URL (http:, https:, ldap:): not fetched.
+            return null;
+        }
+
+        try
+        {
+            var bytes = Convert.FromBase64String(data);
+            return bytes.Length > 0 ? bytes : null;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
     }
 
     /// <summary>A new vCard 3.0 (what Nextcloud's Contacts app writes) with a name and one address.</summary>
@@ -74,8 +110,49 @@ public sealed record VCard(string? Uid, string Name, IReadOnlyList<string> Email
         return builder.ToString();
     }
 
+    /// <summary>
+    /// The card's text with one more KEY line (folded at 75 characters), as vCard 4 writes it
+    /// (a data: URI) or vCard 3 (inline base64, TYPE=PGP or X509). Null when the card already has
+    /// that key.
+    /// </summary>
+    public static string? AddKey(string text, byte[] key, bool certificate)
+    {
+        var card = Parse(text);
+        if (card.Keys?.Any(k => k.AsSpan().SequenceEqual(key)) == true)
+        {
+            return null;
+        }
+
+        var version4 = Properties(text).Any(p => p.Name == "VERSION" && p.Value.Trim() == "4.0");
+        var data = Convert.ToBase64String(key);
+        var line = version4
+            ? $"KEY:data:{(certificate ? "application/pkix-cert" : "application/pgp-keys")};base64,{data}"
+            : $"KEY;TYPE={(certificate ? "X509" : "PGP")};ENCODING=b:{data}";
+        return Insert(text, Fold(line));
+    }
+
+    /// <summary>A content line folded as RFC 6350 asks: at most 75 characters, continued after a space.</summary>
+    private static string Fold(string line)
+    {
+        if (line.Length <= 75)
+        {
+            return line;
+        }
+
+        var folded = new StringBuilder(line[..75]);
+        for (var at = 75; at < line.Length; at += 74)
+        {
+            folded.Append("\n ").Append(line.AsSpan(at, Math.Min(74, line.Length - at)));
+        }
+
+        return folded.ToString();
+    }
+
     /// <summary>The card's text with one more EMAIL line, just before END:VCARD.</summary>
-    public static string AddEmail(string text, string email)
+    public static string AddEmail(string text, string email) => Insert(text, "EMAIL;TYPE=INTERNET:" + Escape(email));
+
+    /// <summary>The card's text with <paramref name="line"/> ("\n" between folded parts) just before END:VCARD, in the card's line ends.</summary>
+    private static string Insert(string text, string line)
     {
         var end = text.LastIndexOf("END:VCARD", StringComparison.OrdinalIgnoreCase);
         if (end < 0)
@@ -90,7 +167,7 @@ public sealed record VCard(string? Uid, string Name, IReadOnlyList<string> Email
             before += newline;
         }
 
-        return before + "EMAIL;TYPE=INTERNET:" + Escape(email) + newline + text[end..];
+        return before + line.Replace("\n", newline) + newline + text[end..];
     }
 
     /// <summary>(name, value) of each content line, unfolded; parameters and "item1." groups dropped.</summary>
