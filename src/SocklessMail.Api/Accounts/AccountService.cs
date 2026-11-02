@@ -171,6 +171,20 @@ public sealed class AccountService(
         return account;
     }
 
+    /// <summary>Turns new-mail notifications on or off; like the appearance, not a change of the account's settings.</summary>
+    public async Task<MailAccount?> SetNotificationsAsync(string userId, Guid id, bool enabled, CancellationToken ct)
+    {
+        var account = await GetAsync(userId, id, ct);
+        if (account is null)
+        {
+            return null;
+        }
+
+        account.Notifications = enabled;
+        await db.SaveChangesAsync(ct);
+        return account;
+    }
+
     /// <summary>Sets the order; <paramref name="ids"/> must be exactly the user's accounts.</summary>
     public async Task<bool> ReorderAsync(string userId, IReadOnlyList<Guid> ids, CancellationToken ct)
     {

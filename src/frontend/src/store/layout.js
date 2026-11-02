@@ -1,7 +1,7 @@
 import { computed, reactive, watch } from 'vue'
 
 /**
- * View preferences (reading pane, density, folder pane, pane sizes, rich or plain text, composer size and close button, sender logos) and the
+ * View preferences (reading pane, density, folder pane, pane sizes, rich or plain text, composer size and close button, sender logos, desktop notifications, the unread count on the icon) and the
  * window width they depend on. Kept in the browser's localStorage, per Nextcloud user: several users can share a
  * browser, and the head element names the logged-in one. Storage may be unavailable (private
  * windows, blocked site data); the defaults apply then.
@@ -28,11 +28,20 @@ const DEFAULTS = {
 	senderLogos: true,
 	/** Warn about look-alike sender domains and the like (store/senders.js). */
 	suspiciousSenders: true,
+	/** Desktop notifications for new mail on this device (store/notifications.js); needs the browser's permission. */
+	notifications: false,
+	/** The count on the installed app's icon and in the tab title (store/badge.js): new, unread or off. */
+	appBadge: 'new',
 }
 
 function load() {
 	try {
-		return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') }
+		const stored = JSON.parse(localStorage.getItem(KEY) ?? '{}')
+		// Was a switch for the unread count; on means the default count now.
+		if (typeof stored.appBadge === 'boolean') {
+			stored.appBadge = stored.appBadge ? 'new' : 'off'
+		}
+		return { ...DEFAULTS, ...stored }
 	} catch {
 		return { ...DEFAULTS }
 	}

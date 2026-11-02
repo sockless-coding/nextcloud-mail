@@ -36,6 +36,9 @@ public sealed record ReorderInput(IReadOnlyList<Guid> AccountIds);
 /// <summary>Whether the account's mail is grouped into conversations.</summary>
 public sealed record ConversationsInput(bool Enabled);
 
+/// <summary>Whether new mail of the account shows desktop notifications.</summary>
+public sealed record NotificationsInput(bool Enabled);
+
 /// <summary>How the account is shown; none of it reaches the mail server. Empty values are cleared.</summary>
 public sealed record AppearanceInput(string? Color, string? BadgeText, string? BadgeIcon, bool IncludeInUnified = true)
 {
@@ -90,7 +93,8 @@ public sealed record AccountDto(
     string? BadgeText,
     string? BadgeIcon,
     bool IncludeInUnified,
-    bool Conversations)
+    bool Conversations,
+    bool Notifications)
 {
     public static AccountDto From(MailAccount a) => new(
         a.Id, a.DisplayName, a.SenderName, a.EmailAddress, a.Username, a.AuthMethod,
@@ -102,7 +106,8 @@ public sealed record AccountDto(
         a.BadgeText,
         a.BadgeIcon,
         a.IncludeInUnified,
-        a.Conversations);
+        a.Conversations,
+        a.Notifications);
 }
 
 public static class AccountValidation

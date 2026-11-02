@@ -74,6 +74,11 @@ public static class AccountEndpoints
                 ? Results.Ok(AccountDto.From(account))
                 : NotFound());
 
+        accounts.MapPut("/{id:guid}/notifications", async (Guid id, NotificationsInput input, ClaimsPrincipal user, AccountService service, CancellationToken ct) =>
+            await service.SetNotificationsAsync(user.GetNextcloudUserId(), id, input.Enabled, ct) is { } account
+                ? Results.Ok(AccountDto.From(account))
+                : NotFound());
+
         accounts.MapPut("/order", async (ReorderInput input, ClaimsPrincipal user, AccountService service, CancellationToken ct) =>
             await service.ReorderAsync(user.GetNextcloudUserId(), input.AccountIds ?? [], ct)
                 ? Results.NoContent()

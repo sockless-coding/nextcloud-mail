@@ -80,6 +80,10 @@ public sealed class FolderCache(
         public bool Quiet;
 
         public readonly List<IMessageSummary> Inserts = [];
+
+        /// <summary>UIDs of <see cref="Inserts"/> that arrived since the last sync (not a first load or rebuild).</summary>
+        public readonly HashSet<uint> Arrivals = [];
+
         public readonly Dictionary<uint, MessageFlags> Flags = [];
 
         /// <summary>Changed keywords (<see cref="Tags.Keywords.Format"/>); only for servers that keep them.</summary>
@@ -157,6 +161,12 @@ public sealed class FolderCache(
 
         return await ApplyAsync(account, Key(folder.FullName), plan, s =>
         {
+            if (s.UidValidity != folder.UidValidity)
+            {
+                // Old UIDs mean nothing in the renumbered folder; counting starts at the next look.
+                s.SeenUid = null;
+            }
+
             s.UidValidity = folder.UidValidity;
             s.HighestModSeq = modSeq;
             s.UidNext = uidNext;
@@ -320,6 +330,26 @@ public sealed class FolderCache(
 
         return state.LastUid < start ? null : new UniqueIdRange(uidValidity, start, state.LastUid);
     }
+
+    /// <summary>Unread INBOX mail per account that arrived since the user last looked (<see cref="CachedFolder.SeenUid"/>).</summary>
+    public async Task<Dictionary<Guid, int>> NewInInboxesAsync(CancellationToken ct)
+    {
+        var rows = await db.Folders
+            .Where(f => f.FullName == "INBOX" && f.SeenUid != null)
+            .Join(db.Messages, f => f.Id, m => m.FolderId, (f, m) => new { f.AccountId, f.SeenUid, m.Uid, m.Flags })
+            .Where(x => x.Uid > x.SeenUid && (x.Flags & MessageFlags.Seen) == 0)
+            .GroupBy(x => x.AccountId)
+            .Select(g => new { AccountId = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        return rows.ToDictionary(r => r.AccountId, r => r.Count);
+    }
+
+    /// <summary>The user looked at the app: what the inboxes of <paramref name="accountIds"/> hold now is no longer new.</summary>
+    /// <returns>Whether any mark moved.</returns>
+    public async Task<bool> MarkInboxesSeenAsync(IReadOnlyCollection<Guid> accountIds, CancellationToken ct) =>
+        await db.Folders
+            .Where(f => f.FullName == "INBOX" && accountIds.Contains(f.AccountId) && (f.SeenUid == null || f.SeenUid != f.LastUid))
+            .ExecuteUpdateAsync(s => s.SetProperty(f => f.SeenUid, f => f.LastUid), ct) > 0;
 
     /// <summary>Applies a flag change the app itself just made on the server.</summary>
     public async Task ApplyFlagsAsync(Guid accountId, string fullName, uint uidValidity, IReadOnlyCollection<uint> uids,
@@ -718,6 +748,7 @@ public sealed class FolderCache(
         if (fresh.Count > 0)
         {
             plan.Inserts.AddRange(await folder.FetchAsync(fresh, ListRequest(), ct));
+            plan.Arrivals.UnionWith(fresh.Select(u => u.Id));
         }
 
         plan.LastUid = Math.Max(state.LastUid, Math.Max(fresh.Count == 0 ? 0 : fresh.Max(u => u.Id), (uidNext ?? 1) - 1));
@@ -942,8 +973,9 @@ public sealed class FolderCache(
         var assignment = await conversations.AssignAsync(account.Id, account.OwnerUserId, [.. headers, .. fills.Select(f => f.Value)], state.Id, seq, ct);
         var conversationIds = assignment.Ids;
         plan.Merged = assignment.ChangedHere;
-        db.Messages.AddRange(inserts.Select((s, i) =>
-            ToCachedMessage(state, s, bimi.Find(s), localKeywords.GetValueOrDefault(s.UniqueId.Id), headers[i], conversationIds[i], seq)));
+        var added = inserts.Select((s, i) =>
+            ToCachedMessage(state, s, bimi.Find(s), localKeywords.GetValueOrDefault(s.UniqueId.Id), headers[i], conversationIds[i], seq)).ToList();
+        db.Messages.AddRange(added);
         foreach (var ((uid, filled), i) in fills.Select((f, i) => (f, i)))
         {
             var conversationId = conversationIds[headers.Count + i];
@@ -1006,6 +1038,17 @@ public sealed class FolderCache(
         foreach (var other in assignment.ChangedFolders)
         {
             await push.FolderChangedAsync(other.OwnerUserId, account.Id, other.FullName);
+        }
+
+        // Rules ran before this sync, so what is left in the INBOX stays there. Mail that arrives
+        // already read (moved in, or read elsewhere first) is not news.
+        if (fullName == "INBOX" && account.Notifications && !plan.Wipe)
+        {
+            var arrived = added.Where(m => plan.Arrivals.Contains(m.Uid) && !m.Flags.HasFlag(MessageFlags.Seen)).ToList();
+            if (arrived.Count > 0)
+            {
+                await push.NewMailAsync(state.OwnerUserId, account.Id, fullName, state.UidValidity, arrived);
+            }
         }
 
         return state;

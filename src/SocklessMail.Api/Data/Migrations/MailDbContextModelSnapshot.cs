@@ -100,6 +100,9 @@ namespace SocklessMail.Api.Data.Migrations
                     b.Property<bool>("IncludeInUnified")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("Notifications")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("OwnerUserId")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -545,6 +548,9 @@ namespace SocklessMail.Api.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<long>("ResetSeq")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<uint?>("SeenUid")
                         .HasColumnType("INTEGER");
 
                     b.Property<long?>("SyncedAt")

@@ -14,6 +14,12 @@ public sealed class MailHub(UserActivity activity) : Hub
 {
     public const string FolderChanged = "folderChanged";
 
+    /// <summary>Unread mail arrived in an INBOX; carries what a desktop notification shows.</summary>
+    public const string NewMail = "newMail";
+
+    /// <summary>The user looked at the app somewhere: the new-mail counts went back to zero.</summary>
+    public const string InboxesSeen = "inboxesSeen";
+
     /// <summary>A scheduled message was sent, failed, or changed otherwise.</summary>
     public const string ScheduledChanged = "scheduledChanged";
 
@@ -36,10 +42,36 @@ public sealed class MailHub(UserActivity activity) : Hub
 
 /// <summary>
 /// Tells a user's open tabs that a cached folder changed. Only a nudge: the client asks the
-/// changes endpoint what changed, so merging stays in one place and nothing here can leak data.
+/// changes endpoint what changed, so merging stays in one place. The one exception is
+/// <see cref="NewMailAsync"/>, which carries sender and subject for a notification; like
+/// everything here it only reaches the owner's own connections.
 /// </summary>
 public sealed class MailPush(IHubContext<MailHub> hub, ILogger<MailPush> logger)
 {
+    /// <summary>Messages a <see cref="MailHub.NewMail"/> describes; the count covers the rest.</summary>
+    public const int NewMailItems = 5;
+
+    public async Task NewMailAsync(string userId, Guid accountId, string fullName, uint uidValidity, IReadOnlyCollection<CachedMessage> messages)
+    {
+        var newest = messages.OrderByDescending(m => m.Date).Take(NewMailItems).Select(m => new
+        {
+            id = MailboxIds.MessageId(uidValidity, m.Uid),
+            from = m.From.FirstOrDefault(),
+            subject = m.Subject,
+            date = m.Date,
+        });
+        try
+        {
+            await hub.Clients.User(userId).SendAsync(
+                MailHub.NewMail, new { accountId, folderId = MailboxIds.FolderId(fullName), count = messages.Count, messages = newest.ToList() });
+        }
+        catch (Exception e)
+        {
+            // Only a notification is lost; the mail itself is cached and shows up as usual.
+            logger.LogWarning(e, "Could not push new mail");
+        }
+    }
+
     public async Task FolderChangedAsync(string userId, Guid accountId, string fullName)
     {
         try
@@ -51,6 +83,19 @@ public sealed class MailPush(IHubContext<MailHub> hub, ILogger<MailPush> logger)
         {
             // The cache is already written; clients that miss this catch up on their next refresh.
             logger.LogWarning(e, "Could not push a folder change");
+        }
+    }
+
+    public async Task InboxesSeenAsync(string userId)
+    {
+        try
+        {
+            await hub.Clients.User(userId).SendAsync(MailHub.InboxesSeen);
+        }
+        catch (Exception e)
+        {
+            // Other tabs ask again on their next refresh.
+            logger.LogWarning(e, "Could not push that the inboxes were seen");
         }
     }
 

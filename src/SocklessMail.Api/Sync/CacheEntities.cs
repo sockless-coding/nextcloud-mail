@@ -31,6 +31,13 @@ public sealed class CachedFolder
     public uint LastUid { get; set; }
 
     public uint? UidNext { get; set; }
+
+    /// <summary>
+    /// INBOX only: <see cref="LastUid"/> when the user last looked at the app. Unread mail above it
+    /// is new (the app icon's count); null until the first look, or after the folder was renumbered.
+    /// </summary>
+    public uint? SeenUid { get; set; }
+
     public int Total { get; set; }
     public int? Unread { get; set; }
 

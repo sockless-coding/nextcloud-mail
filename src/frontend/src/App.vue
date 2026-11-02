@@ -197,10 +197,12 @@ import { accountsState, loadAccounts } from './store/accounts.js'
 import { dialogs, removeFolder, removePermanently } from './store/actions.js'
 import { assistantTaskChanged, loadAssistant } from './store/assistant.js'
 import { composeNew, composer } from './store/compose.js'
+import { inboxChanged, inboxesSeen, startBadge } from './store/badge.js'
 import { attachFileIds, takeFileIdsFromUrl } from './store/files.js'
 import { closeDrawer, folderPaneShown, layout, readingPane, viewport } from './store/layout.js'
 import { hasPendingWrites, loadFolders, mailboxState, refreshMessages } from './store/mailbox.js'
 import { accountSaved, loadAllFolders, openStartView, removeAccount } from './store/navigation.js'
+import { notifyNewMail } from './store/notifications.js'
 import { loadOAuthState } from './store/oauth.js'
 import { loadScheduled, scheduledState } from './store/scheduled.js'
 import { loadPresets } from './store/sendLater.js'
@@ -230,6 +232,7 @@ let pollCount = 0
 let pollTimer = null
 let removeShortcuts = null
 let stopPush = null
+let stopBadge = null
 const folderReloads = new Map()
 
 /** With the reading pane off, the list and the open message take turns. */
@@ -367,19 +370,26 @@ async function poll(event) {
 
 /** A push: refresh the list if it shows that folder, and the account's counts. */
 function folderChanged({ accountId, folderId }) {
-	// Hidden tabs catch up when they become visible.
-	if (document.hidden) {
+	// The app icon's count (store/badge.js) follows the inboxes, in hidden tabs too: a minimized
+	// app window is hidden. Otherwise hidden tabs catch up when they become visible.
+	if (folderId === INBOX_ID) {
+		inboxChanged()
+	}
+	const hidden = document.hidden
+	if (hidden && !(layout.appBadge === 'unread' && folderId === INBOX_ID)) {
 		return
 	}
 	const { selected } = mailboxState
-	if (selected.unified ? inUnifiedView(accountId, folderId) : selected.accountId === accountId && selected.folderId === folderId) {
+	if (!hidden && (selected.unified ? inUnifiedView(accountId, folderId) : selected.accountId === accountId && selected.folderId === folderId)) {
 		refreshList()
 	}
 	if (mailboxState.folders[accountId] && !folderReloads.has(accountId)) {
 		folderReloads.set(accountId, window.setTimeout(() => {
 			folderReloads.delete(accountId)
 			loadFolders(accountId, true)
-			loadTagCounts()
+			if (!document.hidden) {
+				loadTagCounts()
+			}
 		}, FOLDER_RELOAD_DELAY_MS))
 	}
 }
@@ -423,13 +433,15 @@ onMounted(async () => {
 	sendFilesFromUrl()
 	pollTimer = window.setInterval(poll, POLL_INTERVAL_MS)
 	document.addEventListener('visibilitychange', poll)
-	stopPush = startPush({ folderChanged, scheduledChanged: loadScheduled, assistantTaskChanged, reconnected: () => poll({ type: 'visibilitychange' }) })
+	stopBadge = startBadge()
+	stopPush = startPush({ folderChanged, newMail: notifyNewMail, inboxesSeen, scheduledChanged: loadScheduled, assistantTaskChanged, reconnected: () => poll({ type: 'visibilitychange' }) })
 	removeShortcuts = installShortcuts()
 })
 
 onBeforeUnmount(() => {
 	window.clearInterval(pollTimer)
 	stopPush?.()
+	stopBadge?.()
 	folderReloads.forEach((timer) => window.clearTimeout(timer))
 	document.removeEventListener('visibilitychange', poll)
 	removeShortcuts?.()

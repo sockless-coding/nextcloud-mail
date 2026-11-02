@@ -47,6 +47,48 @@
 			</fieldset>
 		</NcAppSettingsSection>
 
+		<NcAppSettingsSection id="sockless-settings-notifications" :name="t('sockless_mail', 'Notifications')">
+			<NcCheckboxRadioSwitch type="switch"
+				:model-value="layout.notifications && notificationState.permission === 'granted'"
+				:disabled="notificationState.permission === 'unsupported'"
+				@update:model-value="setDesktopNotifications">
+				{{ t('sockless_mail', 'Show desktop notifications for new mail on this device') }}
+			</NcCheckboxRadioSwitch>
+			<NcButton v-if="layout.notifications && notificationState.permission === 'granted'"
+				class="settings__test"
+				variant="secondary"
+				@click="sendTest">
+				{{ t('sockless_mail', 'Send a test notification') }}
+			</NcButton>
+			<p v-if="notificationState.permission === 'unsupported'" class="settings__hint">
+				{{ t('sockless_mail', 'This browser cannot show notifications.') }}
+			</p>
+			<p v-else-if="notificationState.permission === 'denied'" class="settings__hint">
+				{{ t('sockless_mail', 'Notifications are blocked for this site. Allow them in the browser\'s site settings, then turn this on.') }}
+			</p>
+			<p v-else-if="apiMode !== 'harp'" class="settings__hint">
+				{{ t('sockless_mail', 'New mail is announced over a push connection, which needs Nextcloud\'s HaRP proxy. Ask your administrator.') }}
+			</p>
+			<p v-else class="settings__hint">
+				{{ t('sockless_mail', 'For unread mail arriving in an inbox, while Mail is open in a tab or as an installed app. Accounts can be left out below.') }}
+			</p>
+			<fieldset class="settings__group">
+				<legend>{{ t('sockless_mail', 'Number on the app icon and in the tab title') }}</legend>
+				<NcCheckboxRadioSwitch v-for="option in BADGES"
+					:key="option.value"
+					v-model="layout.appBadge"
+					type="radio"
+					name="sockless-app-badge"
+					:value="option.value"
+					:description="option.description">
+					{{ option.label }}
+				</NcCheckboxRadioSwitch>
+				<p class="settings__hint">
+					{{ t('sockless_mail', 'The inboxes in All accounts are counted. The icon shows it once Sockless Mail is installed as an app: open it from the app menu and choose Install in the browser\'s address bar or menu.') }}
+				</p>
+			</fieldset>
+		</NcAppSettingsSection>
+
 		<NcAppSettingsSection v-if="accountsState.accounts.length"
 			id="sockless-settings-accounts"
 			:name="t('sockless_mail', 'Accounts')">
@@ -84,6 +126,13 @@
 							@update:model-value="(enabled) => setGrouping(account, enabled)">
 							{{ t('sockless_mail', 'Conversations') }}
 						</NcCheckboxRadioSwitch>
+						<NcCheckboxRadioSwitch type="switch"
+							:model-value="account.notifications !== false"
+							:loading="saving === `${account.id}:notifications`"
+							:aria-label="t('sockless_mail', 'Show notifications for new mail of {name}', { name: account.displayName })"
+							@update:model-value="(enabled) => setNotifying(account, enabled)">
+							{{ t('sockless_mail', 'Notifications') }}
+						</NcCheckboxRadioSwitch>
 					</span>
 					<NcActions :aria-label="t('sockless_mail', 'Actions for {name}', { name: account.displayName })">
 						<NcActionButton close-after-click @click="dialogs.accountAppearance = account">
@@ -119,26 +168,30 @@ import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcAppSettingsDialog from '@nextcloud/vue/components/NcAppSettingsDialog'
 import NcAppSettingsSection from '@nextcloud/vue/components/NcAppSettingsSection'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import { ref } from 'vue'
-import { accountsState, setAppearance, setConversations } from '../store/accounts.js'
+import { apiMode } from '../api.js'
+import { accountsState, setAppearance, setConversations, setNotifications } from '../store/accounts.js'
 import { dialogs } from '../store/actions.js'
 import { layout } from '../store/layout.js'
 import { moveAccountBy, unifiedAccountsChanged } from '../store/navigation.js'
+import { notificationState, setDesktopNotifications, testNotification } from '../store/notifications.js'
 import AccountBadge from './AccountBadge.vue'
 import { useAccountDrag } from './accountDrag.js'
 
 /**
  * The user's preferences that do not fit the View menu. The writing ones are kept with the view
  * settings in this browser (store/layout.js): which composer size suits depends on the screen.
+ * So is whether to show desktop notifications, whose permission is the browser's.
  * The accounts' order and appearance are kept on the server, for every device.
  */
 const open = defineModel('open', { type: Boolean, default: false })
 
 const { dragStart, dragOver, drop, dragEnd, dragClasses } = useAccountDrag()
 
-/** The switch being saved: "<account id>:unified" or "<account id>:conversations". */
+/** The switch being saved: "<account id>:unified", ":conversations" or ":notifications". */
 const saving = ref(null)
 
 async function setUnified(account, includeInUnified) {
@@ -164,6 +217,29 @@ async function setGrouping(account, enabled) {
 		saving.value = null
 	}
 }
+
+function sendTest() {
+	if (!testNotification()) {
+		showError(t('sockless_mail', 'This browser does not show notifications from a page.'))
+	}
+}
+
+async function setNotifying(account, enabled) {
+	saving.value = `${account.id}:notifications`
+	try {
+		await setNotifications(account.id, enabled)
+	} catch (e) {
+		showError(t('sockless_mail', 'Could not save the change: {error}', { error: e.message }))
+	} finally {
+		saving.value = null
+	}
+}
+
+const BADGES = [
+	{ value: 'new', label: t('sockless_mail', 'New mail since you last looked'), description: t('sockless_mail', 'Unread mail that arrived while Sockless Mail was not in front, on any device') },
+	{ value: 'unread', label: t('sockless_mail', 'All unread mail') },
+	{ value: 'off', label: t('sockless_mail', 'None') },
+]
 
 const SIZES = [
 	{ value: 'small', label: t('sockless_mail', 'Small, docked at the bottom') },
@@ -196,6 +272,10 @@ const FORMATS = [
 .settings__hint {
 	color: var(--color-text-maxcontrast);
 	margin-block-start: 4px;
+}
+
+.settings__test {
+	margin-block: 4px;
 }
 
 .settings__accounts {

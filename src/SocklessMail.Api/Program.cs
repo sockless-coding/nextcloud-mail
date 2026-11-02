@@ -200,6 +200,7 @@ api.MapRuleEndpoints();
 api.MapRuleRunEndpoints();
 api.MapTagEndpoints();
 api.MapScheduleEndpoints();
+api.MapNewMailEndpoints();
 api.MapHub<MailHub>("/hub");
 app.MapOAuthCallback();
 app.MapFilesAction();

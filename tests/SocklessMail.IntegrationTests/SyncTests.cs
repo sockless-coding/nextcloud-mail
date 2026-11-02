@@ -4,9 +4,11 @@ using System.Text;
 using System.Text.Json;
 using MailKit;
 using MailKit.Net.Imap;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using MimeKit;
 using SocklessMail.Api.Mail;
+using SocklessMail.Api.Sync;
 using static SocklessMail.IntegrationTests.MailApp;
 
 namespace SocklessMail.IntegrationTests;
@@ -233,5 +235,81 @@ public sealed class SyncTests(DovecotFixture dovecot) : IDisposable
 
         var fresh = await GetAsync(client, $"/api/accounts/{account}/folders/{boxId}/messages");
         Assert.Equal(["New 2", "New 1"], fresh.GetProperty("messages").EnumerateArray().Select(m => m.GetProperty("subject").GetString()));
+    }
+
+    [Fact]
+    public async Task Unread_arrivals_in_the_inbox_are_announced_for_notifications()
+    {
+        var (client, account, _, imap) = await SetUpAsync("qresync");
+        await AppendAsync(imap.Inbox, "Old", 2, Ct);
+        await GetAsync(client, $"/api/accounts/{account}/folders/{Inbox}/messages");
+
+        await using var hub = _apps[^1].HubAs("sync-user");
+        var announced = new List<JsonElement>();
+        var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        hub.On<JsonElement>(MailHub.NewMail, mail =>
+        {
+            lock (announced)
+            {
+                announced.Add(mail);
+            }
+
+            first.TrySetResult();
+        });
+        await hub.StartAsync(Ct);
+
+        // What was there at the first sync is not news, nor is mail that arrives already read.
+        var added = (await AppendAsync(imap.Inbox, "Late", 1, Ct))[0];
+        await imap.Inbox.AppendAsync(Simple("Read elsewhere"), MessageFlags.Seen, Ct);
+        var page = await GetAsync(client, $"/api/accounts/{account}/folders/{Inbox}/messages");
+        await first.Task.WaitAsync(TimeSpan.FromSeconds(15), Ct);
+        var mail = Assert.Single(announced);
+        Assert.Equal(account, mail.GetProperty("accountId").GetGuid());
+        Assert.Equal(Inbox, mail.GetProperty("folderId").GetString());
+        Assert.Equal(1, mail.GetProperty("count").GetInt32());
+        var message = Assert.Single(mail.GetProperty("messages").EnumerateArray());
+        Assert.Equal(Id(page, added), message.GetProperty("id").GetString());
+        Assert.Equal("Late 1", message.GetProperty("subject").GetString());
+        Assert.Equal("sender@example.test", message.GetProperty("from").GetProperty("address").GetString());
+
+        // An account with notifications off stays quiet.
+        var off = await client.PutAsJsonAsync($"/api/accounts/{account}/notifications", new { enabled = false }, Ct);
+        Assert.False((await Json(off)).GetProperty("notifications").GetBoolean());
+        await AppendAsync(imap.Inbox, "Quiet", 1, Ct);
+        var quiet = await GetAsync(client, $"/api/accounts/{account}/folders/{Inbox}/messages");
+        Assert.Contains(quiet.GetProperty("messages").EnumerateArray(), m => m.GetProperty("subject").GetString() == "Quiet 1");
+        await Task.Delay(500, Ct);
+        Assert.Single(announced);
+    }
+
+    [Fact]
+    public async Task New_mail_counts_unread_arrivals_since_the_user_last_looked()
+    {
+        var (client, account, _, imap) = await SetUpAsync("qresync");
+        await AppendAsync(imap.Inbox, "Old", 3, Ct);
+        await GetAsync(client, $"/api/accounts/{account}/folders/{Inbox}/messages");
+        async Task<int> NewAsync()
+        {
+            var counts = (await GetAsync(client, "/api/new-mail")).GetProperty("counts");
+            return counts.TryGetProperty(account.ToString(), out var n) ? n.GetInt32() : 0;
+        }
+
+        // Nothing counts before the first look, however much is unread.
+        Assert.Equal(0, await NewAsync());
+        var look = await client.PutAsJsonAsync("/api/new-mail/seen", new { accountIds = new[] { account } }, Ct);
+        Assert.Equal(System.Net.HttpStatusCode.NoContent, look.StatusCode);
+
+        var late = await AppendAsync(imap.Inbox, "Late", 2, Ct);
+        await imap.Inbox.AppendAsync(Simple("Read elsewhere"), MessageFlags.Seen, Ct);
+        await GetAsync(client, $"/api/accounts/{account}/folders/{Inbox}/messages");
+        Assert.Equal(2, await NewAsync());
+
+        // Read elsewhere: no longer counted.
+        await imap.Inbox.AddFlagsAsync(late[0], MessageFlags.Seen, true, Ct);
+        await GetAsync(client, $"/api/accounts/{account}/folders/{Inbox}/messages");
+        Assert.Equal(1, await NewAsync());
+
+        await client.PutAsJsonAsync("/api/new-mail/seen", new { accountIds = new[] { account } }, Ct);
+        Assert.Equal(0, await NewAsync());
     }
 }

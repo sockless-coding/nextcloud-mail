@@ -155,6 +155,23 @@ export async function setConversations(id, enabled) {
 	}
 }
 
+/**
+ * Turns desktop notifications for new mail on or off for one account.
+ *
+ * @param {string} id account id
+ * @param {boolean} enabled whether new mail of the account is announced
+ */
+export async function setNotifications(id, enabled) {
+	try {
+		const account = await apiSend('PUT', `/accounts/${id}/notifications`, { enabled })
+		const index = accountsState.accounts.findIndex((a) => a.id === id)
+		accountsState.accounts.splice(index, 1, account)
+		return account
+	} catch (e) {
+		rethrow(e)
+	}
+}
+
 /** The accounts the "All accounts" views take in. */
 export const unifiedAccounts = computed(() => accountsState.accounts.filter((a) => a.includeInUnified !== false))
 

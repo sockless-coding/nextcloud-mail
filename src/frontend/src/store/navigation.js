@@ -61,7 +61,7 @@ export function openFolder(accountId, folderId) {
 	clearSearch()
 	endSelectionMode()
 	closeDrawer()
-	selectFolder(accountId, folderId)
+	return selectFolder(accountId, folderId)
 }
 
 /**

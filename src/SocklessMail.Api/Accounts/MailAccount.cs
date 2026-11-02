@@ -64,6 +64,9 @@ public sealed class MailAccount
     /// <summary>Whether the account's mail is grouped into conversations (threads).</summary>
     public bool Conversations { get; set; }
 
+    /// <summary>Whether new INBOX mail of the account is announced to the user's open tabs (desktop notifications).</summary>
+    public bool Notifications { get; set; } = true;
+
     /// <summary>Where the account's tags are kept; learnt from the server when a message is first tagged.</summary>
     public TagStorage TagStorage { get; set; }
 
