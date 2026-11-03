@@ -10,3 +10,6 @@ dev/
 .vscode/
 *.md
 companion/
+dist/
+tools/
+docs/screenshots/

@@ -5,6 +5,8 @@ Nextcloud **External App (ExApp)**: an ASP.NET Core (.NET 10) service that Nextc
 through AppAPI, with a Vue 3 interface rendered inside Nextcloud. Users reach it only through
 Nextcloud and are signed in by their Nextcloud session. Mail is handled with MailKit/MimeKit.
 
+![Sockless Mail: two accounts in one inbox, with a meeting invitation open](docs/screenshots/1-all-accounts.png)
+
 - [Features](#features)
 - [Installation](#installation)
 - [Configuration](#configuration)
@@ -102,52 +104,77 @@ Nextcloud and are signed in by their Nextcloud session. Mail is handled with Mai
 
 - Nextcloud 32 or later with **AppAPI** enabled. AppAPI ships with current Nextcloud releases.
 - A deploy daemon. **HaRP** is recommended. A *manual-install* daemon works too, with
-  limitations (see below).
-- The ability to run a Docker image from a registry your Docker engine can pull from.
+  limitations (see [Without HaRP](#without-harp-manual-install)).
+- A Docker engine that can pull from `ghcr.io`. Releases are published as
+  `ghcr.io/sockless-coding/sockless_mail:<version>` for amd64 and arm64.
 
-### With HaRP
+### Deploy daemon (HaRP)
 
-1. **HaRP**: run it and register it as a deploy daemon, as described in the
-   [HaRP README](https://github.com/nextcloud/HaRP) and the Nextcloud admin manual, section
-   *AppAPI and External Apps*.
-   - Your reverse proxy must forward `/exapps/` to HaRP. AppAPI itself reaches the app through
-     that path, so installation fails without it.
-   - For push (new mail without polling), the proxy must also pass WebSocket upgrades (the
-     `Upgrade` and `Connection` headers in nginx). Without them, the browser falls back to SSE
-     or long polling.
-   - [dev/nginx.conf](dev/nginx.conf) has a working example.
-2. **Image**: releases are published as `ghcr.io/sockless-coding/sockless_mail:<version>` for
-   amd64 and arm64 (see [Releasing](#releasing)). For your own build, push it to a registry
-   your Docker engine can pull from, and set `<registry>`, `<image>` and `<image-tag>` in
-   [appinfo/info.xml](appinfo/info.xml) to match.
-3. **Register**. `--info-xml` takes a local path or a URL, such as the release's own manifest:
-   ```bash
-   occ app_api:app:register sockless_mail <daemon> \
-       --info-xml https://raw.githubusercontent.com/sockless-coding/nextcloud-mail/v<version>/appinfo/info.xml \
-       --env SOCKLESS_MAIL_ENCRYPTION_KEY='<long random value>' --wait-finish
-   ```
-   Generate the key with, for example, `openssl rand -base64 48`, and keep a copy somewhere
-   safe (see [Stored credentials](docs/security.md#stored-credentials)). Add further `--env`
-   options for the other [settings](#environment-variables).
-4. **Web address (optional)**: AppAPI shows the app at
-   `/apps/app_api/embedded/sockless_mail/sockless_mail`. For a cleaner `/apps/socklessmail/`,
-   install the companion app:
-   ```bash
-   cp -r companion/socklessmail /path/to/nextcloud/custom_apps/
-   occ app:enable socklessmail
-   ```
-   The app menu entry then points at the new address, and AppAPI's address keeps working. The
-   companion only serves the page; AppAPI and the ExApp are still required. Each release has
-   it as `socklessmail.tar.gz`.
+- **Nextcloud AIO**: enable HaRP in the AIO interface. AIO registers the daemon (`harp_aio`)
+  and routes `/exapps/` for you.
+- **Other setups**: run HaRP and register it as a deploy daemon, as described in the
+  [HaRP README](https://github.com/nextcloud/HaRP) and the Nextcloud admin manual, section
+  *AppAPI and External Apps*.
+  - Your reverse proxy must forward `/exapps/` to HaRP. AppAPI itself reaches the app through
+    that path, so installation fails without it.
+  - For push (new mail without polling), the proxy must also pass WebSocket upgrades (the
+    `Upgrade` and `Connection` headers in nginx). Without them, the browser falls back to SSE
+    or long polling.
+  - [dev/nginx.conf](dev/nginx.conf) has a working example.
+
+### Encryption key
+
+Generate a key before installing, for example with `openssl rand -base64 48`, and keep a copy
+in your password manager. It protects the stored mail passwords (see
+[Stored credentials](docs/security.md#stored-credentials)) and can only be set at installation.
+Without it, the app falls back to a key derived from its app secret and logs a warning.
+
+### From the App Store
+
+> Sockless Mail is not listed in the Nextcloud App Store yet. Until it is, use
+> [From a GitHub release](#from-a-github-release).
+
+1. In **Apps**, find **Sockless Mail** (Office or Social).
+2. Open **Advanced deploy options** and set `SOCKLESS_MAIL_ENCRYPTION_KEY` to your key. Set
+   the other [environment variables](#environment-variables) there too, if you need them.
+3. Click **Deploy and enable**.
+4. Optional: also enable the companion app (see [Web address](#web-address)). It is listed as
+   *Sockless Mail* too; its summary says it serves the page at `/apps/socklessmail/`.
+
+With `occ` instead (AIO: see the `occ` function under [Nextcloud AIO](#nextcloud-aio)):
+
+```bash
+occ app_api:app:register sockless_mail <daemon> \
+    --env SOCKLESS_MAIL_ENCRYPTION_KEY='<key>' --wait-finish
+occ app:install socklessmail      # optional companion
+```
+
+Without `--info-xml`, AppAPI takes the latest release from the App Store.
+
+### From a GitHub release
+
+`--info-xml` takes a local path or a URL, such as a release's own manifest:
+
+```bash
+occ app_api:app:register sockless_mail <daemon> \
+    --info-xml https://raw.githubusercontent.com/sockless-coding/nextcloud-mail/v<version>/appinfo/info.xml \
+    --env SOCKLESS_MAIL_ENCRYPTION_KEY='<key>' --wait-finish
+```
+
+Add further `--env` options for the other [settings](#environment-variables). For your own
+build, push the image to a registry your Docker engine can pull from, and set `<registry>`,
+`<image>` and `<image-tag>` in [appinfo/info.xml](appinfo/info.xml) to match.
+
+The companion app is attached to each release as `socklessmail.tar.gz`; unpack it into
+`custom_apps` and run `occ app:enable socklessmail`.
 
 ### Nextcloud AIO
 
-Enable HaRP in the AIO interface first. AIO then registers the deploy daemon and routes
-`/exapps/` for you. Run `occ` inside the Nextcloud container:
+Run `occ` inside the Nextcloud container:
 
 ```bash
 occ() { docker exec --user www-data -i nextcloud-aio-nextcloud php occ "$@"; }
-VERSION=0.32.2                    # the release to install
+VERSION=0.50.0                    # the release to install
 KEY="$(openssl rand -base64 48)"; echo "$KEY"   # store this in your password manager
 
 occ app_api:daemon:list   # AIO's HaRP daemon is harp_aio
@@ -162,24 +189,44 @@ curl -fsSL "https://github.com/sockless-coding/nextcloud-mail/releases/download/
 occ app:enable socklessmail
 ```
 
+Once the app is in the App Store, leave out `--info-xml` and install the companion with
+`occ app:install socklessmail`.
+
 AIO's backup covers AIO's own volumes. Check whether it also includes the app's volume
 `nc_app_sockless_mail_data`, and back that volume up yourself if it does not.
 
+### Web address
+
+AppAPI shows the app at `/apps/app_api/embedded/sockless_mail/sockless_mail`. The companion app
+(id `socklessmail`) serves the same page at `/apps/socklessmail/` and points the app menu entry
+there. From that address, the browser can install the page as an app that shows the unread count
+on its icon. AppAPI's address keeps working. The companion only serves the page, so AppAPI and
+the External App are still required.
+
 ### Updating
 
-1. Run:
-   ```bash
-   occ app_api:app:update sockless_mail \
-       --info-xml https://raw.githubusercontent.com/sockless-coding/nextcloud-mail/v<version>/appinfo/info.xml \
-       --wait-finish
-   ```
-   The app secret, port, settings and data volume are kept. An update to the version already
-   installed does nothing.
-2. If every `/exapps/sockless_mail/...` request answers 404 after the update, run
-   `occ app_api:app:disable sockless_mail` and then `occ app_api:app:enable sockless_mail` (see
-   [Known limitations](#known-limitations)).
-3. For the companion app, unpack the new `socklessmail.tar.gz` over the old copy. Nextcloud
-   updates it on the next page load, or with `occ upgrade`.
+- **From the App Store**: the Apps page offers the update for both apps, or run:
+  ```bash
+  occ app_api:app:update sockless_mail --wait-finish   # or: occ app_api:app:update --all
+  occ app:update socklessmail
+  ```
+- **From a GitHub release**:
+  ```bash
+  occ app_api:app:update sockless_mail \
+      --info-xml https://raw.githubusercontent.com/sockless-coding/nextcloud-mail/v<version>/appinfo/info.xml \
+      --wait-finish
+  ```
+  For the companion, unpack the new `socklessmail.tar.gz` over the old copy. Nextcloud
+  updates it on the next page load, or with `occ upgrade`. Once the app is in the App Store,
+  an install registered from a GitHub release can update from the store by leaving out
+  `--info-xml`.
+
+The app secret, port, settings and data volume are kept. An update to the version already
+installed does nothing. The [changelog](CHANGELOG.md) lists what each release changes.
+
+If every `/exapps/sockless_mail/...` request answers 404 after an update, run
+`occ app_api:app:disable sockless_mail` and then `occ app_api:app:enable sockless_mail` (see
+[Known limitations](#known-limitations)).
 
 Unregistering keeps the data volume unless you pass `--rm-data`. Registering again creates a
 new app secret, which matters if no encryption key is set.
@@ -395,7 +442,8 @@ In short (details in [docs/security.md](docs/security.md)):
 ### Layout
 
 ```
-appinfo/info.xml            ExApp manifest: id sockless_mail, image, routes, env allow-list
+appinfo/info.xml            ExApp manifest: id sockless_mail, image, routes, env allow-list, store metadata
+CHANGELOG.md                release notes for both apps, shown in the App Store
 companion/socklessmail/     optional PHP app: serves the mail page at /apps/socklessmail/
 Dockerfile                  frontend build → dotnet publish → aspnet:10.0-alpine + frpc
 docker/entrypoint.sh        runs as root, fixes ownership, drops to the "sockless" user
@@ -428,6 +476,7 @@ tests/SocklessMail.Tests/   xUnit v3: auth, CSRF, accounts, user isolation, key 
 tests/SocklessMail.IntegrationTests/  API and IMAP against GreenMail and Dovecot in Docker (Testcontainers)
 tests/e2e/                  browser checks against the dev stack (Playwright with installed Edge/Chrome)
 dev/                        local Nextcloud + HaRP + GreenMail stack, the dev.sh helper, unicode-data.sh
+tools/appstore.sh           App Store checks, archives, signing and upload (used by the release workflow)
 ```
 
 ### Build and test
@@ -535,6 +584,7 @@ node accounts.mjs    # one script per area; see the list below
 | `tags.mjs`, `rules.mjs` | tags and rules |
 | `sendlater.mjs`, `scheduled.mjs`, `presets.mjs` | send later, the Scheduled view, presets |
 | `companion.mjs` | `/apps/socklessmail/`, menu entry, deep links |
+| `screenshots.mjs` | the App Store screenshots in `docs/screenshots/`, from `dev/dev.sh seed-demo` mail as a separate user (see the file's header) |
 
 They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console
 errors. They open the app at `/apps/socklessmail/`; `APP_PAGE=embedded` uses AppAPI's page
@@ -543,18 +593,52 @@ instead.
 ### Releasing
 
 1. Bump `<version>` and `<image-tag>` in `appinfo/info.xml` (keep them equal), and `<version>`
-   in `companion/socklessmail/appinfo/info.xml`. Commit.
-2. Tag and push:
+   in `companion/socklessmail/appinfo/info.xml`.
+2. In [CHANGELOG.md](CHANGELOG.md), rename `## [Unreleased]` to `## [<version>] - <date>`, add
+   a new empty `## [Unreleased]` above it, and update the links at the bottom. The App Store
+   shows this section as the release notes.
+3. Check, then commit:
    ```bash
-   git tag v0.32.0 && git push origin v0.32.0
+   tools/appstore.sh check   # needs xsltproc and xmllint (apt: xsltproc libxml2-utils)
    ```
-3. [.github/workflows/release.yml](.github/workflows/release.yml) checks that the tag, the
-   version and the image tag agree, runs the unit tests, and pushes
-   `ghcr.io/sockless-coding/sockless_mail:<version>` and `:latest` for amd64 and arm64. It then
-   creates a GitHub release with `info.xml` and `socklessmail.tar.gz`.
-4. The first time only: on GitHub, open the package's settings (your profile or organization →
-   Packages → `sockless_mail`) and make the package **public**, so Docker can pull it without
-   logging in.
+4. Tag and push:
+   ```bash
+   git tag v0.50.0 && git push origin v0.50.0
+   ```
+5. [.github/workflows/release.yml](.github/workflows/release.yml) then:
+   - checks that the tag, both versions, the image tag and the CHANGELOG agree, and validates
+     both `info.xml` files against the App Store schema;
+   - runs the unit tests and pushes `ghcr.io/sockless-coding/sockless_mail:<version>` and
+     `:latest` for amd64 and arm64;
+   - creates a GitHub release with `info.xml`, `sockless_mail.tar.gz` and `socklessmail.tar.gz`
+     (built by `tools/appstore.sh package`);
+   - signs both archives and publishes them to the App Store. An app is skipped, with a notice,
+     while its secrets are missing.
+
+**One-time setup**
+
+- GitHub package: open the package's settings (your profile or organization → Packages →
+  `sockless_mail`) and make it **public**, so Docker can pull it without logging in.
+- App Store, for each app id (`sockless_mail` and `socklessmail`):
+  1. Create a key and a certificate request:
+     ```bash
+     openssl req -nodes -newkey rsa:4096 -keyout sockless_mail.key -out sockless_mail.csr -subj "/CN=sockless_mail"
+     ```
+  2. Submit the `.csr` as a pull request to
+     [nextcloud/app-certificate-requests](https://github.com/nextcloud/app-certificate-requests),
+     with your email address visible on your GitHub profile. You get back a signed `.crt`.
+  3. Register the app at [apps.nextcloud.com](https://apps.nextcloud.com/developer/apps/new)
+     with the certificate and this signature:
+     ```bash
+     echo -n sockless_mail | openssl dgst -sha512 -sign sockless_mail.key | openssl base64
+     ```
+  4. Add the key's contents as a repository secret: `APPSTORE_KEY_SOCKLESS_MAIL` or
+     `APPSTORE_KEY_SOCKLESSMAIL`.
+- Add your App Store API token (account settings on apps.nextcloud.com) as the secret
+  `APPSTORE_TOKEN`.
+- The first release with store archives is the one after 0.50.0. If its secrets were not
+  set yet, upload by hand: sign with `tools/appstore.sh sign <archive> <key>`, then paste the
+  signature and the GitHub release's download link into the App Store's upload form.
 
 ## License
 

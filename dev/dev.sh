@@ -148,6 +148,7 @@ Usage: dev/dev.sh <command>
   logs             Follow the ExApp container's logs
   occ <args>       Run occ in the Nextcloud container
   seed-mail [addr] Send test mail to GreenMail (default alice@example.test)
+  seed-demo        Send made-up demo mail to alice@ and bob@example.test (for screenshots)
 EOF
 }
 
@@ -164,6 +165,7 @@ case "${1:-help}" in
     unregister) occ app_api:app:unregister "$APP_ID" --force ;;
     logs) docker logs -f "nc_app_$APP_ID" ;;
     seed-mail) shift; bash "$ROOT/dev/seed-mail.sh" "$@" ;;
+    seed-demo) bash "$ROOT/dev/seed-demo.sh" ;;
     occ) shift; occ "$@" ;;
     *) cmd_help ;;
 esac

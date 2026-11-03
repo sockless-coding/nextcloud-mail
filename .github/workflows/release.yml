@@ -19,17 +19,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check versions
+      - name: Check versions and App Store metadata
         id: version
         run: |
-          tag="${GITHUB_REF_NAME#v}"
-          version="$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' appinfo/info.xml | head -1)"
-          image_tag="$(sed -n 's:.*<image-tag>\(.*\)</image-tag>.*:\1:p' appinfo/info.xml | head -1)"
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends xsltproc libxml2-utils >/dev/null
+          bash tools/appstore.sh check "$GITHUB_REF_NAME"
           image="$(sed -n 's:.*<registry>\(.*\)</registry>.*:\1:p' appinfo/info.xml | head -1)/$(sed -n 's:.*<image>\(.*\)</image>.*:\1:p' appinfo/info.xml | head -1)"
-          [ "$tag" = "$version" ] || { echo "Tag $GITHUB_REF_NAME does not match <version> $version"; exit 1; }
-          [ "$version" = "$image_tag" ] || { echo "<version> $version and <image-tag> $image_tag differ"; exit 1; }
           [ "$image" = "$IMAGE" ] || { echo "info.xml names $image, the workflow pushes $IMAGE"; exit 1; }
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -62,12 +59,39 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Package the companion app
-        run: tar -czf socklessmail.tar.gz -C companion socklessmail
+      # App Store archives: sockless_mail.tar.gz (metadata for AppAPI; the code is the image
+      # above) and socklessmail.tar.gz (the companion, also what manual installs unpack).
+      - name: Package the apps
+        run: bash tools/appstore.sh package dist
 
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" appinfo/info.xml socklessmail.tar.gz \
+          gh release create "$GITHUB_REF_NAME" appinfo/info.xml dist/sockless_mail.tar.gz dist/socklessmail.tar.gz \
               --title "Sockless Mail ${{ steps.version.outputs.version }}" --generate-notes
+
+      # Runs after the image and the release exist: the store downloads the archive from the
+      # release, and installs pull the image. An app whose key secret is unset is skipped, so
+      # releases work before the store registration is done.
+      - name: Publish to the Nextcloud App Store
+        env:
+          APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
+          KEY_SOCKLESS_MAIL: ${{ secrets.APPSTORE_KEY_SOCKLESS_MAIL }}
+          KEY_SOCKLESSMAIL: ${{ secrets.APPSTORE_KEY_SOCKLESSMAIL }}
+          DOWNLOAD: ${{ github.server_url }}/${{ github.repository }}/releases/download/${{ github.ref_name }}
+        run: |
+          publish() {
+            local id="$1" key="$2"
+            if [ -z "$key" ] || [ -z "$APPSTORE_TOKEN" ]; then
+              echo "::notice::App Store upload of $id skipped: APPSTORE_TOKEN or its key secret is not set"
+              return 0
+            fi
+            local keyfile; keyfile="$(mktemp)"
+            printf '%s\n' "$key" > "$keyfile"
+            local signature; signature="$(bash tools/appstore.sh sign "dist/$id.tar.gz" "$keyfile")"
+            rm -f "$keyfile"
+            bash tools/appstore.sh upload "$DOWNLOAD/$id.tar.gz" "$signature"
+          }
+          publish sockless_mail "$KEY_SOCKLESS_MAIL"
+          publish socklessmail "$KEY_SOCKLESSMAIL"

@@ -4,15 +4,33 @@
 	<id>sockless_mail</id>
 	<name>Sockless Mail</name>
 	<summary>Webmail client for Nextcloud with multiple IMAP/SMTP accounts per user</summary>
-	<description><![CDATA[Sockless Mail is a webmail client that runs as a Nextcloud External App (AppAPI).
-Each user can connect any number of IMAP/SMTP accounts. The backend is written in C# on ASP.NET Core.]]></description>
+	<description><![CDATA[Sockless Mail is a webmail client for Nextcloud. Each user can connect any number of IMAP/SMTP accounts, with a password or by signing in with Google or Microsoft.
+
+- **Mail**: unified inbox and folders across accounts, conversations, search, push for new mail, tags, rules, send later, and rich text with inline images
+- **Nextcloud**: attach from and save to Files, address book suggestions from Contacts, invitations in Calendar, tasks in Tasks, and Assistant summaries, translations and writing help
+- **Security**: sanitized HTML in a sandbox, remote images only on request, look-alike and new sender domains flagged, deceptive links marked, OpenPGP and S/MIME
+
+It runs as an External App (AppAPI), so it needs a deploy daemon, preferably HaRP. Before installing, open **Advanced deploy options** and set `SOCKLESS_MAIL_ENCRYPTION_KEY` to a long random value (at least 32 characters, e.g. from `openssl rand -base64 48`), and keep a copy of it: it protects the stored mail passwords and can only be set during installation.
+
+For the address `/apps/socklessmail/` and installing the page as a browser app, also install the companion app (id `socklessmail`).]]></description>
 	<!-- Keep <version> and <image-tag> equal: AppAPI deploys <image-tag>, app:update compares <version>. -->
 	<version>0.50.0</version>
 	<licence>MIT</licence>
 	<author>Jimmy Everling</author>
 	<namespace>SocklessMail</namespace>
+	<documentation>
+		<admin>https://github.com/sockless-coding/nextcloud-mail#installation</admin>
+	</documentation>
 	<category>social</category>
 	<category>office</category>
+	<website>https://github.com/sockless-coding/nextcloud-mail</website>
+	<bugs>https://github.com/sockless-coding/nextcloud-mail/issues</bugs>
+	<repository type="git">https://github.com/sockless-coding/nextcloud-mail.git</repository>
+	<!-- Made by tests/e2e/screenshots.mjs from demo mail. -->
+	<screenshot>https://raw.githubusercontent.com/sockless-coding/nextcloud-mail/main/docs/screenshots/1-all-accounts.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/sockless-coding/nextcloud-mail/main/docs/screenshots/2-conversation.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/sockless-coding/nextcloud-mail/main/docs/screenshots/3-composer.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/sockless-coding/nextcloud-mail/main/docs/screenshots/4-dark-newsletter.png</screenshot>
 	<dependencies>
 		<nextcloud min-version="32" max-version="36"/>
 	</dependencies>

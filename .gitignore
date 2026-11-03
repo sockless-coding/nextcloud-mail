@@ -61,3 +61,6 @@ node_modules/
 src/SocklessMail.Api/wwwroot/js/
 src/SocklessMail.Api/wwwroot/css/
 dev/data/
+
+# tools/appstore.sh package
+/dist/

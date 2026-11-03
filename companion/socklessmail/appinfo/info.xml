@@ -14,8 +14,16 @@ and points the Sockless Mail entry of the app menu there. From that address the 
 	<licence>MIT</licence>
 	<author>Jimmy Everling</author>
 	<namespace>SocklessMail</namespace>
+	<documentation>
+		<admin>https://github.com/sockless-coding/nextcloud-mail#web-address</admin>
+	</documentation>
 	<category>social</category>
 	<category>office</category>
+	<website>https://github.com/sockless-coding/nextcloud-mail</website>
+	<bugs>https://github.com/sockless-coding/nextcloud-mail/issues</bugs>
+	<repository type="git">https://github.com/sockless-coding/nextcloud-mail.git</repository>
+	<!-- Made by tests/e2e/screenshots.mjs from demo mail. -->
+	<screenshot>https://raw.githubusercontent.com/sockless-coding/nextcloud-mail/main/docs/screenshots/1-all-accounts.png</screenshot>
 	<dependencies>
 		<nextcloud min-version="32" max-version="36"/>
 	</dependencies>
