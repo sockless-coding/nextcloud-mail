@@ -206,6 +206,7 @@
 <script setup>
 import { mdiCertificateOutline, mdiCheck, mdiCheckboxMultipleMarkedCircleOutline, mdiDeleteOutline, mdiDotsHorizontal, mdiEmailOpenOutline, mdiEmailOutline, mdiFlag, mdiFlagOutline, mdiFlagRemoveOutline, mdiLockOutline, mdiMagnify, mdiPaperclip, mdiReply, mdiShieldAlertOutline, mdiTagOutline } from '@mdi/js'
 import { getCanonicalLocale, getFirstDay, n, t } from '@nextcloud/l10n'
+import { folderDisplayName } from '../folderUses.js'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcAvatar from '@nextcloud/vue/components/NcAvatar'
@@ -247,7 +248,8 @@ const listName = computed(() => {
 		return unifiedView.value?.name ?? ''
 	}
 	const { accountId, folderId } = mailboxState.selected
-	return mailboxState.folders[accountId]?.list.find((f) => f.id === folderId)?.name ?? ''
+	const folder = mailboxState.folders[accountId]?.list.find((f) => f.id === folderId)
+	return folder ? folderDisplayName(folder) : ''
 })
 
 /** What the list shows: search results, a unified view, or the folder's messages. */
@@ -376,8 +378,9 @@ function accountName(accountId) {
 
 /** "Account › Folder" for results from everywhere. */
 function location(hit) {
-	const folder = mailboxState.folders[hit.accountId]?.list.find((f) => f.id === hit.folderId)?.name
-		?? (hit.folderFullName.toUpperCase() === 'INBOX' ? t('sockless_mail', 'Inbox') : hit.folderFullName)
+	const known = mailboxState.folders[hit.accountId]?.list.find((f) => f.id === hit.folderId)
+	const folder = known ? folderDisplayName(known)
+		: hit.folderFullName.toUpperCase() === 'INBOX' ? t('sockless_mail', 'Inbox') : hit.folderFullName
 	return `${accountName(hit.accountId)} › ${folder}`
 }
 

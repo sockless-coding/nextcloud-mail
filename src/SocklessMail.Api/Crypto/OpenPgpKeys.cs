@@ -69,11 +69,11 @@ public static class OpenPgpKeys
         {
             if (keys.Count == 0)
             {
-                throw new FormatException("This is not an OpenPGP key.", e);
+                throw new FormatException(L.T("This is not an OpenPGP key."), e);
             }
         }
 
-        return keys.Count > 0 ? keys.Values.ToList() : throw new FormatException("This is not an OpenPGP key.");
+        return keys.Count > 0 ? keys.Values.ToList() : throw new FormatException(L.T("This is not an OpenPGP key."));
     }
 
     /// <summary>The public keys of a secret ring, as a public ring.</summary>

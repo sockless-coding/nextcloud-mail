@@ -174,6 +174,13 @@ if (options.EncryptionKey is null)
 }
 
 app.UseMiddleware<RequestLogging>();
+// Messages in the user's language: the frontend sends it with every API request (L.cs).
+L.Load(Path.Combine(app.Environment.WebRootPath ?? Path.Combine(AppContext.BaseDirectory, "wwwroot"), "js", "l10n"));
+app.Use(async (context, next) =>
+{
+    L.Use(L.RequestLanguage(context.Request));
+    await next(context);
+});
 // Before authentication: bundles and icons carry no secrets, and the top-menu icon is requested
 // without user context. Fixed file names (AppAPI registers paths, not hashes), so revalidate.
 app.UseStaticFiles(new StaticFileOptions

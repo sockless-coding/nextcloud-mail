@@ -19,7 +19,7 @@ public static class SenderEndpoints
             var senders = input.Senders ?? [];
             if (senders.Count > SenderChecks.MaxSenders)
             {
-                return Results.ValidationProblem(new Dictionary<string, string[]> { ["senders"] = [$"At most {SenderChecks.MaxSenders} senders."] });
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["senders"] = [L.T("At most {max} senders.", ("max", SenderChecks.MaxSenders))] });
             }
 
             var result = await checks.CheckAsync(user.GetNextcloudUserId(), senders, ct);
@@ -32,7 +32,7 @@ public static class SenderEndpoints
         trusted.MapPost("", async (TrustInput input, ClaimsPrincipal user, SenderChecks checks, CancellationToken ct) =>
             await checks.TrustAsync(user.GetNextcloudUserId(), input.Domain ?? "", ct) is { } domain
                 ? Results.Ok(new { domain })
-                : Results.ValidationProblem(new Dictionary<string, string[]> { ["domain"] = ["Enter a domain name."] }));
+                : Results.ValidationProblem(new Dictionary<string, string[]> { ["domain"] = [L.T("Enter a domain name.")] }));
 
         trusted.MapDelete("/{domain}", async (string domain, ClaimsPrincipal user, SenderChecks checks, CancellationToken ct) =>
             await checks.DistrustAsync(user.GetNextcloudUserId(), domain, ct) ? Results.NoContent() : MailboxEndpoints.NotFound());

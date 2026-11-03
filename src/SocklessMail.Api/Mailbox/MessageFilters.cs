@@ -22,7 +22,7 @@ public static class MessageFilters
         "unread" => MessageFilter.Unread,
         "flagged" => MessageFilter.Flagged,
         "attachments" => MessageFilter.Attachments,
-        _ => throw new MailboxValidationException("filter", "Use unread, flagged or attachments."),
+        _ => throw new MailboxValidationException("filter", L.T("Use unread, flagged or attachments.")),
     };
 
     /// <summary>

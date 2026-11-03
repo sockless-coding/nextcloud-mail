@@ -20,7 +20,7 @@ public sealed class FilesService(NextcloudFiles files, AttachmentUploads uploads
         var fileIds = (input.FileIds ?? []).Distinct().ToList();
         if (paths.Count + fileIds.Count is 0 or > MaxFiles)
         {
-            throw new MailboxValidationException("paths", $"Choose between 1 and {MaxFiles} files.");
+            throw new MailboxValidationException("paths", L.T("Choose between 1 and {max} files.", ("max", MaxFiles)));
         }
 
         var results = new List<AttachedFile>();
@@ -56,7 +56,7 @@ public sealed class FilesService(NextcloudFiles files, AttachmentUploads uploads
                         : await uploads.SaveAsync(userId, fileName, contentType, content, ct), ct);
                 results.Add(upload is null
                     ? Failed(name, path, new NextcloudFilesException("too_large",
-                        $"Larger than {AttachmentUploads.MaxFileBytes / (1024 * 1024)} MB; insert a share link instead."))
+                        L.T("Larger than {megabytes} MB; insert a share link instead.", ("megabytes", AttachmentUploads.MaxFileBytes / (1024 * 1024)))))
                     : new AttachedFile(upload.FileName, path, upload, null, null));
             }
             catch (NextcloudFilesException e) when (e.Code is not "nextcloud_unavailable")
@@ -72,7 +72,7 @@ public sealed class FilesService(NextcloudFiles files, AttachmentUploads uploads
     {
         var names = NextcloudFiles.SplitPath(input.Path) is { Length: > 0 } n
             ? n
-            : throw new MailboxValidationException("path", "Choose a file or folder.");
+            : throw new MailboxValidationException("path", L.T("Choose a file or folder."));
         var (url, token) = await files.CreateShareLinkAsync(userId, NextcloudFiles.JoinPath(names), ct);
         return new ShareLink(names[^1], url, token);
     }
@@ -85,11 +85,11 @@ public sealed class FilesService(NextcloudFiles files, AttachmentUploads uploads
     public async Task<IReadOnlyList<SavedPart>> SaveAttachmentsAsync(
         string userId, MailAccount account, string folderId, string messageId, SaveToFilesInput input, CancellationToken ct)
     {
-        var folder = NextcloudFiles.SplitPath(input.Folder) ?? throw new MailboxValidationException("folder", "Choose a folder.");
+        var folder = NextcloudFiles.SplitPath(input.Folder) ?? throw new MailboxValidationException("folder", L.T("Choose a folder."));
         var partIds = (input.PartIds ?? []).Distinct().ToList();
         if (partIds.Count is 0 or > MaxFiles)
         {
-            throw new MailboxValidationException("partIds", $"Choose between 1 and {MaxFiles} attachments.");
+            throw new MailboxValidationException("partIds", L.T("Choose between 1 and {max} attachments.", ("max", MaxFiles)));
         }
 
         var saved = new List<SavedPart>();
@@ -102,7 +102,7 @@ public sealed class FilesService(NextcloudFiles files, AttachmentUploads uploads
             }
             catch (MailboxNotFoundException)
             {
-                saved.Add(new SavedPart(partId, null, "not_found", "The attachment no longer exists."));
+                saved.Add(new SavedPart(partId, null, "not_found", L.T("The attachment no longer exists.")));
                 continue;
             }
 
@@ -117,7 +117,7 @@ public sealed class FilesService(NextcloudFiles files, AttachmentUploads uploads
         return saved;
     }
 
-    private static NextcloudFilesException IsFolder() => new("is_folder", "Folders cannot be attached; insert a share link instead.");
+    private static NextcloudFilesException IsFolder() => new("is_folder", L.T("Folders cannot be attached; insert a share link instead."));
 
     private static AttachedFile Failed(string name, string? path, NextcloudFilesException e) => new(name, path, null, e.Code, e.Message);
 }

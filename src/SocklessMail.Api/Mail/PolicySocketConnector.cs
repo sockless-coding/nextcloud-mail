@@ -26,7 +26,7 @@ public sealed class PolicySocketConnector(ServerAddressPolicy policy)
             }
             catch (SocketException e)
             {
-                throw new MailConnectionException("host_not_found", $"The server name \"{host}\" could not be resolved.", e);
+                throw new MailConnectionException("host_not_found", L.T("The server name \"{host}\" could not be resolved.", ("host", host)), e);
             }
         }
 

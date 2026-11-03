@@ -22,7 +22,7 @@ public static class ConnectionErrors
                 $"{where} did not answer in time. Check the host name, port and firewall.", e),
 
             AuthenticationException => new("auth_failed",
-                "The server rejected the username or password.", e),
+                L.T("The server rejected the username or password."), e),
 
             SslHandshakeException => new("tls_failed", TlsMessage(where, certificateErrors), e),
 
@@ -39,7 +39,7 @@ public static class ConnectionErrors
                 $"{where} does not support STARTTLS. Choose SSL/TLS or a different port.", e),
 
             NotSupportedException => new("auth_unsupported",
-                "The server does not offer a supported way to log in.", e),
+                L.T("The server does not offer a supported way to log in."), e),
 
             ImapProtocolException or SmtpProtocolException or ProtocolException or IOException => new("protocol_error",
                 $"{where} answered with something unexpected. The port or security setting is probably wrong (typical: 993 with SSL/TLS or 143 with STARTTLS for IMAP, 465 with SSL/TLS or 587 with STARTTLS for SMTP).", e),
@@ -47,7 +47,7 @@ public static class ConnectionErrors
             ImapCommandException or SmtpCommandException => new("server_error",
                 $"{where} reported an error. Try again later or check the account settings.", e),
 
-            _ => new("unknown", $"Connecting to {where} failed unexpectedly.", e),
+            _ => new("unknown", L.T("Connecting to {server} failed unexpectedly.", ("server", where)), e),
         };
     }
 
@@ -55,7 +55,7 @@ public static class ConnectionErrors
     {
         if (errors is null or SslPolicyErrors.None)
         {
-            return $"The secure connection to {where} failed. The port or security setting may be wrong.";
+            return L.T("The secure connection to {server} failed. The port or security setting may be wrong.", ("server", where));
         }
 
         var problems = new List<string>();

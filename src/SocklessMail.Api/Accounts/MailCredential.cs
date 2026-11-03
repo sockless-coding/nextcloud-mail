@@ -37,7 +37,7 @@ public sealed record AccessTokenCredential(string AccessToken) : MailCredential
 
 /// <summary>Thrown when a stored credential cannot be decrypted (key ring lost or key changed).</summary>
 public sealed class CredentialUnavailableException(Exception inner)
-    : Exception("The stored credential cannot be decrypted; the password has to be entered again.", inner);
+    : Exception(L.T("The stored credential cannot be decrypted; the password has to be entered again."), inner);
 
 public sealed class CredentialProtector(IDataProtectionProvider provider)
 {

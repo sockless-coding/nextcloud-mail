@@ -40,13 +40,13 @@ public static class ContactsEndpoints
         {
             if (ParseAddress(input.Address) is not { } address)
             {
-                return Invalid("address", "Enter a valid email address.");
+                return Invalid("address", L.T("Enter a valid email address."));
             }
 
             var name = (input.Name ?? "").Trim();
             if (name.Length > 200)
             {
-                return Invalid("name", "Names may be at most 200 characters.");
+                return Invalid("name", L.T("Names may be at most 200 characters."));
             }
 
             var userId = user.GetNextcloudUserId();
@@ -55,7 +55,7 @@ public static class ContactsEndpoints
             var book = (await directory.GetAsync(userId, dav, ct)).Select(b => b.Book).FirstOrDefault(b => b.Id == input.AddressBookId);
             if (book is null || !book.Writable)
             {
-                return Invalid("addressBookId", "Choose an address book you can add contacts to.");
+                return Invalid("addressBookId", L.T("Choose an address book you can add contacts to."));
             }
 
             var id = await dav.CreateAsync(userId, book.Id, name.Length > 0 ? name : address, address, ct);
@@ -67,7 +67,7 @@ public static class ContactsEndpoints
         {
             if (ParseAddress(input.Address) is not { } address)
             {
-                return Invalid("address", "Enter a valid email address.");
+                return Invalid("address", L.T("Enter a valid email address."));
             }
 
             var userId = user.GetNextcloudUserId();

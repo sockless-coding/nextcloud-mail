@@ -6,7 +6,7 @@ using SocklessMail.Api.Sync;
 
 namespace SocklessMail.Api.Accounts;
 
-public sealed class AccountLimitException() : Exception($"A user can have at most {AccountService.MaxAccountsPerUser} accounts.");
+public sealed class AccountLimitException() : Exception(L.T("A user can have at most {max} accounts.", ("max", AccountService.MaxAccountsPerUser)));
 
 /// <summary>
 /// Account CRUD. Every method takes the owner explicitly and filters on it, in addition to the

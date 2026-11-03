@@ -18,7 +18,7 @@ public sealed partial class MailboxService
     {
         if (input.Seen is null && input.Flagged is null)
         {
-            throw new MailboxValidationException("seen", "Set seen, flagged or both.");
+            throw new MailboxValidationException("seen", L.T("Set seen, flagged or both."));
         }
 
         var (uidValidity, uids) = await Run(account, async (client, token) =>
@@ -51,13 +51,13 @@ public sealed partial class MailboxService
         {
             if (string.IsNullOrEmpty(input.TargetFolderId) || input.TargetFolderId == folderId)
             {
-                throw new MailboxValidationException("targetFolderId", "Choose a different folder.");
+                throw new MailboxValidationException("targetFolderId", L.T("Choose a different folder."));
             }
 
             var target = await FindFolderAsync(client, input.TargetFolderId, token);
             if (!IsSelectable(target))
             {
-                throw new MailboxValidationException("targetFolderId", "Messages cannot be moved into this folder.");
+                throw new MailboxValidationException("targetFolderId", L.T("Messages cannot be moved into this folder."));
             }
 
             var folder = await OpenFolderAsync(client, folderId, token, FolderAccess.ReadWrite);
@@ -102,7 +102,7 @@ public sealed partial class MailboxService
             var inTrash = trash is not null && MailboxIds.FolderId(trash.FullName) == folderId;
             if (!input.Permanent && !inTrash && trash is null)
             {
-                throw new MailboxConflictException("no_trash", "This account has no Trash folder. Delete the messages permanently?");
+                throw new MailboxConflictException("no_trash", L.T("This account has no Trash folder. Delete the messages permanently?"));
             }
 
             var folder = await OpenFolderAsync(client, folderId, token, FolderAccess.ReadWrite);
@@ -147,7 +147,7 @@ public sealed partial class MailboxService
                 await EnsureFolderDoesNotExistAsync(client, parent, name, token);
 
                 var created = await parent.CreateAsync(name, isMessageFolder: true, token)
-                              ?? throw new MailboxConflictException("folder_exists", $"A folder named \"{name}\" already exists here.");
+                              ?? throw new MailboxConflictException("folder_exists", L.T("A folder named \"{name}\" already exists here.", ("name", name)));
                 await created.SubscribeAsync(token);
                 return await ToDtoWithStatusAsync(created, token);
             }, ct, retry: false);
@@ -167,7 +167,7 @@ public sealed partial class MailboxService
                 var folder = await FindFolderAsync(client, folderId, token);
                 if (IsInbox(folder.FullName))
                 {
-                    throw new MailboxValidationException("name", "The inbox cannot be renamed.");
+                    throw new MailboxValidationException("name", L.T("The inbox cannot be renamed."));
                 }
 
                 var parent = folder.ParentFolder ?? client.GetFolder(client.PersonalNamespaces[0]);
@@ -208,7 +208,7 @@ public sealed partial class MailboxService
                 var folder = await FindFolderAsync(client, folderId, token);
                 if (IsInbox(folder.FullName))
                 {
-                    throw new MailboxValidationException("folderId", "The inbox cannot be deleted.");
+                    throw new MailboxValidationException("folderId", L.T("The inbox cannot be deleted."));
                 }
 
                 // MailKit caches folders per connection: another pooled connection may have deleted it already.
@@ -220,7 +220,7 @@ public sealed partial class MailboxService
 
                 if ((await folder.GetSubfoldersAsync(false, token)).Count > 0)
                 {
-                    throw new MailboxConflictException("has_subfolders", "Delete or move the folder's subfolders first.");
+                    throw new MailboxConflictException("has_subfolders", L.T("Delete or move the folder's subfolders first."));
                 }
 
                 // A selected folder cannot be deleted on some servers; this connection may still have it open.
@@ -249,12 +249,12 @@ public sealed partial class MailboxService
     {
         if (messageIds is null || messageIds.Count == 0)
         {
-            throw new MailboxValidationException("messageIds", "Select at least one message.");
+            throw new MailboxValidationException("messageIds", L.T("Select at least one message."));
         }
 
         if (messageIds.Count > MaxMessagesPerAction)
         {
-            throw new MailboxValidationException("messageIds", $"At most {MaxMessagesPerAction} messages at once.");
+            throw new MailboxValidationException("messageIds", L.T("At most {max} messages at once.", ("max", MaxMessagesPerAction)));
         }
 
         var uids = new List<UniqueId>(messageIds.Count);
@@ -267,7 +267,7 @@ public sealed partial class MailboxService
 
             if (uidValidity != folder.UidValidity)
             {
-                throw new MailboxConflictException("stale_messages", "The folder has changed on the server. Reload it and try again.");
+                throw new MailboxConflictException("stale_messages", L.T("The folder has changed on the server. Reload it and try again."));
             }
 
             uids.Add(new UniqueId(uidValidity, uid));
@@ -281,22 +281,22 @@ public sealed partial class MailboxService
         var trimmed = name?.Trim() ?? "";
         if (trimmed.Length == 0)
         {
-            throw new MailboxValidationException("name", "Enter a folder name.");
+            throw new MailboxValidationException("name", L.T("Enter a folder name."));
         }
 
         if (trimmed.Length > MaxFolderNameLength)
         {
-            throw new MailboxValidationException("name", $"Use at most {MaxFolderNameLength} characters.");
+            throw new MailboxValidationException("name", L.T("Use at most {max} characters.", ("max", MaxFolderNameLength)));
         }
 
         if (trimmed.Contains(separator) || trimmed.Any(char.IsControl) || trimmed.Contains('*') || trimmed.Contains('%'))
         {
-            throw new MailboxValidationException("name", $"The name cannot contain \"{separator}\", \"*\" or \"%\".");
+            throw new MailboxValidationException("name", L.T("The name cannot contain \"{separator}\", \"*\" or \"%\".", ("separator", separator)));
         }
 
         if (trimmed.Equals("INBOX", StringComparison.OrdinalIgnoreCase))
         {
-            throw new MailboxValidationException("name", "This name is reserved.");
+            throw new MailboxValidationException("name", L.T("This name is reserved."));
         }
 
         return trimmed;
@@ -314,7 +314,7 @@ public sealed partial class MailboxService
             return;
         }
 
-        throw new MailboxConflictException("folder_exists", $"A folder named \"{name}\" already exists here.");
+        throw new MailboxConflictException("folder_exists", L.T("A folder named \"{name}\" already exists here.", ("name", name)));
     }
 
     /// <summary>RFC 6154 special-use folder; by common name when the server does not announce them.</summary>

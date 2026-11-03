@@ -30,7 +30,7 @@ public sealed class KeySecrets(IDataProtectionProvider provider)
 }
 
 /// <summary>Thrown when a stored private key cannot be decrypted (key ring lost or changed); it has to be imported again.</summary>
-public sealed class KeyUnavailableException(Exception inner) : Exception("The stored private key cannot be decrypted; import it again.", inner);
+public sealed class KeyUnavailableException(Exception inner) : Exception(L.T("The stored private key cannot be decrypted; import it again."), inner);
 
 /// <summary>
 /// The passphrases of the private keys a user unlocked, held in memory only, each until it was

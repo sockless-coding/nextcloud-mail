@@ -48,7 +48,7 @@ public sealed partial class TagStore(MailDbContext db, TimeProvider clock)
         var existing = await db.Tags.Where(t => t.OwnerUserId == userId).ToListAsync(ct);
         if (existing.Count >= MaxTags)
         {
-            throw new TagValidationException("name", $"At most {MaxTags} tags.");
+            throw new TagValidationException("name", L.T("At most {max} tags.", ("max", MaxTags)));
         }
 
         CheckUniqueName(existing, name, null);
@@ -58,12 +58,12 @@ public sealed partial class TagStore(MailDbContext db, TimeProvider clock)
             keyword = input.Keyword.Trim();
             if (!Keywords.IsTagKeyword(keyword))
             {
-                throw new TagValidationException("keyword", "This keyword cannot be a tag.");
+                throw new TagValidationException("keyword", L.T("This keyword cannot be a tag."));
             }
 
             if (existing.Any(t => t.Keyword.Equals(keyword, StringComparison.OrdinalIgnoreCase)))
             {
-                throw new TagValidationException("keyword", "A tag already uses this keyword.");
+                throw new TagValidationException("keyword", L.T("A tag already uses this keyword."));
             }
         }
         else
@@ -186,20 +186,20 @@ public sealed partial class TagStore(MailDbContext db, TimeProvider clock)
         var trimmed = name?.Trim() ?? "";
         if (trimmed.Length == 0)
         {
-            throw new TagValidationException("name", "Enter a name.");
+            throw new TagValidationException("name", L.T("Enter a name."));
         }
 
-        return trimmed.Length <= MaxNameLength ? trimmed : throw new TagValidationException("name", $"At most {MaxNameLength} characters.");
+        return trimmed.Length <= MaxNameLength ? trimmed : throw new TagValidationException("name", L.T("At most {max} characters.", ("max", MaxNameLength)));
     }
 
     private static string ValidColor(string color) =>
-        ColorPattern().IsMatch(color) ? color.ToLowerInvariant() : throw new TagValidationException("color", "Use a color like #1a2b3c.");
+        ColorPattern().IsMatch(color) ? color.ToLowerInvariant() : throw new TagValidationException("color", L.T("Use a color like #1a2b3c."));
 
     private static void CheckUniqueName(IEnumerable<MailTag> tags, string name, Guid? self)
     {
         if (tags.Any(t => t.Id != self && t.Name.Equals(name, StringComparison.CurrentCultureIgnoreCase)))
         {
-            throw new TagValidationException("name", "A tag with this name exists already.");
+            throw new TagValidationException("name", L.T("A tag with this name exists already."));
         }
     }
 

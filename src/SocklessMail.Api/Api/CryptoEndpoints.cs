@@ -24,7 +24,7 @@ public static class CryptoEndpoints
         {
             var addresses = input.Addresses ?? [];
             return addresses.Count > KeyDirectory.MaxAddresses
-                ? Invalid(new MailboxValidationException("addresses", $"Ask for at most {KeyDirectory.MaxAddresses} addresses."))
+                ? Invalid(new MailboxValidationException("addresses", L.T("Ask for at most {max} addresses.", ("max", KeyDirectory.MaxAddresses))))
                 : Results.Ok(await directory.LookupAsync(user.GetNextcloudUserId(), addresses, input.Search, ct));
         });
 
@@ -80,7 +80,7 @@ public static class CryptoEndpoints
             {
                 return store.Unlock(userId, key, input.Passphrase ?? "")
                     ? Results.Ok((await store.ListAsync(userId, ct)).First(k => k.Id == id))
-                    : Invalid(new MailboxValidationException("passphrase", "The passphrase is wrong."));
+                    : Invalid(new MailboxValidationException("passphrase", L.T("The passphrase is wrong.")));
             }
             catch (MailboxValidationException e)
             {
@@ -160,7 +160,7 @@ public static class CryptoEndpoints
                 await part.WriteToAsync(buffer, ct);
                 if (buffer.Length > CryptoKeyStore.MaxImportBytes)
                 {
-                    return Invalid(new MailboxValidationException("data", "The attachment is too large for a key."));
+                    return Invalid(new MailboxValidationException("data", L.T("The attachment is too large for a key.")));
                 }
 
                 try
@@ -169,7 +169,7 @@ public static class CryptoEndpoints
                 }
                 catch (MailboxValidationException e) when (e.Field == "passphrase")
                 {
-                    return Invalid(new MailboxValidationException("data", "This is a private key. Import it under Settings → Encryption, with its passphrase."));
+                    return Invalid(new MailboxValidationException("data", L.T("This is a private key. Import it under Settings → Encryption, with its passphrase.")));
                 }
             })
             .AddEndpointFilter<MailboxEndpoints.MailErrorFilter>();

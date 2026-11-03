@@ -20,7 +20,7 @@ public static partial class SearchTerms
         var text = string.Concat((query ?? "").Where(c => !char.IsControl(c))).Trim();
         if (text.Length > MaxLength)
         {
-            throw new MailboxValidationException("q", $"Use at most {MaxLength} characters.");
+            throw new MailboxValidationException("q", L.T("Use at most {max} characters.", ("max", MaxLength)));
         }
 
         var terms = Term().Matches(text)
@@ -30,12 +30,12 @@ public static partial class SearchTerms
             .ToList();
         if (terms.Count == 0)
         {
-            throw new MailboxValidationException("q", "Enter something to search for.");
+            throw new MailboxValidationException("q", L.T("Enter something to search for."));
         }
 
         if (terms.Count > MaxTerms)
         {
-            throw new MailboxValidationException("q", $"Use at most {MaxTerms} search words.");
+            throw new MailboxValidationException("q", L.T("Use at most {max} search words.", ("max", MaxTerms)));
         }
 
         return terms;

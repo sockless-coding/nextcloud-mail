@@ -14,10 +14,18 @@ export const USE_ICONS = {
 }
 
 export const USE_NAMES = {
-	inbox: t('sockless_mail', 'Inbox'),
-	drafts: t('sockless_mail', 'Drafts'),
-	sent: t('sockless_mail', 'Sent'),
-	junk: t('sockless_mail', 'Junk'),
-	trash: t('sockless_mail', 'Trash'),
-	archive: t('sockless_mail', 'Archive'),
+	get inbox() { return t('sockless_mail', 'Inbox') },
+	get drafts() { return t('sockless_mail', 'Drafts') },
+	get sent() { return t('sockless_mail', 'Sent') },
+	get junk() { return t('sockless_mail', 'Junk') },
+	get trash() { return t('sockless_mail', 'Trash') },
+	get archive() { return t('sockless_mail', 'Archive') },
+}
+
+/**
+ * A folder's name as shown: special folders get their translated name when the server uses the
+ * standard English one ("INBOX", "Sent"); other names are the user's own.
+ */
+export function folderDisplayName(folder) {
+	return (folder.specialUse && folder.name.toLowerCase() === folder.specialUse ? USE_NAMES[folder.specialUse] : null) ?? folder.name
 }

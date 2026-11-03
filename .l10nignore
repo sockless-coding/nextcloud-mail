@@ -1,0 +1,10 @@
+# Paths Nextcloud's translationtool skips when it extracts strings (tools/l10n.mjs only reads
+# src/frontend/src). Built bundles, dependencies and tooling hold no source strings.
+src/SocklessMail.Api/wwwroot/
+src/frontend/node_modules/
+node_modules/
+tests/
+dev/
+tools/
+docs/
+companion/

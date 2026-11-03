@@ -44,7 +44,7 @@ public sealed class OutgoingSecurity(CryptoKeyStore store, TimeProvider clock)
     {
         "smime" => CryptoKind.Smime,
         "openpgp" or null or "" => CryptoKind.OpenPgp,
-        _ => throw new Mailbox.MailboxValidationException("security", "Choose OpenPGP or S/MIME."),
+        _ => throw new Mailbox.MailboxValidationException("security", L.T("Choose OpenPGP or S/MIME.")),
     };
 
     /// <summary>Replaces the message's body with its signed and/or encrypted form.</summary>
@@ -86,12 +86,12 @@ public sealed class OutgoingSecurity(CryptoKeyStore store, TimeProvider clock)
             if (missing.Contains(from.Address, StringComparer.OrdinalIgnoreCase))
             {
                 throw new MessageProtectionException("no_own_key",
-                    $"You have no {Name(kind)} key for {from.Address}, so you could not read this message yourself. Create or import one under Settings → Encryption.");
+                    L.T("You have no {kind} key for {address}, so you could not read this message yourself. Create or import one under Settings → Encryption.", ("kind", Name(kind)), ("address", from.Address)));
             }
 
             if (missing.Count > 0)
             {
-                throw new MessageProtectionException("missing_keys", $"There is no {Name(kind)} key for {string.Join(", ", missing)}.", missing);
+                throw new MessageProtectionException("missing_keys", L.T("There is no {kind} key for {addresses}.", ("kind", Name(kind)), ("addresses", string.Join(", ", missing))), missing);
             }
         }
 
@@ -169,11 +169,11 @@ public sealed class OutgoingSecurity(CryptoKeyStore store, TimeProvider clock)
 
         if (own.Count > 0)
         {
-            throw new MessageProtectionException("key_locked", "Unlock your key to sign this message.", keys: own.Select(k => new KeyRefDto(k.Id, k.Fingerprint, k.AddressList)).ToList());
+            throw new MessageProtectionException("key_locked", L.T("Unlock your key to sign this message."), keys: own.Select(k => new KeyRefDto(k.Id, k.Fingerprint, k.AddressList)).ToList());
         }
 
         throw new MessageProtectionException("no_own_key",
-            $"You have no {Name(kind)} key for {from.Address} to sign with. Create or import one under Settings → Encryption.");
+            L.T("You have no {kind} key for {address} to sign with. Create or import one under Settings → Encryption.", ("kind", Name(kind)), ("address", from.Address)));
     }
 
     /// <summary>The sender's OpenPGP public key as an .asc attachment, so recipients can answer encrypted.</summary>
@@ -183,7 +183,7 @@ public sealed class OutgoingSecurity(CryptoKeyStore store, TimeProvider clock)
             .Where(k => k.Kind == CryptoKind.OpenPgp && k.IsOwn && k.AddressList.Contains(from.Address, StringComparer.OrdinalIgnoreCase) && KeyUsability.CanEncrypt(k, now))
             .OrderByDescending(k => k.CreatedAt)
             .FirstOrDefault()
-            ?? throw new MessageProtectionException("no_own_key", $"You have no OpenPGP key for {from.Address} to attach.");
+            ?? throw new MessageProtectionException("no_own_key", L.T("You have no OpenPGP key for {address} to attach.", ("address", from.Address)));
         var (_, _, text) = CryptoKeyStore.PublicExport(key);
         var part = new MimePart("application", "pgp-keys")
         {

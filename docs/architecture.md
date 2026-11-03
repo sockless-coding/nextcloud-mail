@@ -13,6 +13,14 @@ Internals for people working on the app. Installing and configuring it is in the
 - **UI**: AppAPI renders the page at `/index.php/apps/app_api/embedded/sockless_mail/sockless_mail`
   and loads our bundle through its PHP proxy. The bundle calls the API at
   `/exapps/sockless_mail/api` under HaRP, otherwise through the PHP proxy.
+- **Translations**: because AppAPI adds the bundle as one of its own scripts, Nextcloud loads
+  only `app_api`'s translations into the page. The bundle fetches `js/l10n/<lang>.json` for the
+  user's language (`de_DE`, else `de`) and registers it with `@nextcloud/l10n` before mounting
+  (`src/l10n.js`); Vite copies `l10n/*.json` there and bakes in the list of languages. Every API
+  request carries `X-Sockless-Language`; a middleware sets it for the request's async flow, and
+  `L.T(...)` (`Localization/L.cs`) translates the server's messages from the same files in
+  `wwwroot/js/l10n/`. Pages the browser opens itself (the OAuth callback) use `Accept-Language`;
+  background work has no language and stays English.
 - **Container user**: the image's default user stays root, because AppAPI copies certificates in
   and runs `update-ca-certificates` as root. The entrypoint drops to the unprivileged user
   `sockless` before starting `frpc` and the app.

@@ -56,7 +56,7 @@ public sealed class ImapConnections : IAsyncDisposable
                 if (!retry || attempt > 0 || ct.IsCancellationRequested)
                 {
                     throw new MailConnectionException("connection_lost",
-                        $"The connection to {endpoint.Host} was lost. Try again.", e);
+                        L.T("The connection to {server} was lost. Try again.", ("server", endpoint.Host)), e);
                 }
 
                 _logger.LogInformation("IMAP connection of account {AccountId} was lost ({ExceptionType}); reconnecting",

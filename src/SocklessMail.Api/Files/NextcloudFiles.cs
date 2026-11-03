@@ -19,13 +19,13 @@ public sealed class NextcloudFilesException(string code, string message, int sta
     public int StatusCode { get; } = statusCode;
 
     public static NextcloudFilesException NotFound() =>
-        new("not_found", "The file no longer exists in Files.", StatusCodes.Status404NotFound);
+        new("not_found", L.T("The file no longer exists in Files."), StatusCodes.Status404NotFound);
 
     public static NextcloudFilesException FolderNotFound() =>
-        new("folder_not_found", "The folder no longer exists in Files.", StatusCodes.Status404NotFound);
+        new("folder_not_found", L.T("The folder no longer exists in Files."), StatusCodes.Status404NotFound);
 
     public static NextcloudFilesException Unavailable() =>
-        new("nextcloud_unavailable", "Nextcloud Files did not answer. Try again in a moment.", StatusCodes.Status502BadGateway);
+        new("nextcloud_unavailable", L.T("Nextcloud Files did not answer. Try again in a moment."), StatusCodes.Status502BadGateway);
 }
 
 /// <summary>
@@ -70,7 +70,7 @@ public sealed class NextcloudFiles(NextcloudClient nextcloud, ILogger<NextcloudF
         var entry = await StatAsync(userId, names, ct) ?? throw NextcloudFilesException.NotFound();
         if (entry.IsFolder)
         {
-            throw new NextcloudFilesException("is_folder", "Folders cannot be attached; insert a share link instead.");
+            throw new NextcloudFilesException("is_folder", L.T("Folders cannot be attached; insert a share link instead."));
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Get, FileUrl(userId, names));
@@ -184,18 +184,18 @@ public sealed class NextcloudFiles(NextcloudClient nextcloud, ILogger<NextcloudF
                 case HttpStatusCode.PreconditionFailed:
                     continue;
                 case HttpStatusCode.Forbidden:
-                    throw new NextcloudFilesException("no_permission", "You cannot add files to this folder.", StatusCodes.Status403Forbidden);
+                    throw new NextcloudFilesException("no_permission", L.T("You cannot add files to this folder."), StatusCodes.Status403Forbidden);
                 case HttpStatusCode.NotFound or HttpStatusCode.Conflict:
                     throw NextcloudFilesException.FolderNotFound();
                 case HttpStatusCode.InsufficientStorage:
-                    throw new NextcloudFilesException("quota", "There is not enough space left in your Files.", StatusCodes.Status507InsufficientStorage);
+                    throw new NextcloudFilesException("quota", L.T("There is not enough space left in your Files."), StatusCodes.Status507InsufficientStorage);
                 default:
                     EnsureSuccess(response, "PUT");
                     return JoinPath(target);
             }
         }
 
-        throw new NextcloudFilesException("name_conflict", "Could not find a free file name in this folder. Try again.", StatusCodes.Status409Conflict);
+        throw new NextcloudFilesException("name_conflict", L.T("Could not find a free file name in this folder. Try again."), StatusCodes.Status409Conflict);
     }
 
     /// <summary>
@@ -219,7 +219,7 @@ public sealed class NextcloudFiles(NextcloudClient nextcloud, ILogger<NextcloudF
         catch (NextcloudApiException e) when (e.StatusCode is >= 400 and < 500)
         {
             throw new NextcloudFilesException("share_refused",
-                "Nextcloud did not create a public link for this file. Public links may be turned off, or need a password; share it from the Files app instead.",
+                L.T("Nextcloud did not create a public link for this file. Public links may be turned off, or need a password; share it from the Files app instead."),
                 StatusCodes.Status403Forbidden);
         }
         catch (Exception e) when (e is NextcloudApiException or HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)

@@ -450,7 +450,7 @@ public sealed partial class MailboxService(
                        ?? throw new MailboxNotFoundException("The calendar part");
             if (part.Octets > MaxCalendarBytes * 2)
             {
-                throw new MailboxValidationException("partId", "The calendar data is too large.");
+                throw new MailboxValidationException("partId", L.T("The calendar data is too large."));
             }
 
             if (await FetchPartAsync(folder, uid, part, token) is not MimePart mime || mime.Content is null)
@@ -468,7 +468,7 @@ public sealed partial class MailboxService(
         await mime.Content!.DecodeToAsync(buffer, ct);
         if (buffer.Length > MaxCalendarBytes)
         {
-            throw new MailboxValidationException("partId", "The calendar data is too large.");
+            throw new MailboxValidationException("partId", L.T("The calendar data is too large."));
         }
 
         // A text part decodes its charset; an application/ics file is UTF-8 by definition.

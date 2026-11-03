@@ -106,8 +106,8 @@ public sealed partial class MailboxService
 
     /// <summary>Why an encrypted message could not be opened to answer it: a locked key (to unlock), or no key at all.</summary>
     private static Exception Unopened(MessageSecurityDto security) => security.Encryption is { Status: "locked" } locked
-        ? new MessageProtectionException("key_locked", "Unlock your key to read the message you are answering.", keys: locked.Keys)
-        : new MailboxValidationException("source", "The encrypted message cannot be decrypted with your keys.");
+        ? new MessageProtectionException("key_locked", L.T("Unlock your key to read the message you are answering."), keys: locked.Keys)
+        : new MailboxValidationException("source", L.T("The encrypted message cannot be decrypted with your keys."));
 
     /// <summary>Like <see cref="BodiesAsync"/>, for a decrypted message.</summary>
     private static (string Text, string Html) BodiesOf(MimeEntity body)
@@ -290,7 +290,7 @@ public sealed partial class MailboxService
     {
         var root = client.GetFolder(client.PersonalNamespaces.Count > 0 ? client.PersonalNamespaces[0] : new FolderNamespace('/', ""));
         var drafts = await root.CreateAsync("Drafts", isMessageFolder: true, ct)
-                     ?? throw new MailboxConflictException("folder_exists", "A Drafts folder could not be created.");
+                     ?? throw new MailboxConflictException("folder_exists", L.T("A Drafts folder could not be created."));
         await drafts.SubscribeAsync(ct);
         return drafts;
     }
@@ -319,25 +319,25 @@ public sealed partial class MailboxService
         var recipients = (to?.Count ?? 0) + (cc?.Count ?? 0) + (bcc?.Count ?? 0);
         if (recipients == 0 && !draft)
         {
-            throw new MailboxValidationException("to", "Add at least one recipient.");
+            throw new MailboxValidationException("to", L.T("Add at least one recipient."));
         }
 
         if (recipients > MaxRecipients)
         {
-            throw new MailboxValidationException("to", $"At most {MaxRecipients} recipients per message.");
+            throw new MailboxValidationException("to", L.T("At most {max} recipients per message.", ("max", MaxRecipients)));
         }
 
         var subject = (input.Subject ?? "").ReplaceLineEndings(" ").Trim();
         if (subject.Length > 998)
         {
-            throw new MailboxValidationException("subject", "The subject is too long.");
+            throw new MailboxValidationException("subject", L.T("The subject is too long."));
         }
 
         var text = input.Text ?? "";
         var html = string.IsNullOrWhiteSpace(input.Html) ? null : input.Html;
         if (text.Length > MaxTextLength || html?.Length > MaxTextLength)
         {
-            throw new MailboxValidationException("text", "The message is too long.");
+            throw new MailboxValidationException("text", L.T("The message is too long."));
         }
 
         var fragment = html is null ? null : OutgoingHtml.SanitizeWithImages(html);
@@ -346,20 +346,20 @@ public sealed partial class MailboxService
         var forwardPartIds = input.Source is { Mode: ReplyMode.Forward or ReplyMode.Edit } ? input.Source.ForwardPartIds ?? [] : [];
         if (attachmentIds.Count + forwardPartIds.Count > MaxAttachments)
         {
-            throw new MailboxValidationException("attachmentIds", $"At most {MaxAttachments} attachments per message.");
+            throw new MailboxValidationException("attachmentIds", L.T("At most {max} attachments per message.", ("max", MaxAttachments)));
         }
 
         // More than attachments: a quoted newsletter brings its own.
         if (contentIds.Count > MaxInlineImages)
         {
-            throw new MailboxValidationException("text", $"At most {MaxInlineImages} images per message.");
+            throw new MailboxValidationException("text", L.T("At most {max} images per message.", ("max", MaxInlineImages)));
         }
 
         var uploaded = new List<UploadedAttachment>();
         foreach (var id in attachmentIds.Distinct())
         {
             uploaded.Add(await uploads.GetAsync(account.OwnerUserId, id, ct)
-                ?? throw new MailboxValidationException("attachmentIds", "An attachment has expired or was removed. Attach it again."));
+                ?? throw new MailboxValidationException("attachmentIds", L.T("An attachment has expired or was removed. Attach it again.")));
         }
 
         // Images of the source: a continued draft's own (also those inserted before it was saved),
@@ -381,7 +381,7 @@ public sealed partial class MailboxService
             else if (!draft)
             {
                 // A draft is saved without it; sending would lose it unnoticed.
-                throw new MailboxValidationException("text", "An image in the message has expired or was removed. Insert it again.");
+                throw new MailboxValidationException("text", L.T("An image in the message has expired or was removed. Insert it again."));
             }
         }
 
@@ -469,7 +469,7 @@ public sealed partial class MailboxService
 
             if (total > MaxAttachmentBytes)
             {
-                throw new MailboxValidationException("attachmentIds", $"Attachments and images may total at most {MaxAttachmentBytes / (1024 * 1024)} MB.");
+                throw new MailboxValidationException("attachmentIds", L.T("Attachments and images may total at most {megabytes} MB.", ("megabytes", MaxAttachmentBytes / (1024 * 1024))));
             }
 
             message.Body = builder.ToMessageBody();
@@ -477,7 +477,7 @@ public sealed partial class MailboxService
             if (original is { Encrypted: true } && !encrypt && (original.ForwardedParts.Count > 0 || original.InlineParts.Count > 0))
             {
                 throw new MessageProtectionException("encryption_required",
-                    "Attachments and images of an encrypted message can only be sent or saved encrypted. Turn on Encrypt, or remove them.");
+                    L.T("Attachments and images of an encrypted message can only be sent or saved encrypted. Turn on Encrypt, or remove them."));
             }
 
             plainAttachments = draft && encrypt ? ViewOf(message.Body).Attachments : null;
@@ -530,20 +530,20 @@ public sealed partial class MailboxService
         }
         catch (SmtpCommandException e) when (e.ErrorCode == SmtpErrorCode.RecipientNotAccepted)
         {
-            throw new MailboxValidationException("to", $"The server refused the recipient {e.Mailbox?.Address}.");
+            throw new MailboxValidationException("to", L.T("The server refused the recipient {address}.", ("address", e.Mailbox?.Address)));
         }
         catch (SmtpCommandException e) when (e.ErrorCode == SmtpErrorCode.SenderNotAccepted)
         {
-            throw new MailConnectionException("sender_rejected", $"The server does not accept {account.EmailAddress} as the sender.", e);
+            throw new MailConnectionException("sender_rejected", L.T("The server does not accept {address} as the sender.", ("address", account.EmailAddress)), e);
         }
         catch (SmtpCommandException e)
         {
-            throw new MailConnectionException("message_rejected", "The server refused the message (it may be too large).", e);
+            throw new MailConnectionException("message_rejected", L.T("The server refused the message (it may be too large)."), e);
         }
         catch (Exception e) when (e is SmtpProtocolException or IOException)
         {
             // The connection broke during the transfer: the message may or may not have gone out.
-            throw new MailConnectionException("send_interrupted", "The connection broke while sending. Check Sent before trying again.", e);
+            throw new MailConnectionException("send_interrupted", L.T("The connection broke while sending. Check Sent before trying again."), e);
         }
 
         try
@@ -571,7 +571,7 @@ public sealed partial class MailboxService
                 }
                 else
                 {
-                    warning = "The message was sent, but this account has no Sent folder to keep a copy in.";
+                    warning = L.T("The message was sent, but this account has no Sent folder to keep a copy in.");
                 }
 
                 // A continued draft is no original: it is removed instead (see SendAsync).
@@ -586,7 +586,7 @@ public sealed partial class MailboxService
         catch (Exception e) when (e is MailConnectionException or ImapCommandException or IOException or MailboxNotFoundException)
         {
             logger.LogWarning("Sent message, but saving it to Sent failed ({ExceptionType})", e.GetType().Name);
-            return new SendResult(false, null, "The message was sent, but the copy could not be saved to Sent.");
+            return new SendResult(false, null, L.T("The message was sent, but the copy could not be saved to Sent."));
         }
     }
 
@@ -632,7 +632,7 @@ public sealed partial class MailboxService
             {
                 var specifier = MailboxIds.PartSpecifier(partId);
                 var part = summary.Attachments.FirstOrDefault(p => p.PartSpecifier == specifier)
-                           ?? throw new MailboxValidationException("source", "An attachment of the forwarded message no longer exists.");
+                           ?? throw new MailboxValidationException("source", L.T("An attachment of the forwarded message no longer exists."));
                 var entity = await FetchPartAsync(folder, uid, part, token);
                 if (entity is MimePart mime)
                 {
@@ -684,7 +684,7 @@ public sealed partial class MailboxService
             var leaf = leaves.FirstOrDefault(l => l.Id == partId && (l.Entity.IsAttachment || l.Entity is MessagePart));
             if (leaf.Entity is null)
             {
-                throw new MailboxValidationException("source", "An attachment of the forwarded message no longer exists.");
+                throw new MailboxValidationException("source", L.T("An attachment of the forwarded message no longer exists."));
             }
 
             var entity = await CopyAsync(leaf.Entity, ct);

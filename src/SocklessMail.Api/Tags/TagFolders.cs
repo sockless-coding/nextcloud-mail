@@ -200,6 +200,6 @@ public sealed class TagFolders(MailDbContext db, AccountService accounts, Mailbo
             return (new DateTimeOffset(ticks, TimeSpan.Zero), id);
         }
 
-        throw new MailboxValidationException("before", "The cursor is not valid.");
+        throw new MailboxValidationException("before", L.T("The cursor is not valid."));
     }
 }

@@ -124,7 +124,7 @@ public sealed partial class AssistantService(
         var tone = string.IsNullOrWhiteSpace(input.Tone) ? "neutral" : input.Tone;
         if (!AssistantPrompts.Tones.Contains(tone))
         {
-            throw Invalid("tone", "Choose one of the offered tones.");
+            throw Invalid("tone", L.T("Choose one of the offered tones."));
         }
 
         CheckLength("instruction", input.Instruction, AssistantPrompts.MaxInstructionLength);
@@ -132,7 +132,7 @@ public sealed partial class AssistantService(
         var mode = input.Source?.Mode is ReplyMode.Reply or ReplyMode.ReplyAll or ReplyMode.Forward ? input.Source.Mode : (ReplyMode?)null;
         if (mode is not (ReplyMode.Reply or ReplyMode.ReplyAll) && string.IsNullOrWhiteSpace(input.Instruction))
         {
-            throw Invalid("instruction", "Say what the message should be about.");
+            throw Invalid("instruction", L.T("Say what the message should be about."));
         }
 
         string? conversation = null;
@@ -154,7 +154,7 @@ public sealed partial class AssistantService(
     {
         await RequireEnabledAsync(ct);
         var available = await types.GetAsync(nextcloud, userId, ct);
-        var action = input.Action ?? throw Invalid("action", "Say how the text should change.");
+        var action = input.Action ?? throw Invalid("action", L.T("Say how the text should change."));
         if (!RewriteActions(available).Contains(action))
         {
             throw Unavailable();
@@ -163,7 +163,7 @@ public sealed partial class AssistantService(
         var text = input.Text?.Trim();
         if (string.IsNullOrEmpty(text))
         {
-            throw Invalid("text", "There is no text to rewrite.");
+            throw Invalid("text", L.T("There is no text to rewrite."));
         }
 
         CheckLength("text", text, AssistantPrompts.MaxRewriteLength);
@@ -179,7 +179,7 @@ public sealed partial class AssistantService(
                     : AssistantPrompts.Tones.Where(t => t != "neutral");
                 if (tone is null || !tones.Contains(tone))
                 {
-                    throw Invalid("tone", "Choose one of the offered tones.");
+                    throw Invalid("tone", L.T("Choose one of the offered tones."));
                 }
 
                 if (hasChangeTone)
@@ -191,7 +191,7 @@ public sealed partial class AssistantService(
             case RewriteAction.Translate:
                 return await TranslateAsync(userId, available, text, input.Language, "rewrite", ct);
             case RewriteAction.Custom when string.IsNullOrWhiteSpace(input.Instruction):
-                throw Invalid("instruction", "Say how the text should change.");
+                throw Invalid("instruction", L.T("Say how the text should change."));
         }
 
         var instructions = AssistantPrompts.Instructions(action, tone, language, input.Instruction);
@@ -238,7 +238,7 @@ public sealed partial class AssistantService(
         if (message.Security?.Encryption is not null)
         {
             // What was decrypted stays here; the provider may be outside this server.
-            throw new AssistantException("encrypted", "Encrypted messages are not given to the Assistant.", StatusCodes.Status409Conflict);
+            throw new AssistantException("encrypted", L.T("Encrypted messages are not given to the Assistant."), StatusCodes.Status409Conflict);
         }
 
         var raw = await mailbox.GetHeadersAsync(account, folderId, messageId, ct);
@@ -272,7 +272,7 @@ public sealed partial class AssistantService(
         var languages = hasTranslate ? EnumValues(translate, "target_language") : AssistantPrompts.Languages;
         if (language is null || languages.All(l => l.Value != language))
         {
-            throw Invalid("language", "Choose one of the offered languages.");
+            throw Invalid("language", L.T("Choose one of the offered languages."));
         }
 
         return hasTranslate;
@@ -331,7 +331,7 @@ public sealed partial class AssistantService(
     {
         if (value is { Length: > 0 } && value.Length > max)
         {
-            throw Invalid(field, $"This is too long for the Assistant (at most {max} characters).");
+            throw Invalid(field, L.T("This is too long for the Assistant (at most {max} characters).", ("max", max)));
         }
     }
 
@@ -406,14 +406,14 @@ public sealed partial class AssistantService(
             {
                 StatusCodes.Status404NotFound => NotFound(),
                 StatusCodes.Status429TooManyRequests => new AssistantException(
-                    "rate_limited", "Too many Assistant requests. Try again in a minute or two.", StatusCodes.Status429TooManyRequests),
+                    "rate_limited", L.T("Too many Assistant requests. Try again in a minute or two."), StatusCodes.Status429TooManyRequests),
                 StatusCodes.Status400BadRequest or StatusCodes.Status412PreconditionFailed => Unavailable(),
-                _ => new AssistantException("assistant_failed", "Nextcloud did not accept the Assistant request.", StatusCodes.Status502BadGateway),
+                _ => new AssistantException("assistant_failed", L.T("Nextcloud did not accept the Assistant request."), StatusCodes.Status502BadGateway),
             };
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
         {
-            throw new AssistantException("nextcloud_unreachable", "Nextcloud could not be reached.", StatusCodes.Status502BadGateway);
+            throw new AssistantException("nextcloud_unreachable", L.T("Nextcloud could not be reached."), StatusCodes.Status502BadGateway);
         }
     }
 
@@ -455,18 +455,18 @@ public sealed partial class AssistantService(
     {
         if (!await settings.AssistantAsync(ct))
         {
-            throw new AssistantException("assistant_disabled", "Your administrator turned the Assistant off for mail.", StatusCodes.Status403Forbidden);
+            throw new AssistantException("assistant_disabled", L.T("Your administrator turned the Assistant off for mail."), StatusCodes.Status403Forbidden);
         }
     }
 
     private static AssistantException Unavailable() =>
-        new("assistant_unavailable", "The Nextcloud Assistant cannot do this here: no AI provider is set up for it.", StatusCodes.Status409Conflict);
+        new("assistant_unavailable", L.T("The Nextcloud Assistant cannot do this here: no AI provider is set up for it."), StatusCodes.Status409Conflict);
 
     private static AssistantException Invalid(string field, string message) =>
         new("invalid_" + field, message, StatusCodes.Status400BadRequest);
 
     private static AssistantException NotFound() =>
-        new("not_found", "The Assistant task no longer exists.", StatusCodes.Status404NotFound);
+        new("not_found", L.T("The Assistant task no longer exists."), StatusCodes.Status404NotFound);
 }
 
 /// <summary>

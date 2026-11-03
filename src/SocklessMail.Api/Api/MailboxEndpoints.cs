@@ -208,7 +208,7 @@ public static class MailboxEndpoints
             var items = input.Items ?? [];
             if (items.Count > MaxConversationRefs)
             {
-                return Results.ValidationProblem(new Dictionary<string, string[]> { ["items"] = [$"Ask for at most {MaxConversationRefs} conversations."] });
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["items"] = [L.T("Ask for at most {max} conversations.", ("max", MaxConversationRefs))] });
             }
 
             var userId = user.GetNextcloudUserId();
@@ -249,7 +249,7 @@ public static class MailboxEndpoints
             var messageFilter = MessageFilters.Parse(filter);
             if (messageFilter == MessageFilter.None)
             {
-                throw new MailboxValidationException("filter", "Choose a filter.");
+                throw new MailboxValidationException("filter", L.T("Choose a filter."));
             }
 
             return Results.Ok(await folders.GetFilteredAsync(user.GetNextcloudUserId(), unifiedView, messageFilter, before,
@@ -306,7 +306,7 @@ public static class MailboxEndpoints
             }
             catch (CredentialUnavailableException)
             {
-                return Results.Json(new { error = "credential_unavailable", message = "The stored password cannot be decrypted. Enter it again in the account settings." },
+                return Results.Json(new { error = "credential_unavailable", message = L.T("The stored password cannot be decrypted. Enter it again in the account settings.") },
                     statusCode: StatusCodes.Status409Conflict);
             }
             catch (MailConnectionException e)
@@ -325,7 +325,7 @@ public static class MailboxEndpoints
             {
                 logger.LogInformation("IMAP command failed: {ExceptionType}", e.GetType().Name);
                 return e is ImapCommandException
-                    ? Results.Json(new { error = "server_error", message = "The mail server refused the request." }, statusCode: StatusCodes.Status502BadGateway)
+                    ? Results.Json(new { error = "server_error", message = L.T("The mail server refused the request.") }, statusCode: StatusCodes.Status502BadGateway)
                     : NotFound();
             }
         }

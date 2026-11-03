@@ -499,7 +499,7 @@ public sealed partial class MessageSecurity(CryptoKeyStore store)
 
     private static EncryptionDto Failed(string kind) => new(kind, "failed", []);
 
-    private static SignatureDto Unreadable(string kind) => new(kind, "bad", null, [], null, null, null, false, "The signature could not be read.");
+    private static SignatureDto Unreadable(string kind) => new(kind, "bad", null, [], null, null, null, false, L.T("The signature could not be read."));
 
     /// <summary>What BouncyCastle and MimeKit throw on data they cannot use.</summary>
     private static bool IsCryptoFailure(Exception e) =>

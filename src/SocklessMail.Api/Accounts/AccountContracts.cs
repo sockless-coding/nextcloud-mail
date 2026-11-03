@@ -58,19 +58,19 @@ public sealed record AppearanceInput(string? Color, string? BadgeText, string? B
         var errors = new Dictionary<string, string[]>();
         if (!string.IsNullOrEmpty(Color) && !System.Text.RegularExpressions.Regex.IsMatch(Color, "^#[0-9a-fA-F]{6}$"))
         {
-            errors["color"] = ["Use a colour like #1a62d6."];
+            errors["color"] = [L.T("Use a colour like #1a62d6.")];
         }
 
         // Up to three characters as people see them (an emoji with modifiers is one), and a byte cap.
         if (!string.IsNullOrEmpty(BadgeText)
             && (BadgeText.Length > MaxBadgeLength || new System.Globalization.StringInfo(BadgeText.Trim()).LengthInTextElements > 3))
         {
-            errors["badgeText"] = ["Use at most three characters."];
+            errors["badgeText"] = [L.T("Use at most three characters.")];
         }
 
         if (!string.IsNullOrEmpty(BadgeIcon) && !Icons.Contains(BadgeIcon))
         {
-            errors["badgeIcon"] = ["Choose one of the offered icons."];
+            errors["badgeIcon"] = [L.T("Choose one of the offered icons.")];
         }
 
         return errors;
@@ -120,7 +120,7 @@ public static class AccountValidation
         var errors = new Dictionary<string, string[]>();
         if (input is null)
         {
-            errors[""] = ["A request body is required."];
+            errors[""] = [L.T("A request body is required.")];
             return errors;
         }
 
@@ -132,22 +132,22 @@ public static class AccountValidation
             }
         }
 
-        Check(!string.IsNullOrWhiteSpace(input.DisplayName), "displayName", "Enter a name for the account.");
-        Check(input.DisplayName is null || input.DisplayName.Length <= 200, "displayName", "Use at most 200 characters.");
+        Check(!string.IsNullOrWhiteSpace(input.DisplayName), "displayName", L.T("Enter a name for the account."));
+        Check(input.DisplayName is null || input.DisplayName.Length <= 200, "displayName", L.T("Use at most 200 characters."));
 
-        Check(input.SenderName is null || input.SenderName.Length <= 200, "senderName", "Use at most 200 characters.");
+        Check(input.SenderName is null || input.SenderName.Length <= 200, "senderName", L.T("Use at most 200 characters."));
 
-        Check(IsEmailAddress(input.EmailAddress), "emailAddress", "Enter a valid email address.");
+        Check(IsEmailAddress(input.EmailAddress), "emailAddress", L.T("Enter a valid email address."));
 
-        Check(!string.IsNullOrWhiteSpace(input.Username), "username", "Enter the login name.");
-        Check(input.Username is null || input.Username.Length <= 320, "username", "Use at most 320 characters.");
+        Check(!string.IsNullOrWhiteSpace(input.Username), "username", L.T("Enter the login name."));
+        Check(input.Username is null || input.Username.Length <= 320, "username", L.T("Use at most 320 characters."));
 
         if (passwordRequired)
         {
-            Check(!string.IsNullOrEmpty(input.Password), "password", "Enter the password.");
+            Check(!string.IsNullOrEmpty(input.Password), "password", L.T("Enter the password."));
         }
 
-        Check(input.Password is null || input.Password.Length <= MaxPasswordLength, "password", "The password is too long.");
+        Check(input.Password is null || input.Password.Length <= MaxPasswordLength, "password", L.T("The password is too long."));
 
         ValidateServer(input.Imap, "imap", Check);
         ValidateServer(input.Smtp, "smtp", Check);
@@ -158,16 +158,16 @@ public static class AccountValidation
     {
         if (server is null)
         {
-            check(false, prefix, "Server settings are required.");
+            check(false, prefix, L.T("Server settings are required."));
             return;
         }
 
         var host = server.Host?.Trim() ?? "";
-        check(host.Length is > 0 and <= 253, $"{prefix}.host", "Enter the server name.");
+        check(host.Length is > 0 and <= 253, $"{prefix}.host", L.T("Enter the server name."));
         check(!host.Contains("://") && !host.Any(char.IsWhiteSpace) && !host.Contains('/'), $"{prefix}.host",
-            "Enter only the server name, without protocol or path.");
-        check(server.Port is > 0 and <= 65535, $"{prefix}.port", "Enter a port between 1 and 65535.");
-        check(Enum.IsDefined(server.Security), $"{prefix}.security", "Choose a security setting.");
+            L.T("Enter only the server name, without protocol or path."));
+        check(server.Port is > 0 and <= 65535, $"{prefix}.port", L.T("Enter a port between 1 and 65535."));
+        check(Enum.IsDefined(server.Security), $"{prefix}.security", L.T("Choose a security setting."));
     }
 
     private static bool IsEmailAddress(string? value) =>

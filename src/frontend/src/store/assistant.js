@@ -29,14 +29,14 @@ export const assistantState = reactive({
 
 /** Tones for writing, and for rewriting without the provider's own; the values go to the server (AssistantPrompts.Tones). */
 export const TONES = [
-	{ value: 'neutral', name: t('sockless_mail', 'Neutral') },
-	{ value: 'friendly', name: t('sockless_mail', 'Friendly') },
-	{ value: 'formal', name: t('sockless_mail', 'Formal') },
-	{ value: 'concise', name: t('sockless_mail', 'Concise') },
-	{ value: 'warm', name: t('sockless_mail', 'Warm') },
-	{ value: 'apologetic', name: t('sockless_mail', 'Apologetic') },
-	{ value: 'confident', name: t('sockless_mail', 'Confident') },
-	{ value: 'enthusiastic', name: t('sockless_mail', 'Enthusiastic') },
+	{ value: 'neutral', get name() { return t('sockless_mail', 'Neutral') } },
+	{ value: 'friendly', get name() { return t('sockless_mail', 'Friendly') } },
+	{ value: 'formal', get name() { return t('sockless_mail', 'Formal') } },
+	{ value: 'concise', get name() { return t('sockless_mail', 'Concise') } },
+	{ value: 'warm', get name() { return t('sockless_mail', 'Warm') } },
+	{ value: 'apologetic', get name() { return t('sockless_mail', 'Apologetic') } },
+	{ value: 'confident', get name() { return t('sockless_mail', 'Confident') } },
+	{ value: 'enthusiastic', get name() { return t('sockless_mail', 'Enthusiastic') } },
 ]
 
 /** The tones to rewrite in: the provider's, or the app's without "neutral". */

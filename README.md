@@ -363,8 +363,9 @@ In short (details in [docs/security.md](docs/security.md)):
   is sent, and due messages go out as soon as it is back.
 - Without HaRP: no push, and AppAPI's PHP proxy forwards only GET, HEAD, POST, PUT and DELETE
   (the API uses no PATCH for that reason).
-- Nextcloud installs translations only from app store release archives, so the UI is English
-  until the app is published there.
+- Errors saved by background work stay English in every language: the last error of a rule,
+  and why a scheduled message could not be sent yet. Everything else follows the user's
+  language (see [Translations](#translations)).
 
 **Accounts and servers**
 - One login per account, used for both IMAP and SMTP: a username and password, or an OAuth2
@@ -477,6 +478,8 @@ tests/SocklessMail.IntegrationTests/  API and IMAP against GreenMail and Dovecot
 tests/e2e/                  browser checks against the dev stack (Playwright with installed Edge/Chrome)
 dev/                        local Nextcloud + HaRP + GreenMail stack, the dev.sh helper, unicode-data.sh
 tools/appstore.sh           App Store checks, archives, signing and upload (used by the release workflow)
+tools/l10n.mjs              translations: extract, update, compile, check
+translationfiles/, l10n/    translation template and .po files; compiled translations
 ```
 
 ### Build and test
@@ -584,11 +587,59 @@ node accounts.mjs    # one script per area; see the list below
 | `tags.mjs`, `rules.mjs` | tags and rules |
 | `sendlater.mjs`, `scheduled.mjs`, `presets.mjs` | send later, the Scheduled view, presets |
 | `companion.mjs` | `/apps/socklessmail/`, menu entry, deep links |
+| `l10n.mjs` | the interface and a server message in Swedish (switches the user's language and back) |
 | `screenshots.mjs` | the App Store screenshots in `docs/screenshots/`, from `dev/dev.sh seed-demo` mail as a separate user (see the file's header) |
 
 They use an installed Edge (`BROWSER_CHANNEL=chrome` for Chrome) and exit non-zero on console
 errors. They open the app at `/apps/socklessmail/`; `APP_PAGE=embedded` uses AppAPI's page
 instead.
+
+### Translations
+
+The interface and the server's messages (validation and error texts) follow each user's
+Nextcloud language. Swedish is included; other languages come from translators (see below).
+
+Files, in the layout of Nextcloud's translation tooling:
+
+```
+translationfiles/templates/sockless_mail.pot   the English messages (generated, do not edit)
+translationfiles/<lang>/sockless_mail.po       one translation per language
+l10n/<lang>.json, l10n/<lang>.js               compiled from the .po files; the bundle uses the .json
+```
+
+[tools/l10n.mjs](tools/l10n.mjs) does the work,
+with Node only (no PHP or gettext):
+
+```bash
+node tools/l10n.mjs extract   # after changing texts: update the template
+node tools/l10n.mjs update    # merge the template into every .po (new texts empty, removed ones dropped)
+node tools/l10n.mjs compile   # .po → l10n/*.json and *.js
+node tools/l10n.mjs check     # template current, placeholders intact, l10n/ matches (the release runs this)
+```
+
+- Texts are `t('sockless_mail', '…')` and `n('sockless_mail', '…', '…', count)` with literal
+  strings, and named placeholders such as `{name}`.
+- In the backend, a message is `L.T("Use at most {max} characters.", ("max", MaxLength))`
+  ([Localization/L.cs](src/SocklessMail.Api/Localization/L.cs)), always with a literal string.
+  The frontend sends the user's language with every request (`X-Sockless-Language`), and the
+  server looks the message up in the same `l10n/<lang>.json`. Outside a request (background
+  work) messages stay English, so translate only what a request returns, not what is stored.
+  Log messages and texts for the AI stay English.
+- `extract` also writes the backend's messages as `t()` calls to
+  [Localization/server-strings.js](src/SocklessMail.Api/Localization/server-strings.js), because
+  Nextcloud's translation tool does not read C#. That file is generated and not loaded anywhere.
+- Module code must not call `t()` while loading (a constant like `{ label: t(…) }` would stay
+  English): the translations are registered just before the app mounts. Use a getter,
+  `{ get label() { return t(…) } }`, as in [store/rules.js](src/frontend/src/store/rules.js).
+- To add a language without Transifex: copy the template to `translationfiles/<lang>/sockless_mail.po`,
+  add a header with `Language` and `Plural-Forms`, translate it (with Poedit, for example), then
+  `compile`.
+
+**Transifex.** [.tx/config](.tx/config) and [.l10nignore](.l10nignore) are set up for
+Nextcloud's translation community. To join it: give the GitHub account `nextcloud-bot` write
+access to the repository, then open a "Request translations" issue at
+[nextcloud/docker-ci](https://github.com/nextcloud/docker-ci/issues/new/choose). The bot then
+commits translations to `main` every night, in the same files.
 
 ### Releasing
 
@@ -599,6 +650,7 @@ instead.
    shows this section as the release notes.
 3. Check, then commit:
    ```bash
+   node tools/l10n.mjs check
    tools/appstore.sh check   # needs xsltproc and xmllint (apt: xsltproc libxml2-utils)
    ```
 4. Tag and push:

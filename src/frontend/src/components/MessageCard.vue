@@ -711,7 +711,8 @@ function fileType(attachment) {
 
 .message-view__text-button {
 	--sm-button-background: transparent;
-	--sm-button-color: var(--color-primary-element-text-dark, var(--color-primary-element));
+	/* The text colour of primary-element-light surfaces: readable on the notice in both themes. */
+	--sm-button-color: var(--color-primary-element-light-text, var(--color-primary-element));
 	height: 28px;
 	min-height: 0;
 	margin: 0;
@@ -719,7 +720,7 @@ function fileType(attachment) {
 	border: 0;
 	border-radius: var(--border-radius-element, 8px);
 	background: none;
-	color: var(--color-primary-element-text-dark, var(--color-primary-element));
+	color: var(--color-primary-element-light-text, var(--color-primary-element));
 	font: inherit;
 	font-weight: 600;
 	cursor: pointer;

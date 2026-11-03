@@ -52,12 +52,12 @@ public sealed class Invitation
         var events = root.ChildrenNamed("VEVENT").Where(e => !string.IsNullOrWhiteSpace(e.Property("UID")?.Value)).ToList();
         if (events.Count == 0)
         {
-            throw new FormatException("The calendar data contains no event.");
+            throw new FormatException(L.T("The calendar data contains no event."));
         }
 
         if (events.Count > MaxEvents)
         {
-            throw new FormatException($"The calendar data contains more than {MaxEvents} events.");
+            throw new FormatException(L.T("The calendar data contains more than {max} events.", ("max", MaxEvents)));
         }
 
         return new Invitation(root, (root.Property("METHOD")?.Value ?? "").Trim().ToUpperInvariant(), events);

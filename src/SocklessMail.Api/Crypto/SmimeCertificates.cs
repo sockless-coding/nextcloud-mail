@@ -51,7 +51,7 @@ public static class SmimeCertificates
             .OfType<X509Certificate>()
             .Select(c => new ParsedCertificate(c, data))
             .ToList();
-        return found.Count > 0 ? found : throw new FormatException("The PKCS#12 file holds no private key.");
+        return found.Count > 0 ? found : throw new FormatException(L.T("The PKCS#12 file holds no private key."));
     }
 
     /// <exception cref="CryptographicException">The password is wrong.</exception>
@@ -66,11 +66,11 @@ public static class SmimeCertificates
         }
         catch (IOException e) when (e.Message.Contains("password", StringComparison.OrdinalIgnoreCase) || e.Message.Contains("MAC", StringComparison.OrdinalIgnoreCase))
         {
-            throw new CryptographicException("The password is wrong.", e);
+            throw new CryptographicException(L.T("The password is wrong."), e);
         }
         catch (Exception e) when (e is IOException or ArgumentException or InvalidCastException or Org.BouncyCastle.Crypto.CryptoException or InvalidOperationException)
         {
-            throw new FormatException("This is not a PKCS#12 file.", e);
+            throw new FormatException(L.T("This is not a PKCS#12 file."), e);
         }
     }
 
@@ -97,11 +97,11 @@ public static class SmimeCertificates
             var certificates = new X509CertificateParser().ReadCertificates(data);
             return certificates.Count > 0
                 ? certificates.Select(c => new ParsedCertificate(c, null)).ToList()
-                : throw new FormatException("This is not a certificate.");
+                : throw new FormatException(L.T("This is not a certificate."));
         }
         catch (Exception e) when (e is CertificateException or IOException or ArgumentException or InvalidCastException)
         {
-            throw new FormatException("This is not a certificate.", e);
+            throw new FormatException(L.T("This is not a certificate."), e);
         }
     }
 

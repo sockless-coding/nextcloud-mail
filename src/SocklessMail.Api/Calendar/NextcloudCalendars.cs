@@ -21,10 +21,10 @@ public sealed class CalendarException(string code, string message, int statusCod
     public int StatusCode { get; } = statusCode;
 
     public static CalendarException Unavailable() =>
-        new("nextcloud_unavailable", "Nextcloud Calendar did not answer. Try again in a moment.", StatusCodes.Status502BadGateway);
+        new("nextcloud_unavailable", L.T("Nextcloud Calendar did not answer. Try again in a moment."), StatusCodes.Status502BadGateway);
 
     public static CalendarException Changed() =>
-        new("changed", "The event was changed in the calendar in the meantime. Try again.", StatusCodes.Status409Conflict);
+        new("changed", L.T("The event was changed in the calendar in the meantime. Try again."), StatusCodes.Status409Conflict);
 }
 
 /// <summary>
@@ -175,20 +175,20 @@ public sealed class NextcloudCalendars(NextcloudClient nextcloud, ILogger<Nextcl
         switch (response.StatusCode)
         {
             case HttpStatusCode.Forbidden or HttpStatusCode.MethodNotAllowed:
-                throw new CalendarException("read_only", "This calendar is read-only.", StatusCodes.Status403Forbidden);
+                throw new CalendarException("read_only", L.T("This calendar is read-only."), StatusCodes.Status403Forbidden);
             case HttpStatusCode.PreconditionFailed:
                 throw CalendarException.Changed();
             case HttpStatusCode.NotFound or HttpStatusCode.Conflict:
-                throw new CalendarException("not_found", "The calendar no longer exists.", StatusCodes.Status404NotFound);
+                throw new CalendarException("not_found", L.T("The calendar no longer exists."), StatusCodes.Status404NotFound);
             case HttpStatusCode.InsufficientStorage:
-                throw new CalendarException("quota", "There is not enough space left in your Nextcloud.", StatusCodes.Status507InsufficientStorage);
+                throw new CalendarException("quota", L.T("There is not enough space left in your Nextcloud."), StatusCodes.Status507InsufficientStorage);
             default:
                 if (!response.IsSuccessStatusCode)
                 {
                     // Sabre refuses invalid calendar data with 400/415.
                     logger.LogWarning("CalDAV {Method} returned HTTP {Status}", method, (int)response.StatusCode);
                     throw response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.UnsupportedMediaType
-                        ? new CalendarException("invalid", "Nextcloud did not accept this event.", StatusCodes.Status422UnprocessableEntity)
+                        ? new CalendarException("invalid", L.T("Nextcloud did not accept this event."), StatusCodes.Status422UnprocessableEntity)
                         : CalendarException.Unavailable();
                 }
 
@@ -201,7 +201,7 @@ public sealed class NextcloudCalendars(NextcloudClient nextcloud, ILogger<Nextcl
         using var response = await SendAsync(request, userId, ct);
         if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden)
         {
-            throw new CalendarException("not_found", "The calendar no longer exists.", StatusCodes.Status404NotFound);
+            throw new CalendarException("not_found", L.T("The calendar no longer exists."), StatusCodes.Status404NotFound);
         }
 
         if (!response.IsSuccessStatusCode)
@@ -257,10 +257,10 @@ public sealed class NextcloudCalendars(NextcloudClient nextcloud, ILogger<Nextcl
     private static string CalendarUrl(string userId, string calendarId) =>
         ValidSegment(calendarId)
             ? $"{HomeUrl(userId)}{Uri.EscapeDataString(calendarId)}/"
-            : throw new CalendarException("not_found", "The calendar no longer exists.", StatusCodes.Status404NotFound);
+            : throw new CalendarException("not_found", L.T("The calendar no longer exists."), StatusCodes.Status404NotFound);
 
     private static string ObjectUrl(string userId, string calendarId, string name) =>
         ValidSegment(name)
             ? CalendarUrl(userId, calendarId) + Uri.EscapeDataString(name)
-            : throw new CalendarException("not_found", "The event no longer exists.", StatusCodes.Status404NotFound);
+            : throw new CalendarException("not_found", L.T("The event no longer exists."), StatusCodes.Status404NotFound);
 }

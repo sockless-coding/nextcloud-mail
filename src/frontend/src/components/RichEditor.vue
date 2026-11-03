@@ -915,7 +915,7 @@ defineExpose({ getText, focus, insertLinks, insertImages, hasImages, assistantTa
 }
 
 .rich-editor__select--size {
-	max-width: 70px;
+	max-width: 90px;
 }
 
 .rich-editor__button {

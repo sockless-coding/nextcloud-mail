@@ -175,12 +175,12 @@ public sealed class RuleEngine(
         var rule = await FindAsync(account, ruleId, ct);
         if (messageIds is null || messageIds.Count == 0)
         {
-            throw new MailboxValidationException("messageIds", "Give the messages to run the rule on.");
+            throw new MailboxValidationException("messageIds", L.T("Give the messages to run the rule on."));
         }
 
         if (messageIds.Count > ExistingWindow)
         {
-            throw new MailboxValidationException("messageIds", $"At most {ExistingWindow} messages at once.");
+            throw new MailboxValidationException("messageIds", L.T("At most {max} messages at once.", ("max", ExistingWindow)));
         }
 
         var name = folderId is null ? null : MailboxIds.FolderFullName(folderId);
@@ -203,7 +203,7 @@ public sealed class RuleEngine(
 
                     if (validity != folder.UidValidity)
                     {
-                        throw new MailboxConflictException("stale_messages", "The folder has changed on the server. Check the messages again.");
+                        throw new MailboxConflictException("stale_messages", L.T("The folder has changed on the server. Check the messages again."));
                     }
 
                     uids.Add(new UniqueId(validity, uid));

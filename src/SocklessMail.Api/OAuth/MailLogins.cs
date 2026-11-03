@@ -103,7 +103,7 @@ public sealed class MailLogins(
             catch (OAuthGrantRevokedException)
             {
                 throw new MailConnectionException("oauth_signin_required",
-                    $"The sign-in with {client.Provider.Name} has expired or was revoked. Sign in again in the account settings.");
+                    L.T("The sign-in with {provider} has expired or was revoked. Sign in again in the account settings.", ("provider", client.Provider.Name)));
             }
             catch (OAuthUnavailableException e)
             {
@@ -145,7 +145,7 @@ public sealed class MailLogins(
         await using var scope = scopes.CreateAsyncScope();
         var client = await scope.ServiceProvider.GetRequiredService<OAuthClientStore>().GetAsync(grant.Provider, ct)
                      ?? throw new MailConnectionException("oauth_not_configured",
-                         "Signing in with this provider is not set up (any more). Ask your administrator to configure it.");
+                         L.T("Signing in with this provider is not set up (any more). Ask your administrator to configure it."));
 
         OAuthTokenResponse response;
         try
@@ -156,7 +156,7 @@ public sealed class MailLogins(
         {
             logger.LogInformation("OAuth grant of account {AccountId} was rejected; the user has to sign in again", account.Id);
             throw new MailConnectionException("oauth_signin_required",
-                $"The sign-in with {client.Provider.Name} has expired or was revoked. Sign in again in the account settings.");
+                L.T("The sign-in with {provider} has expired or was revoked. Sign in again in the account settings.", ("provider", client.Provider.Name)));
         }
         catch (OAuthUnavailableException e)
         {
@@ -192,4 +192,4 @@ public sealed class MailLogins(
 }
 
 /// <summary>The account's sign-in lacks the consent to Microsoft Graph: signing in again asks for it.</summary>
-public sealed class GraphConsentRequiredException() : Exception("Sign in again to allow tags as Outlook categories.");
+public sealed class GraphConsentRequiredException() : Exception(L.T("Sign in again to allow tags as Outlook categories."));

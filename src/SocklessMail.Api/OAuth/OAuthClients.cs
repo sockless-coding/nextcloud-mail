@@ -84,12 +84,12 @@ public sealed class OAuthClientStore(MailDbContext db, IDataProtectionProvider p
             return;
         }
 
-        Require(clientId.Length <= 500, "clientId", "Use at most 500 characters.");
+        Require(clientId.Length <= 500, "clientId", L.T("Use at most 500 characters."));
         var secret = input.ClientSecret?.Trim() ?? "";
-        Require(secret.Length > 0 || existing is not null, "clientSecret", "Enter the client secret.");
-        Require(secret.Length <= 2000, "clientSecret", "Use at most 2000 characters.");
+        Require(secret.Length > 0 || existing is not null, "clientSecret", L.T("Enter the client secret."));
+        Require(secret.Length <= 2000, "clientSecret", L.T("Use at most 2000 characters."));
         var redirect = input.RedirectUri?.Trim() ?? "";
-        Require(IsRedirectUri(redirect), "redirectUri", "Enter the full callback URL, starting with https://.");
+        Require(IsRedirectUri(redirect), "redirectUri", L.T("Enter the full callback URL, starting with https://."));
         var tenant = provider.UsesTenant && !string.IsNullOrWhiteSpace(input.Tenant) ? input.Tenant.Trim() : null;
         Require(tenant is null || (tenant.Length <= 100 && tenant.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '.')),
             "tenant", "Enter \"common\", \"organizations\", \"consumers\" or a tenant id.");

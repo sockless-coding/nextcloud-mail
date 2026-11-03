@@ -144,7 +144,7 @@ public sealed class KeySharing(
     /// </summary>
     public async Task<SavedToContactDto> SaveToContactAsync(string userId, CryptoKey key, CancellationToken ct)
     {
-        var address = key.AddressList.FirstOrDefault() ?? throw new MailboxValidationException("id", "The key names no address.");
+        var address = key.AddressList.FirstOrDefault() ?? throw new MailboxValidationException("id", L.T("The key names no address."));
         var books = await directory.GetAsync(userId, contacts, ct);
         var certificate = key.Kind == CryptoKind.Smime;
         var existing = books.Where(b => b.Book.Writable)
@@ -159,7 +159,7 @@ public sealed class KeySharing(
         else
         {
             var book = books.FirstOrDefault(b => b.Book.Writable).Book
-                       ?? throw new MailboxValidationException("id", "You have no address book to save contacts in.");
+                       ?? throw new MailboxValidationException("id", L.T("You have no address book to save contacts in."));
             name = key.Name ?? address;
             contactId = await contacts.CreateAsync(userId, book.Id, name, address, ct);
             created = true;
@@ -181,7 +181,7 @@ public sealed class KeySharing(
     {
         if (key.Kind != CryptoKind.OpenPgp || !key.IsOwn)
         {
-            throw new MailboxValidationException("id", "Only your own OpenPGP keys can be published.");
+            throw new MailboxValidationException("id", L.T("Only your own OpenPGP keys can be published."));
         }
 
         var client = http.CreateClient(PublicKeyFinder.HttpClientName);
@@ -217,7 +217,7 @@ public sealed class KeySharing(
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested)
         {
             logger.LogWarning("keys.openpgp.org could not be reached ({ExceptionType})", e.GetType().Name);
-            throw new KeyServerException("keys.openpgp.org could not be reached. Try again later.");
+            throw new KeyServerException(L.T("keys.openpgp.org could not be reached. Try again later."));
         }
 
         using (response)

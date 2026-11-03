@@ -20,10 +20,10 @@ public sealed class NextcloudContactsException(string code, string message, int 
     public int StatusCode { get; } = statusCode;
 
     public static NextcloudContactsException NotFound() =>
-        new("not_found", "The contact or address book no longer exists.", StatusCodes.Status404NotFound);
+        new("not_found", L.T("The contact or address book no longer exists."), StatusCodes.Status404NotFound);
 
     public static NextcloudContactsException Unavailable() =>
-        new("nextcloud_unavailable", "Nextcloud Contacts did not answer. Try again in a moment.", StatusCodes.Status502BadGateway);
+        new("nextcloud_unavailable", L.T("Nextcloud Contacts did not answer. Try again in a moment."), StatusCodes.Status502BadGateway);
 }
 
 /// <summary>
@@ -147,7 +147,7 @@ public sealed class NextcloudContacts(NextcloudClient nextcloud, ILogger<Nextclo
         using var result = await SendAsync(put, userId, ct);
         if (result.StatusCode == HttpStatusCode.PreconditionFailed)
         {
-            throw new NextcloudContactsException("changed", "The contact was changed in the meantime. Try again.", StatusCodes.Status409Conflict);
+            throw new NextcloudContactsException("changed", L.T("The contact was changed in the meantime. Try again."), StatusCodes.Status409Conflict);
         }
 
         ThrowForWrite(result, "PUT");
@@ -169,11 +169,11 @@ public sealed class NextcloudContacts(NextcloudClient nextcloud, ILogger<Nextclo
         switch (response.StatusCode)
         {
             case HttpStatusCode.Forbidden or HttpStatusCode.MethodNotAllowed:
-                throw new NextcloudContactsException("read_only", "This address book is read-only.", StatusCodes.Status403Forbidden);
+                throw new NextcloudContactsException("read_only", L.T("This address book is read-only."), StatusCodes.Status403Forbidden);
             case HttpStatusCode.NotFound or HttpStatusCode.Conflict:
                 throw NextcloudContactsException.NotFound();
             case HttpStatusCode.PreconditionFailed:
-                throw new NextcloudContactsException("changed", "The contact was changed in the meantime. Try again.", StatusCodes.Status409Conflict);
+                throw new NextcloudContactsException("changed", L.T("The contact was changed in the meantime. Try again."), StatusCodes.Status409Conflict);
             default:
                 EnsureSuccess(response, method);
                 break;

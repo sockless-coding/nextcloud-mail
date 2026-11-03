@@ -49,7 +49,7 @@ public sealed class UserPgpContext : OpenPgpContext
         Task.FromResult<PgpPublicKeyRing?>(_public.GetPublicKeyRing(keyId));
 
     protected override PgpSecretKey GetSecretKey(long keyId, CancellationToken cancellationToken) =>
-        _secret.GetSecretKey(keyId) ?? throw new PrivateKeyNotFoundException(keyId, "None of your private keys opens this message.");
+        _secret.GetSecretKey(keyId) ?? throw new PrivateKeyNotFoundException(keyId, L.T("None of your private keys opens this message."));
 
     /// <summary>For each mailbox, the newest usable encryption key of a key whose user ids name it.</summary>
     public override IList<PgpPublicKey> GetPublicKeys(IEnumerable<MailboxAddress> mailboxes, CancellationToken cancellationToken = default)
@@ -62,7 +62,7 @@ public sealed class UserPgpContext : OpenPgpContext
                 .SelectMany(ring => ring.GetPublicKeys())
                 .Where(k => k.IsEncryptionKey && !k.HasRevocation() && !IsExpired(k))
                 .MaxBy(k => k.CreationTime);
-            keys.Add(key ?? throw new PublicKeyNotFoundException(mailbox, "No public key was found for " + mailbox.Address + "."));
+            keys.Add(key ?? throw new PublicKeyNotFoundException(mailbox, L.T("No public key was found for {address}.", ("address", mailbox.Address))));
         }
 
         return keys;
@@ -74,7 +74,7 @@ public sealed class UserPgpContext : OpenPgpContext
             .SelectMany(ring => ring.GetSecretKeys())
             .Where(k => k.IsSigningKey && !k.IsPrivateKeyEmpty && !k.PublicKey.HasRevocation() && !IsExpired(k.PublicKey))
             .MaxBy(k => k.PublicKey.CreationTime)
-        ?? throw new PrivateKeyNotFoundException(mailbox, "No private key to sign with was found for " + mailbox.Address + ".");
+        ?? throw new PrivateKeyNotFoundException(mailbox, L.T("No private key to sign with was found for {address}.", ("address", mailbox.Address)));
 
     public override bool CanSign(MailboxAddress signer, CancellationToken cancellationToken = default)
     {

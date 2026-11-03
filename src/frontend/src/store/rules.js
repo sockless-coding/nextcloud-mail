@@ -104,43 +104,43 @@ function toInput(rule) {
 }
 
 export const FIELDS = [
-	{ id: 'from', label: t('sockless_mail', 'From') },
-	{ id: 'to', label: t('sockless_mail', 'To') },
-	{ id: 'cc', label: t('sockless_mail', 'Cc') },
-	{ id: 'recipient', label: t('sockless_mail', 'To or Cc') },
-	{ id: 'subject', label: t('sockless_mail', 'Subject') },
-	{ id: 'header', label: t('sockless_mail', 'Header') },
-	{ id: 'size', label: t('sockless_mail', 'Size') },
-	{ id: 'attachment', label: t('sockless_mail', 'Attachments') },
+	{ id: 'from', get label() { return t('sockless_mail', 'From') } },
+	{ id: 'to', get label() { return t('sockless_mail', 'To') } },
+	{ id: 'cc', get label() { return t('sockless_mail', 'Cc') } },
+	{ id: 'recipient', get label() { return t('sockless_mail', 'To or Cc') } },
+	{ id: 'subject', get label() { return t('sockless_mail', 'Subject') } },
+	{ id: 'header', get label() { return t('sockless_mail', 'Header') } },
+	{ id: 'size', get label() { return t('sockless_mail', 'Size') } },
+	{ id: 'attachment', get label() { return t('sockless_mail', 'Attachments') } },
 ]
 
 export const TEXT_OPS = [
-	{ id: 'contains', label: t('sockless_mail', 'contains') },
-	{ id: 'notContains', label: t('sockless_mail', 'does not contain') },
-	{ id: 'is', label: t('sockless_mail', 'is') },
-	{ id: 'isNot', label: t('sockless_mail', 'is not') },
-	{ id: 'startsWith', label: t('sockless_mail', 'starts with') },
-	{ id: 'endsWith', label: t('sockless_mail', 'ends with') },
-	{ id: 'matches', label: t('sockless_mail', 'matches regex') },
+	{ id: 'contains', get label() { return t('sockless_mail', 'contains') } },
+	{ id: 'notContains', get label() { return t('sockless_mail', 'does not contain') } },
+	{ id: 'is', get label() { return t('sockless_mail', 'is') } },
+	{ id: 'isNot', get label() { return t('sockless_mail', 'is not') } },
+	{ id: 'startsWith', get label() { return t('sockless_mail', 'starts with') } },
+	{ id: 'endsWith', get label() { return t('sockless_mail', 'ends with') } },
+	{ id: 'matches', get label() { return t('sockless_mail', 'matches regex') } },
 ]
 
 export const SIZE_OPS = [
-	{ id: 'greaterThan', label: t('sockless_mail', 'is larger than') },
-	{ id: 'lessThan', label: t('sockless_mail', 'is smaller than') },
+	{ id: 'greaterThan', get label() { return t('sockless_mail', 'is larger than') } },
+	{ id: 'lessThan', get label() { return t('sockless_mail', 'is smaller than') } },
 ]
 
 export const ATTACHMENT_OPS = [
-	{ id: 'has', label: t('sockless_mail', 'has attachments') },
-	{ id: 'hasNot', label: t('sockless_mail', 'has no attachments') },
+	{ id: 'has', get label() { return t('sockless_mail', 'has attachments') } },
+	{ id: 'hasNot', get label() { return t('sockless_mail', 'has no attachments') } },
 ]
 
 export const ACTIONS = [
-	{ id: 'move', label: t('sockless_mail', 'Move to folder') },
-	{ id: 'copy', label: t('sockless_mail', 'Copy to folder') },
-	{ id: 'markRead', label: t('sockless_mail', 'Mark as read') },
-	{ id: 'flag', label: t('sockless_mail', 'Flag') },
-	{ id: 'trash', label: t('sockless_mail', 'Move to Trash') },
-	{ id: 'tag', label: t('sockless_mail', 'Add tag') },
+	{ id: 'move', get label() { return t('sockless_mail', 'Move to folder') } },
+	{ id: 'copy', get label() { return t('sockless_mail', 'Copy to folder') } },
+	{ id: 'markRead', get label() { return t('sockless_mail', 'Mark as read') } },
+	{ id: 'flag', get label() { return t('sockless_mail', 'Flag') } },
+	{ id: 'trash', get label() { return t('sockless_mail', 'Move to Trash') } },
+	{ id: 'tag', get label() { return t('sockless_mail', 'Add tag') } },
 ]
 
 /** The operators that fit a field. */

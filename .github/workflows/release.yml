@@ -23,6 +23,7 @@ jobs:
         id: version
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends xsltproc libxml2-utils >/dev/null
+          node tools/l10n.mjs check
           bash tools/appstore.sh check "$GITHUB_REF_NAME"
           image="$(sed -n 's:.*<registry>\(.*\)</registry>.*:\1:p' appinfo/info.xml | head -1)/$(sed -n 's:.*<image>\(.*\)</image>.*:\1:p' appinfo/info.xml | head -1)"
           [ "$image" = "$IMAGE" ] || { echo "info.xml names $image, the workflow pushes $IMAGE"; exit 1; }

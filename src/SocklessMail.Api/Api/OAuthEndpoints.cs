@@ -68,13 +68,13 @@ public static class OAuthEndpoints
 
             if (await clients.GetAsync(providerId ?? "", ct) is not { } client)
             {
-                return Results.Json(new { error = "oauth_not_configured", message = "Signing in with this provider is not set up. Ask your administrator." },
+                return Results.Json(new { error = "oauth_not_configured", message = L.T("Signing in with this provider is not set up. Ask your administrator.") },
                     statusCode: StatusCodes.Status409Conflict);
             }
 
             if (flows.Start(userId, client.Provider.Id, client.RedirectUri, input.AccountId) is not { } flow)
             {
-                return Results.Json(new { error = "too_many_sign_ins", message = "Too many sign-ins in progress. Wait a few minutes and try again." },
+                return Results.Json(new { error = "too_many_sign_ins", message = L.T("Too many sign-ins in progress. Wait a few minutes and try again.") },
                     statusCode: StatusCodes.Status429TooManyRequests);
             }
 
@@ -92,12 +92,12 @@ public static class OAuthEndpoints
             var errors = new Dictionary<string, string[]>();
             if (input.DisplayName is { Length: > 200 })
             {
-                errors["displayName"] = ["Use at most 200 characters."];
+                errors["displayName"] = [L.T("Use at most 200 characters.")];
             }
 
             if (input.SenderName is { Length: > 200 })
             {
-                errors["senderName"] = ["Use at most 200 characters."];
+                errors["senderName"] = [L.T("Use at most 200 characters.")];
             }
 
             if (errors.Count > 0)
@@ -145,7 +145,7 @@ public static class OAuthEndpoints
                 return Results.Json(new
                 {
                     error = "different_account",
-                    message = $"You signed in as {done.Email}, but this account is {account.Username}. Sign in with that address, or add a new account.",
+                    message = L.T("You signed in as {email}, but this account is {username}. Sign in with that address, or add a new account.", ("email", done.Email), ("username", account.Username)),
                 }, statusCode: StatusCodes.Status409Conflict);
             }
 
@@ -197,23 +197,23 @@ public static class OAuthEndpoints
             {
                 if (flows.FindByState(state) is not { } flow)
                 {
-                    return Page(http, StatusCodes.Status400BadRequest, "This sign-in has expired. Start it again in Sockless Mail.");
+                    return Page(http, StatusCodes.Status400BadRequest, L.T("This sign-in has expired. Start it again in Sockless Mail."));
                 }
 
                 // A signed-in Nextcloud user must be the one who started the flow.
                 if (user.FindFirstValue(ClaimTypes.NameIdentifier) is { Length: > 0 } userId && userId != flow.UserId)
                 {
-                    return Page(http, StatusCodes.Status403Forbidden, "This sign-in was started by another user.");
+                    return Page(http, StatusCodes.Status403Forbidden, L.T("This sign-in was started by another user."));
                 }
 
                 if (Interlocked.Exchange(ref flow.Claimed, 1) == 1)
                 {
-                    return Page(http, StatusCodes.Status409Conflict, "This sign-in has already been handled. You can close this window.");
+                    return Page(http, StatusCodes.Status409Conflict, L.T("This sign-in has already been handled. You can close this window."));
                 }
 
                 var message = await CompleteAsync(flow, code, error, clients, tokens, logger, ct);
                 return flow.Status == OAuthFlowStatus.Done
-                    ? Page(http, StatusCodes.Status200OK, $"Signed in as {flow.Email}. You can close this window.")
+                    ? Page(http, StatusCodes.Status200OK, L.T("Signed in as {email}. You can close this window.", ("email", flow.Email)))
                     : Page(http, StatusCodes.Status400BadRequest, message);
             })
             .RequireAuthorization(AppApiAuthentication.SystemPolicy);
@@ -233,13 +233,13 @@ public static class OAuthEndpoints
         var client = await clients.GetAsync(flow.ProviderId, ct);
         if (client is null)
         {
-            return Fail("Signing in with this provider is no longer set up. Ask your administrator.");
+            return Fail(L.T("Signing in with this provider is no longer set up. Ask your administrator."));
         }
 
         if (error is not null || string.IsNullOrEmpty(code))
         {
             return Fail(error == "access_denied"
-                ? "The sign-in was cancelled."
+                ? L.T("The sign-in was cancelled.")
                 : $"{client.Provider.Name} did not complete the sign-in ({error ?? "no code"}).");
         }
 
@@ -251,7 +251,7 @@ public static class OAuthEndpoints
         catch (Exception e) when (e is OAuthGrantRevokedException or OAuthUnavailableException)
         {
             logger.LogInformation("Exchanging an OAuth code with {Provider} failed: {Error}", client.Provider.Id, e.GetType().Name);
-            return Fail(e is OAuthUnavailableException ? e.Message : "The sign-in code was not accepted. Try again.");
+            return Fail(e is OAuthUnavailableException ? e.Message : L.T("The sign-in code was not accepted. Try again."));
         }
 
         if (OAuthTokens.ReadIdentity(response.IdToken) is not { } identity)
@@ -272,7 +272,7 @@ public static class OAuthEndpoints
     }
 
     private static IResult NoSignIn() =>
-        Results.Json(new { error = "no_sign_in", message = "The sign-in has expired or was not completed. Sign in again." },
+        Results.Json(new { error = "no_sign_in", message = L.T("The sign-in has expired or was not completed. Sign in again.") },
             statusCode: StatusCodes.Status409Conflict);
 
     private static IResult Page(HttpContext http, int status, string message)

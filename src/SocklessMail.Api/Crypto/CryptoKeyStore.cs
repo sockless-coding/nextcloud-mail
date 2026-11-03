@@ -52,7 +52,7 @@ public sealed class CryptoKeyStore(MailDbContext db, KeySecrets secrets, KeyUnlo
             }
             catch (CryptographicException)
             {
-                throw new MailboxValidationException("passphrase", input.Passphrase is null or "" ? "Enter the file's password." : "The password is wrong.");
+                throw new MailboxValidationException("passphrase", input.Passphrase is null or "" ? L.T("Enter the file's password.") : L.T("The password is wrong."));
             }
             catch (FormatException e)
             {
@@ -67,7 +67,7 @@ public sealed class CryptoKeyStore(MailDbContext db, KeySecrets secrets, KeyUnlo
             {
                 if (key.Secret is { } secret && !OpenPgpKeys.Opens(secret, passphrase))
                 {
-                    throw new MailboxValidationException("passphrase", input.Passphrase is null or "" ? "Enter the key's passphrase." : "The passphrase is wrong.");
+                    throw new MailboxValidationException("passphrase", input.Passphrase is null or "" ? L.T("Enter the key's passphrase.") : L.T("The passphrase is wrong."));
                 }
 
                 found.Add(FromPgp(userId, key));
@@ -81,7 +81,7 @@ public sealed class CryptoKeyStore(MailDbContext db, KeySecrets secrets, KeyUnlo
             }
             catch (FormatException)
             {
-                throw new MailboxValidationException("data", "This is not an OpenPGP key, a certificate or a PKCS#12 file.");
+                throw new MailboxValidationException("data", L.T("This is not an OpenPGP key, a certificate or a PKCS#12 file."));
             }
         }
 
@@ -113,7 +113,7 @@ public sealed class CryptoKeyStore(MailDbContext db, KeySecrets secrets, KeyUnlo
 
         if (await db.CryptoKeys.CountAsync(k => k.OwnerUserId == userId, ct) + added.Count > MaxKeysPerUser)
         {
-            throw new MailboxValidationException("data", $"You can keep at most {MaxKeysPerUser} keys.");
+            throw new MailboxValidationException("data", L.T("You can keep at most {max} keys.", ("max", MaxKeysPerUser)));
         }
 
         await db.SaveChangesAsync(ct);
@@ -126,25 +126,25 @@ public sealed class CryptoKeyStore(MailDbContext db, KeySecrets secrets, KeyUnlo
         var address = input.Address?.Trim() ?? "";
         if (!ownAddresses.Contains(address, StringComparer.OrdinalIgnoreCase))
         {
-            throw new MailboxValidationException("address", "Choose the address of one of your accounts.");
+            throw new MailboxValidationException("address", L.T("Choose the address of one of your accounts."));
         }
 
         var passphrase = input.Passphrase ?? "";
         if (passphrase.Length is < MinPassphraseLength or > MaxPassphraseLength)
         {
-            throw new MailboxValidationException("passphrase", $"Use a passphrase of at least {MinPassphraseLength} characters.");
+            throw new MailboxValidationException("passphrase", L.T("Use a passphrase of at least {min} characters.", ("min", MinPassphraseLength)));
         }
 
         var years = input.ValidYears ?? 3;
         if (years is < 0 or > 10)
         {
-            throw new MailboxValidationException("validYears", "Choose between 1 and 10 years, or no expiry.");
+            throw new MailboxValidationException("validYears", L.T("Choose between 1 and 10 years, or no expiry."));
         }
 
         var name = input.Name?.Trim();
         if (name?.Length > 200)
         {
-            throw new MailboxValidationException("name", "The name is too long.");
+            throw new MailboxValidationException("name", L.T("The name is too long."));
         }
 
         var mailbox = new MailboxAddress(string.IsNullOrEmpty(name) ? null : name, address);
@@ -180,7 +180,7 @@ public sealed class CryptoKeyStore(MailDbContext db, KeySecrets secrets, KeyUnlo
     {
         if (key.ProtectedSecret is null)
         {
-            throw new MailboxValidationException("id", "This is not one of your own keys.");
+            throw new MailboxValidationException("id", L.T("This is not one of your own keys."));
         }
 
         var secret = secrets.Unprotect(key.Id, key.ProtectedSecret);
@@ -303,7 +303,7 @@ public sealed class CryptoKeyStore(MailDbContext db, KeySecrets secrets, KeyUnlo
             }
             catch (FormatException)
             {
-                throw new MailboxValidationException("data", "The file could not be read.");
+                throw new MailboxValidationException("data", L.T("The file could not be read."));
             }
         }
         else if (!string.IsNullOrWhiteSpace(input.Text))
@@ -312,10 +312,10 @@ public sealed class CryptoKeyStore(MailDbContext db, KeySecrets secrets, KeyUnlo
         }
         else
         {
-            throw new MailboxValidationException("data", "Choose a key file or paste a key.");
+            throw new MailboxValidationException("data", L.T("Choose a key file or paste a key."));
         }
 
-        return data.Length <= MaxImportBytes ? data : throw new MailboxValidationException("data", "The file is too large for a key.");
+        return data.Length <= MaxImportBytes ? data : throw new MailboxValidationException("data", L.T("The file is too large for a key."));
     }
 
     private static IReadOnlyList<ParsedPgpKey>? TryParsePgp(byte[] data)

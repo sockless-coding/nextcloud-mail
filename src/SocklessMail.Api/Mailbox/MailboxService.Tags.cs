@@ -24,18 +24,18 @@ public sealed partial class MailboxService
     {
         var tags = await tagStore.ListAsync(account.OwnerUserId, ct);
         string[] KeywordsOf(IReadOnlyList<Guid>? ids, string field) => (ids ?? []).Distinct()
-            .Select(id => tags.FirstOrDefault(t => t.Id == id)?.Keyword ?? throw new MailboxValidationException(field, "There is no such tag."))
+            .Select(id => tags.FirstOrDefault(t => t.Id == id)?.Keyword ?? throw new MailboxValidationException(field, L.T("There is no such tag.")))
             .ToArray();
         var add = KeywordsOf(input.Add, "add");
         var remove = KeywordsOf(input.Remove, "remove");
         if (add.Length + remove.Length == 0)
         {
-            throw new MailboxValidationException("add", "Add or remove at least one tag.");
+            throw new MailboxValidationException("add", L.T("Add or remove at least one tag."));
         }
 
         if (add.Intersect(remove, StringComparer.OrdinalIgnoreCase).Any())
         {
-            throw new MailboxValidationException("remove", "A tag cannot be added and removed at once.");
+            throw new MailboxValidationException("remove", L.T("A tag cannot be added and removed at once."));
         }
 
         return await ChangeKeywordsAsync(account, folderId, input.MessageIds, add, remove, ct);
@@ -54,7 +54,7 @@ public sealed partial class MailboxService
             if (!onServer && storage == TagStorage.Keywords)
             {
                 // The account's other folders keep keywords; one that does not (read-only, shared) cannot take tags.
-                throw new MailboxConflictException("tags_unsupported", "This folder cannot keep tags.");
+                throw new MailboxConflictException("tags_unsupported", L.T("This folder cannot keep tags."));
             }
 
             if (onServer)

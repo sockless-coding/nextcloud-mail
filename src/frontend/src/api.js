@@ -1,5 +1,6 @@
 import axios from '@nextcloud/axios'
 import { loadState } from '@nextcloud/initial-state'
+import { getLanguage } from '@nextcloud/l10n'
 import { generateUrl, getRootUrl } from '@nextcloud/router'
 
 export const EX_APP_ID = 'sockless_mail'
@@ -20,8 +21,9 @@ export const apiBase = apiMode === 'harp'
 	? `${getRootUrl()}/exapps/${EX_APP_ID}/api`
 	: generateUrl(`/apps/app_api/proxy/${EX_APP_ID}/api`)
 
-// The ExApp rejects state-changing requests without this header (CSRF guard, ApiRequestGuard.cs).
-const headers = { 'X-Sockless-Request': '1' }
+// The ExApp rejects state-changing requests without X-Sockless-Request (CSRF guard,
+// ApiRequestGuard.cs); X-Sockless-Language picks the language of its messages (ServerText.cs).
+const headers = { 'X-Sockless-Request': '1', 'X-Sockless-Language': getLanguage() }
 
 /**
  * @param {string} path API path, e.g. "/me"

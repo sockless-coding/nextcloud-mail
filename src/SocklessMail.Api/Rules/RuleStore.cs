@@ -37,7 +37,7 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
         var rules = input ?? [];
         if (rules.Count > MaxRules)
         {
-            throw new RuleValidationException("rules", $"At most {MaxRules} rules per account.");
+            throw new RuleValidationException("rules", L.T("At most {max} rules per account.", ("max", MaxRules)));
         }
 
         var validated = rules.Select((rule, i) => Validate(rule, $"rules[{i}]")).ToList();
@@ -114,7 +114,7 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
         known.UnionWith(saved.SelectMany(r => Compile(r).Actions).Select(a => a.TagId).OfType<Guid>());
         if (wanted.FirstOrDefault(x => !known.Contains(x.TagId!.Value)) is { Path: not null } unknown)
         {
-            throw new RuleValidationException(unknown.Path, "Choose a tag.");
+            throw new RuleValidationException(unknown.Path, L.T("Choose a tag."));
         }
     }
 
@@ -148,7 +148,7 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
     /// <summary>A rule as entered, checked and normalised but not saved (for trying it out).</summary>
     public static CompiledRule Draft(MailAccount account, RuleDto? input)
     {
-        var (name, conditions, actions) = Validate(input ?? throw new RuleValidationException("rule", "Give a rule."), "rule");
+        var (name, conditions, actions) = Validate(input ?? throw new RuleValidationException("rule", L.T("Give a rule.")), "rule");
         var rule = new MailRule
         {
             OwnerUserId = account.OwnerUserId,
@@ -179,34 +179,34 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
         var name = rule.Name?.Trim() ?? "";
         if (name.Length == 0)
         {
-            throw new RuleValidationException($"{path}.name", "Give the rule a name.");
+            throw new RuleValidationException($"{path}.name", L.T("Give the rule a name."));
         }
 
         if (name.Length > MaxNameLength || name.Any(char.IsControl))
         {
-            throw new RuleValidationException($"{path}.name", $"Use at most {MaxNameLength} characters.");
+            throw new RuleValidationException($"{path}.name", L.T("Use at most {max} characters.", ("max", MaxNameLength)));
         }
 
         var conditions = rule.Conditions ?? [];
         if (conditions.Count == 0)
         {
-            throw new RuleValidationException($"{path}.conditions", "Add at least one condition.");
+            throw new RuleValidationException($"{path}.conditions", L.T("Add at least one condition."));
         }
 
         if (conditions.Count > MaxConditions)
         {
-            throw new RuleValidationException($"{path}.conditions", $"At most {MaxConditions} conditions.");
+            throw new RuleValidationException($"{path}.conditions", L.T("At most {max} conditions.", ("max", MaxConditions)));
         }
 
         var actions = rule.Actions ?? [];
         if (actions.Count == 0)
         {
-            throw new RuleValidationException($"{path}.actions", "Add at least one action.");
+            throw new RuleValidationException($"{path}.actions", L.T("Add at least one action."));
         }
 
         if (actions.Count > MaxActions)
         {
-            throw new RuleValidationException($"{path}.actions", $"At most {MaxActions} actions.");
+            throw new RuleValidationException($"{path}.actions", L.T("At most {max} actions.", ("max", MaxActions)));
         }
 
         return (name,
@@ -218,7 +218,7 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
     {
         if (condition is null)
         {
-            throw new RuleValidationException(path, "Not a condition.");
+            throw new RuleValidationException(path, L.T("Not a condition."));
         }
 
         switch (condition.Field)
@@ -226,12 +226,12 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
             case RuleFields.Size:
                 if (!RuleOps.Size.Contains(condition.Op))
                 {
-                    throw new RuleValidationException($"{path}.op", "Choose larger or smaller than.");
+                    throw new RuleValidationException($"{path}.op", L.T("Choose larger or smaller than."));
                 }
 
                 if (!long.TryParse(condition.Value?.Trim(), out var bytes) || bytes < 0)
                 {
-                    throw new RuleValidationException($"{path}.value", "Enter a size.");
+                    throw new RuleValidationException($"{path}.value", L.T("Enter a size."));
                 }
 
                 return new RuleCondition(RuleFields.Size, null, condition.Op, bytes.ToString());
@@ -239,7 +239,7 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
             case RuleFields.Attachment:
                 if (!RuleOps.Attachment.Contains(condition.Op))
                 {
-                    throw new RuleValidationException($"{path}.op", "Choose has or has no attachments.");
+                    throw new RuleValidationException($"{path}.op", L.T("Choose has or has no attachments."));
                 }
 
                 return new RuleCondition(RuleFields.Attachment, null, condition.Op, null);
@@ -247,7 +247,7 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
 
         if (!RuleFields.Text.Contains(condition.Field))
         {
-            throw new RuleValidationException($"{path}.field", "Choose what to look at.");
+            throw new RuleValidationException($"{path}.field", L.T("Choose what to look at."));
         }
 
         string? header = null;
@@ -257,24 +257,24 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
             // RFC 5322 field names: printable US-ASCII except the colon.
             if (header.Length is 0 or > MaxHeaderNameLength || header.Any(c => c is < '!' or > '~' or ':'))
             {
-                throw new RuleValidationException($"{path}.header", "Enter a header name, such as List-Id.");
+                throw new RuleValidationException($"{path}.header", L.T("Enter a header name, such as List-Id."));
             }
         }
 
         if (!RuleOps.Text.Contains(condition.Op))
         {
-            throw new RuleValidationException($"{path}.op", "Choose how to compare.");
+            throw new RuleValidationException($"{path}.op", L.T("Choose how to compare."));
         }
 
         var value = condition.Value ?? "";
         if (value.Trim().Length == 0)
         {
-            throw new RuleValidationException($"{path}.value", "Enter a value.");
+            throw new RuleValidationException($"{path}.value", L.T("Enter a value."));
         }
 
         if (value.Length > MaxValueLength)
         {
-            throw new RuleValidationException($"{path}.value", $"Use at most {MaxValueLength} characters.");
+            throw new RuleValidationException($"{path}.value", L.T("Use at most {max} characters.", ("max", MaxValueLength)));
         }
 
         if (condition.Op == RuleOps.Matches)
@@ -285,7 +285,7 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
             }
             catch (ArgumentException)
             {
-                throw new RuleValidationException($"{path}.value", "This is not a valid regular expression.");
+                throw new RuleValidationException($"{path}.value", L.T("This is not a valid regular expression."));
             }
         }
 
@@ -301,7 +301,7 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
             var at = $"{path}[{i}]";
             if (action is null || !RuleActionTypes.All.Contains(action.Type))
             {
-                throw new RuleValidationException(at, "Choose an action.");
+                throw new RuleValidationException(at, L.T("Choose an action."));
             }
 
             string? folderId = null;
@@ -311,19 +311,19 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
                 var fullName = folderId is { Length: > 0 and <= 4000 } ? MailboxIds.FolderFullName(folderId) : null;
                 if (string.IsNullOrEmpty(fullName))
                 {
-                    throw new RuleValidationException($"{at}.folderId", "Choose a folder.");
+                    throw new RuleValidationException($"{at}.folderId", L.T("Choose a folder."));
                 }
 
                 if (MailboxService.IsInbox(fullName))
                 {
-                    throw new RuleValidationException($"{at}.folderId", "Rules act on new mail in the inbox: choose another folder.");
+                    throw new RuleValidationException($"{at}.folderId", L.T("Rules act on new mail in the inbox: choose another folder."));
                 }
             }
 
             Guid? tagId = null;
             if (action.Type == RuleActionTypes.Tag)
             {
-                tagId = action.TagId ?? throw new RuleValidationException($"{at}.tagId", "Choose a tag.");
+                tagId = action.TagId ?? throw new RuleValidationException($"{at}.tagId", L.T("Choose a tag."));
             }
 
             var duplicate = result.Any(a => a.Type == action.Type
@@ -331,7 +331,7 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
                                             && (action.Type != RuleActionTypes.Tag || a.TagId == tagId));
             if (duplicate)
             {
-                throw new RuleValidationException(at, "This action is already in the rule.");
+                throw new RuleValidationException(at, L.T("This action is already in the rule."));
             }
 
             result.Add(new RuleAction(action.Type, folderId, tagId));
@@ -339,7 +339,7 @@ public sealed class RuleStore(MailDbContext db, TimeProvider clock)
 
         if (result.Count(a => a.Type is RuleActionTypes.Move or RuleActionTypes.Trash) > 1)
         {
-            throw new RuleValidationException(path, "A rule can move a message to one place only.");
+            throw new RuleValidationException(path, L.T("A rule can move a message to one place only."));
         }
 
         return result;

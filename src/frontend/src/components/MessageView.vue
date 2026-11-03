@@ -40,6 +40,7 @@ import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { computed, watch } from 'vue'
+import { folderDisplayName } from '../folderUses.js'
 import { accountColor, accountsState } from '../store/accounts.js'
 import { conversationsOn, conversationState, loadConversation } from '../store/conversation.js'
 import { readingPane } from '../store/layout.js'
@@ -69,8 +70,7 @@ const location = computed(() => {
 	if (!account || !folder) {
 		return null
 	}
-	const folderName = folder.specialUse === 'inbox' ? t('sockless_mail', 'Inbox') : folder.name
-	return { label: `${account.displayName} › ${folderName}`, color: accountColor(account.id) }
+	return { label: `${account.displayName} › ${folderDisplayName(folder)}`, color: accountColor(account.id) }
 })
 </script>
 

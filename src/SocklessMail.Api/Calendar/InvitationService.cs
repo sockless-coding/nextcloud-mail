@@ -65,19 +65,19 @@ public sealed class InvitationService(
     {
         if (!Responses.TryGetValue(input.Response ?? "", out var partStatus))
         {
-            throw new MailboxValidationException("response", "Answer accepted, tentative or declined.");
+            throw new MailboxValidationException("response", L.T("Answer accepted, tentative or declined."));
         }
 
         if (input.Comment is { Length: > 1000 })
         {
-            throw new MailboxValidationException("comment", "The comment may be at most 1000 characters.");
+            throw new MailboxValidationException("comment", L.T("The comment may be at most 1000 characters."));
         }
 
         var loaded = await LoadAsync(userId, account, folderId, messageId, partId, ct);
         var invitation = loaded.Invitation;
         if (invitation.Method != "REQUEST")
         {
-            throw new MailboxValidationException("response", "This is no invitation to answer.");
+            throw new MailboxValidationException("response", L.T("This is no invitation to answer."));
         }
 
         var uid = invitation.Uids[0];
@@ -134,7 +134,7 @@ public sealed class InvitationService(
         var invitation = loaded.Invitation;
         if (invitation.Method is "CANCEL" or "REPLY" or "COUNTER" or "DECLINECOUNTER" or "REFRESH")
         {
-            throw new MailboxValidationException("calendarId", "This calendar message cannot be added as an event.");
+            throw new MailboxValidationException("calendarId", L.T("This calendar message cannot be added as an event."));
         }
 
         int added = 0, updated = 0, skipped = 0;
@@ -178,10 +178,10 @@ public sealed class InvitationService(
         var uid = invitation.Uids[0];
         var events = EventsOf(invitation, uid);
         var existing = await calendars.FindAsync(userId, loaded.Calendars, uid, ct)
-                       ?? throw new CalendarException("not_in_calendar", "The event is not in your calendar.", StatusCodes.Status404NotFound);
+                       ?? throw new CalendarException("not_in_calendar", L.T("The event is not in your calendar."), StatusCodes.Status404NotFound);
         if (!existing.Calendar.Writable)
         {
-            throw new CalendarException("read_only", "This calendar is read-only.", StatusCodes.Status403Forbidden);
+            throw new CalendarException("read_only", L.T("This calendar is read-only."), StatusCodes.Status403Forbidden);
         }
 
         var current = ICalComponent.Parse(existing.Text);
@@ -211,7 +211,7 @@ public sealed class InvitationService(
 
                 break;
             default:
-                throw new MailboxValidationException("partId", "Only cancellations and replies change an event this way.");
+                throw new MailboxValidationException("partId", L.T("Only cancellations and replies change an event this way."));
         }
 
         return await DescribeAsync(userId, account, loaded, ct);
@@ -244,7 +244,7 @@ public sealed class InvitationService(
         }
         catch (FormatException e)
         {
-            throw new CalendarException("invalid_data", $"The calendar data in this message cannot be read: {e.Message}", StatusCodes.Status422UnprocessableEntity);
+            throw new CalendarException("invalid_data", L.T("The calendar data in this message cannot be read: {error}", ("error", e.Message)), StatusCodes.Status422UnprocessableEntity);
         }
 
         return new Loaded(invitation, await calendars.ListAsync(userId, ct));
@@ -295,7 +295,7 @@ public sealed class InvitationService(
 
     private static CalendarInfo WritableCalendar(Loaded loaded, string? calendarId) =>
         loaded.Calendars.FirstOrDefault(c => c.Id == calendarId && c.Writable)
-        ?? throw new MailboxValidationException("calendarId", "Choose a calendar you can add events to.");
+        ?? throw new MailboxValidationException("calendarId", L.T("Choose a calendar you can add events to."));
 
     private static List<ICalComponent> EventsOf(Invitation invitation, string uid) =>
         [.. invitation.Events.Where(e => Invitation.Uid(e) == uid)];

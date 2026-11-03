@@ -61,7 +61,7 @@ public readonly record struct UnifiedCursor(DateTimeOffset Date, Guid AccountId,
             return new UnifiedCursor(new DateTimeOffset(ticks, TimeSpan.Zero), accountId, uid);
         }
 
-        throw new MailboxValidationException("before", "The cursor is not valid.");
+        throw new MailboxValidationException("before", L.T("The cursor is not valid."));
     }
 
     public static UnifiedCursor Of(Guid accountId, CachedMessage message) => new(message.Date, accountId, message.Uid);
@@ -168,7 +168,7 @@ public sealed class UnifiedFolders(AccountService accounts, IServiceScopeFactory
     {
         if (view.IsSmart)
         {
-            throw new MailboxValidationException("filter", "Smart folders are filtered already.");
+            throw new MailboxValidationException("filter", L.T("Smart folders are filtered already."));
         }
 
         return (await FilterAsync(userId, view, filter, cursor, limit, withStates: false, ct)).Page;
@@ -277,7 +277,7 @@ public sealed class UnifiedFolders(AccountService accounts, IServiceScopeFactory
                 || !uint.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out var uid)
                 || !result.TryAdd($"{accountId:N}.{parts[1]}", uid))
             {
-                throw new MailboxValidationException("before", "The cursor is not valid.");
+                throw new MailboxValidationException("before", L.T("The cursor is not valid."));
             }
         }
 
@@ -385,9 +385,9 @@ public sealed class UnifiedFolders(AccountService accounts, IServiceScopeFactory
         {
             MailConnectionException c => new AccountError(account.Id, c.Code, c.Message),
             CredentialUnavailableException => new AccountError(account.Id, "credential_unavailable",
-                "The stored password cannot be decrypted. Enter it again in the account settings."),
+                L.T("The stored password cannot be decrypted. Enter it again in the account settings.")),
             ImapCommandException or FolderNotFoundException or MailboxNotFoundException => new AccountError(account.Id, "server_error",
-                "The mail server refused the request."),
+                L.T("The mail server refused the request.")),
             _ => null,
         };
         if (error is not null)
@@ -426,7 +426,7 @@ public sealed class UnifiedFolders(AccountService accounts, IServiceScopeFactory
                 || !long.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out var seq)
                 || !result.TryAdd($"{accountId:N}.{parts[1]}", seq))
             {
-                throw new MailboxValidationException("since", "The token is not valid.");
+                throw new MailboxValidationException("since", L.T("The token is not valid."));
             }
         }
 

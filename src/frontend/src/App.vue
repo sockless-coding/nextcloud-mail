@@ -595,6 +595,17 @@ onBeforeUnmount(() => {
 
 <style>
 /*
+ * Native dropdown lists: the page's color-scheme stays "normal" in Nextcloud's dark theme, so the
+ * browser draws the list light while the options inherit the theme's light text. Give options
+ * the theme's own colours. Not under #content-vue: dialogs are mounted on <body>.
+ */
+select option,
+select optgroup {
+	background-color: var(--color-main-background);
+	color: var(--color-main-text);
+}
+
+/*
  * Nextcloud's server styles give every plain button a background and text colour on hover,
  * focus, press and when disabled, with selectors no component rule outweighs. The app's own
  * buttons draw their states themselves, through --sm-button-background and --sm-button-color.

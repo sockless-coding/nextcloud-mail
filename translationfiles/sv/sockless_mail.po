@@ -1,0 +1,5141 @@
+# Swedish translation of Sockless Mail.
+msgid ""
+msgstr ""
+"Project-Id-Version: Sockless Mail\n"
+"Language: sv\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: appinfo/info.xml
+#: src/frontend/src/store/notifications.js:58
+msgid "Sockless Mail"
+msgstr "Sockless Mail"
+
+#: appinfo/info.xml
+msgid "Webmail client for Nextcloud with multiple IMAP/SMTP accounts per user"
+msgstr "Webbmejlklient för Nextcloud med flera IMAP/SMTP-konton per användare"
+
+#: appinfo/info.xml
+msgid ""
+"Sockless Mail is a webmail client for Nextcloud. Each user can connect any number of IMAP/SMTP accounts, with a password or by signing in with Google or Microsoft.\n"
+"\n"
+"- **Mail**: unified inbox and folders across accounts, conversations, search, push for new mail, tags, rules, send later, and rich text with inline images\n"
+"- **Nextcloud**: attach from and save to Files, address book suggestions from Contacts, invitations in Calendar, tasks in Tasks, and Assistant summaries, translations and writing help\n"
+"- **Security**: sanitized HTML in a sandbox, remote images only on request, look-alike and new sender domains flagged, deceptive links marked, OpenPGP and S/MIME\n"
+"\n"
+"It runs as an External App (AppAPI), so it needs a deploy daemon, preferably HaRP. Before installing, open **Advanced deploy options** and set `SOCKLESS_MAIL_ENCRYPTION_KEY` to a long random value (at least 32 characters, e.g. from `openssl rand -base64 48`), and keep a copy of it: it protects the stored mail passwords and can only be set during installation.\n"
+"\n"
+"For the address `/apps/socklessmail/` and installing the page as a browser app, also install the companion app (id `socklessmail`)."
+msgstr ""
+"Sockless Mail är en webbmejlklient för Nextcloud. Varje användare kan ansluta hur många IMAP/SMTP-konton som helst, med lösenord eller genom att logga in med Google eller Microsoft.\n"
+"\n"
+"- **E-post**: samlad inkorg och samlade mappar för alla konton, konversationer, sökning, push för ny e-post, taggar, regler, skicka senare och formaterad text med infogade bilder\n"
+"- **Nextcloud**: bifoga från och spara till Filer, adressförslag från Kontakter, inbjudningar i Kalender, uppgifter i Uppgifter samt sammanfattningar, översättningar och skrivhjälp från Assistenten\n"
+"- **Säkerhet**: sanerad HTML i en sandlåda, fjärrbilder bara på begäran, flaggning av avsändardomäner som liknar kända domäner eller är nyregistrerade, markering av vilseledande länkar, OpenPGP och S/MIME\n"
+"\n"
+"Appen körs som en extern app (AppAPI) och behöver därför en driftsättningsdaemon, helst HaRP. Öppna **Avancerade driftsättningsalternativ** innan du installerar och ange ett långt slumpmässigt värde för `SOCKLESS_MAIL_ENCRYPTION_KEY` (minst 32 tecken, t.ex. från `openssl rand -base64 48`), och spara en kopia av det: det skyddar de lagrade e-postlösenorden och kan bara anges vid installationen.\n"
+"\n"
+"Installera även följeappen (id `socklessmail`) för adressen `/apps/socklessmail/` och för att kunna installera sidan som en webbläsarapp."
+
+#: src/frontend/src/App.vue:10
+#: src/frontend/src/components/MessageView.vue:7
+#: src/frontend/src/components/ScheduledView.vue:8
+msgid "Could not open the message"
+msgstr "Det gick inte att öppna meddelandet"
+
+#: src/frontend/src/App.vue:10
+msgid "Could not open the composer"
+msgstr "Det gick inte att öppna skrivfönstret"
+
+#: src/frontend/src/App.vue:24
+msgid "Could not load your accounts"
+msgstr "Det gick inte att läsa in dina konton"
+
+#: src/frontend/src/App.vue:28
+#: src/frontend/src/store/windows.js:184
+msgid "No mail accounts yet"
+msgstr "Inga e-postkonton än"
+
+#: src/frontend/src/App.vue:29
+msgid "Connect an IMAP/SMTP account to read and send mail."
+msgstr "Anslut ett IMAP/SMTP-konto för att läsa och skicka e-post."
+
+#: src/frontend/src/App.vue:35
+#: src/frontend/src/components/AccountDialog.vue:188
+#: src/frontend/src/components/AccountRail.vue:33
+#: src/frontend/src/components/AccountRail.vue:34
+msgid "Add account"
+msgstr "Lägg till konto"
+
+#: src/frontend/src/App.vue:49
+msgid "Message list"
+msgstr "Meddelandelista"
+
+#: src/frontend/src/App.vue:52
+#: src/frontend/src/components/RulesDialog.vue:214
+msgid "Choose a folder"
+msgstr "Välj en mapp"
+
+#: src/frontend/src/App.vue:59
+msgid "Resize the message list"
+msgstr "Ändra storlek på meddelandelistan"
+
+#: src/frontend/src/App.vue:62
+#: src/frontend/src/components/CommandBar.vue:92
+msgid "Reading pane"
+msgstr "Läsfönster"
+
+#: src/frontend/src/App.vue:65
+#: src/frontend/src/App.vue:80
+msgid "No message selected"
+msgstr "Inget meddelande markerat"
+
+#: src/frontend/src/App.vue:73
+msgid "{count} message selected"
+msgid_plural "{count} messages selected"
+msgstr[0] "{count} meddelande markerat"
+msgstr[1] "{count} meddelanden markerade"
+
+#: src/frontend/src/App.vue:74
+msgid "Use the commands at the top for all of them."
+msgstr "Använd kommandona högst upp för alla."
+
+#: src/frontend/src/App.vue:76
+msgid "Clear selection"
+msgstr "Rensa markeringen"
+
+#: src/frontend/src/App.vue:143
+msgid "Delete permanently?"
+msgstr "Ta bort permanent?"
+
+#: src/frontend/src/App.vue:144
+msgid "This account has no Trash folder. The messages will be deleted permanently and cannot be restored."
+msgstr "Det här kontot har ingen papperskorg. Meddelandena tas bort permanent och kan inte återställas."
+
+#: src/frontend/src/App.vue:150
+#: src/frontend/src/App.vue:329
+#: src/frontend/src/components/FolderItem.vue:37
+msgid "Delete folder"
+msgstr "Ta bort mapp"
+
+#: src/frontend/src/App.vue:157
+#: src/frontend/src/components/FolderPane.vue:98
+msgid "Delete account"
+msgstr "Ta bort konto"
+
+#: src/frontend/src/App.vue:158
+msgid "Remove {name} from Sockless Mail? Mail on the server is not affected."
+msgstr "Ta bort {name} från Sockless Mail? E-posten på servern påverkas inte."
+
+#: src/frontend/src/App.vue:306
+#: src/frontend/src/App.vue:327
+#: src/frontend/src/App.vue:338
+#: src/frontend/src/components/AccountAppearanceDialog.vue:164
+#: src/frontend/src/components/AccountDialog.vue:186
+#: src/frontend/src/components/AddContactDialog.vue:133
+#: src/frontend/src/components/AssistantCard.vue:36
+#: src/frontend/src/components/AssistantComposeDialog.vue:213
+#: src/frontend/src/components/DeceptiveLinkDialog.vue:33
+#: src/frontend/src/components/FolderNameDialog.vue:32
+#: src/frontend/src/components/MoveDialog.vue:50
+#: src/frontend/src/components/SendLaterDialog.vue:65
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:270
+#: src/frontend/src/components/TagsDialog.vue:272
+#: src/frontend/src/components/TaskDialog.vue:153
+msgid "Cancel"
+msgstr "Avbryt"
+
+#: src/frontend/src/App.vue:308
+#: src/frontend/src/components/CommandBar.vue:29
+#: src/frontend/src/components/KeyRow.vue:49
+#: src/frontend/src/components/MessageCard.vue:125
+#: src/frontend/src/components/MessageList.vue:161
+#: src/frontend/src/components/MessageList.vue:162
+#: src/frontend/src/components/MessageMenu.vue:62
+#: src/frontend/src/components/RulesDialog.vue:116
+#: src/frontend/src/components/TagsDialog.vue:90
+#: src/frontend/src/components/TagsDialog.vue:274
+#: src/frontend/src/store/shortcuts.js:20
+msgid "Delete"
+msgstr "Ta bort"
+
+#: src/frontend/src/App.vue:317
+msgid "{name} has subfolders. Delete or move them first."
+msgstr "{name} har undermappar. Ta bort eller flytta dem först."
+
+#: src/frontend/src/App.vue:320
+msgid "Delete {name} and the message in it? This cannot be undone."
+msgid_plural "Delete {name} and the {count} messages in it? This cannot be undone."
+msgstr[0] "Ta bort {name} och meddelandet i den? Det går inte att ångra."
+msgstr[1] "Ta bort {name} och de {count} meddelandena i den? Det går inte att ångra."
+
+#: src/frontend/src/App.vue:321
+msgid "Delete {name}? This cannot be undone."
+msgstr "Ta bort {name}? Det går inte att ångra."
+
+#: src/frontend/src/App.vue:325
+#: src/frontend/src/components/AssistantComposeDialog.vue:225
+#: src/frontend/src/components/Composer.vue:47
+#: src/frontend/src/components/Composer.vue:558
+#: src/frontend/src/components/Composer.vue:560
+#: src/frontend/src/components/OAuthSettingsDialog.vue:6
+msgid "Close"
+msgstr "Stäng"
+
+#: src/frontend/src/App.vue:340
+msgid "Delete permanently"
+msgstr "Ta bort permanent"
+
+#: src/frontend/src/App.vue:408
+msgid "Add a mail account first, then send the files from the Files app again."
+msgstr "Lägg till ett e-postkonto först och skicka sedan filerna från appen Filer igen."
+
+#: src/frontend/src/components/AccountAppearanceDialog.vue:2
+msgid "Customize {name}"
+msgstr "Anpassa {name}"
+
+#: src/frontend/src/components/AccountAppearanceDialog.vue:14
+msgid "Colour"
+msgstr "Färg"
+
+#: src/frontend/src/components/AccountAppearanceDialog.vue:21
+#: src/frontend/src/components/AccountAppearanceDialog.vue:22
+#: src/frontend/src/components/RichEditor.vue:72
+#: src/frontend/src/components/RichEditor.vue:72
+msgid "Automatic"
+msgstr "Automatisk"
+
+#: src/frontend/src/components/AccountAppearanceDialog.vue:42
+#: src/frontend/src/components/AccountAppearanceDialog.vue:43
+msgid "Other colour…"
+msgstr "Annan färg …"
+
+#: src/frontend/src/components/AccountAppearanceDialog.vue:51
+#: src/frontend/src/components/MessageList.vue:17
+msgid "Show"
+msgstr "Visa"
+
+#: src/frontend/src/components/AccountAppearanceDialog.vue:54
+msgid "Initials"
+msgstr "Initialer"
+
+#: src/frontend/src/components/AccountAppearanceDialog.vue:57
+msgid "Text or emoji"
+msgstr "Text eller emoji"
+
+#: src/frontend/src/components/AccountAppearanceDialog.vue:60
+#: src/frontend/src/components/AccountAppearanceDialog.vue:70
+msgid "Icon"
+msgstr "Ikon"
+
+#: src/frontend/src/components/AccountAppearanceDialog.vue:66
+msgid "Up to three characters"
+msgstr "Upp till tre tecken"
+
+#: src/frontend/src/components/AccountAppearanceDialog.vue:86
+msgid "Show in All accounts"
+msgstr "Visa i Alla konton"
+
+#: src/frontend/src/components/AccountAppearanceDialog.vue:89
+msgid "Left out, the account's mail is not in the unified folders and their counts."
+msgstr "Om kontot utesluts finns dess e-post inte i de samlade mapparna eller deras antal."
+
+#: src/frontend/src/components/AccountAppearanceDialog.vue:166
+#: src/frontend/src/components/AccountDialog.vue:188
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:271
+msgid "Save"
+msgstr "Spara"
+
+#: src/frontend/src/components/AccountDialog.vue:4
+#: src/frontend/src/components/FolderPane.vue:56
+#: src/frontend/src/components/FolderPane.vue:107
+msgid "Edit account"
+msgstr "Redigera konto"
+
+#: src/frontend/src/components/AccountDialog.vue:4
+msgid "Add mail account"
+msgstr "Lägg till e-postkonto"
+
+#: src/frontend/src/components/AccountDialog.vue:20
+msgid "Sign in with {provider}"
+msgstr "Logga in med {provider}"
+
+#: src/frontend/src/components/AccountDialog.vue:23
+msgid "Or enter the server settings of any other provider:"
+msgstr "Eller ange serverinställningarna för en annan leverantör:"
+
+#: src/frontend/src/components/AccountDialog.vue:28
+msgid "This account signs in through its provider as {address}; no password is stored."
+msgstr "Det här kontot loggar in via sin leverantör som {address}; inget lösenord sparas."
+
+#: src/frontend/src/components/AccountDialog.vue:34
+msgid "Sign in again"
+msgstr "Logga in igen"
+
+#: src/frontend/src/components/AccountDialog.vue:40
+msgid "Email address"
+msgstr "E-postadress"
+
+#: src/frontend/src/components/AccountDialog.vue:47
+msgid "Account name"
+msgstr "Kontonamn"
+
+#: src/frontend/src/components/AccountDialog.vue:52
+#: src/frontend/src/components/EncryptionSettings.vue:87
+msgid "Your name"
+msgstr "Ditt namn"
+
+#: src/frontend/src/components/AccountDialog.vue:54
+msgid "Shown to recipients next to your address."
+msgstr "Visas för mottagarna bredvid din adress."
+
+#: src/frontend/src/components/AccountDialog.vue:59
+msgid "Username"
+msgstr "Användarnamn"
+
+#: src/frontend/src/components/AccountDialog.vue:65
+msgid "Password"
+msgstr "Lösenord"
+
+#: src/frontend/src/components/AccountDialog.vue:66
+#: src/frontend/src/components/OAuthSettingsDialog.vue:60
+msgid "Unchanged"
+msgstr "Oförändrat"
+
+#: src/frontend/src/components/AccountDialog.vue:68
+msgid "Leave empty to keep the stored password."
+msgstr "Lämna tomt för att behålla det sparade lösenordet."
+
+#: src/frontend/src/components/AccountDialog.vue:71
+msgid "Incoming mail (IMAP)"
+msgstr "Inkommande e-post (IMAP)"
+
+#: src/frontend/src/components/AccountDialog.vue:76
+msgid "Outgoing mail (SMTP)"
+msgstr "Utgående e-post (SMTP)"
+
+#: src/frontend/src/components/AccountDialog.vue:85
+msgid "Without encryption, the password and your mail travel over the network unprotected."
+msgstr "Utan kryptering skickas lösenordet och din e-post oskyddade över nätverket."
+
+#: src/frontend/src/components/AccountDialog.vue:185
+msgid "Test connection"
+msgstr "Testa anslutningen"
+
+#: src/frontend/src/components/AccountRail.vue:2
+#: src/frontend/src/components/SettingsDialog.vue:94
+msgid "Accounts"
+msgstr "Konton"
+
+#: src/frontend/src/components/AccountRail.vue:6
+#: src/frontend/src/components/AccountRail.vue:8
+#: src/frontend/src/components/CommandBar.vue:68
+#: src/frontend/src/components/FolderPane.vue:8
+msgid "All accounts"
+msgstr "Alla konton"
+
+#: src/frontend/src/components/AccountRail.vue:41
+#: src/frontend/src/components/AccountRail.vue:42
+#: src/frontend/src/components/OAuthSettingsDialog.vue:4
+msgid "Administration"
+msgstr "Administration"
+
+#: src/frontend/src/components/AccountRail.vue:47
+#: src/frontend/src/components/AccountRail.vue:48
+#: src/frontend/src/components/SettingsDialog.vue:3
+msgid "Settings"
+msgstr "Inställningar"
+
+#: src/frontend/src/components/AddContactDialog.vue:3
+msgid "Add to contacts"
+msgstr "Lägg till i kontakter"
+
+#: src/frontend/src/components/AddContactDialog.vue:13
+msgid "{address} is already in your contacts as {names}."
+msgid_plural "{address} is already in your contacts as {names}."
+msgstr[0] "{address} finns redan i dina kontakter som {names}."
+msgstr[1] "{address} finns redan i dina kontakter som {names}."
+
+#: src/frontend/src/components/AddContactDialog.vue:16
+msgid "You have no address book you can add contacts to. Create one in the Contacts app."
+msgstr "Du har ingen adressbok som du kan lägga till kontakter i. Skapa en i appen Kontakter."
+
+#: src/frontend/src/components/AddContactDialog.vue:19
+msgid "Where to add the address"
+msgstr "Var adressen ska läggas till"
+
+#: src/frontend/src/components/AddContactDialog.vue:21
+msgid "New contact"
+msgstr "Ny kontakt"
+
+#: src/frontend/src/components/AddContactDialog.vue:24
+msgid "Add to an existing contact"
+msgstr "Lägg till i en befintlig kontakt"
+
+#: src/frontend/src/components/AddContactDialog.vue:30
+#: src/frontend/src/components/RulesDialog.vue:126
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:11
+#: src/frontend/src/components/TagsDialog.vue:51
+msgid "Name"
+msgstr "Namn"
+
+#: src/frontend/src/components/AddContactDialog.vue:42
+msgid "Address book"
+msgstr "Adressbok"
+
+#: src/frontend/src/components/AddContactDialog.vue:47
+msgid "Find contact"
+msgstr "Hitta kontakt"
+
+#: src/frontend/src/components/AddContactDialog.vue:49
+msgid "Contact"
+msgstr "Kontakt"
+
+#: src/frontend/src/components/AddContactDialog.vue:59
+msgid "No matching contact"
+msgstr "Ingen matchande kontakt"
+
+#: src/frontend/src/components/AddContactDialog.vue:135
+#: src/frontend/src/components/TagsDialog.vue:39
+msgid "Add"
+msgstr "Lägg till"
+
+#: src/frontend/src/components/AddContactDialog.vue:144
+msgid "{name} was added to {book}"
+msgstr "{name} lades till i {book}"
+
+#: src/frontend/src/components/AddContactDialog.vue:148
+msgid "{address} was added to {name}"
+msgstr "{address} lades till hos {name}"
+
+#: src/frontend/src/components/AssistantCard.vue:32
+msgid "The Assistant is busy or runs its tasks in the background on this server. This can take a few minutes; you can keep reading meanwhile."
+msgstr "Assistenten är upptagen eller kör sina uppgifter i bakgrunden på den här servern. Det kan ta några minuter; du kan fortsätta läsa under tiden."
+
+#: src/frontend/src/components/AssistantCard.vue:43
+#: src/frontend/src/components/AssistantComposeDialog.vue:110
+msgid "Cancelled."
+msgstr "Avbrutet."
+
+#: src/frontend/src/components/AssistantCard.vue:43
+#: src/frontend/src/components/AssistantComposeDialog.vue:110
+#: src/frontend/src/store/assistant.js:297
+msgid "The Assistant could not do this."
+msgstr "Assistenten kunde inte göra detta."
+
+#: src/frontend/src/components/AssistantCard.vue:45
+#: src/frontend/src/components/AssistantComposeDialog.vue:222
+#: src/frontend/src/components/ConversationView.vue:92
+msgid "Try again"
+msgstr "Försök igen"
+
+#: src/frontend/src/components/AssistantCard.vue:87
+msgid "Copied"
+msgstr "Kopierat"
+
+#: src/frontend/src/components/AssistantCard.vue:89
+msgid "Could not copy"
+msgstr "Det gick inte att kopiera"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:5
+msgid "Write with the Assistant"
+msgstr "Skriv med Assistenten"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:5
+msgid "Rewrite with the Assistant"
+msgstr "Skriv om med Assistenten"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:15
+msgid "What should the reply say?"
+msgstr "Vad ska svaret säga?"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:15
+msgid "What should the message say?"
+msgstr "Vad ska meddelandet säga?"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:23
+msgid "For example: accept, and suggest Tuesday instead"
+msgstr "Till exempel: tacka ja och föreslå tisdag i stället"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:23
+msgid "For example: invite the team to lunch on Friday at noon"
+msgstr "Till exempel: bjud in teamet på lunch på fredag klockan tolv"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:25
+msgid "Leave it empty for a fitting reply. The Assistant reads the conversation."
+msgstr "Lämna tomt för ett passande svar. Assistenten läser konversationen."
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:27
+#: src/frontend/src/components/AssistantComposeDialog.vue:57
+msgid "Tone"
+msgstr "Ton"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:34
+msgid "Build on what I have written"
+msgstr "Bygg vidare på det jag har skrivit"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:40
+msgid "The selected text"
+msgstr "Den markerade texten"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:40
+msgid "Your text, without the quoted message"
+msgstr "Din text, utan det citerade meddelandet"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:46
+msgid "What to do"
+msgstr "Vad som ska göras"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:65
+#: src/frontend/src/components/AssistantTranslation.vue:14
+msgid "Translate into"
+msgstr "Översätt till"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:73
+msgid "How should it change?"
+msgstr "Hur ska den ändras?"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:79
+msgid "For example: add a short greeting and keep it under 100 words"
+msgstr "Till exempel: lägg till en kort hälsning och håll det under 100 ord"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:88
+msgid "The Assistant is writing…"
+msgstr "Assistenten skriver …"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:91
+msgid "The Assistant is busy or runs its tasks in the background on this server. This can take a few minutes."
+msgstr "Assistenten är upptagen eller kör sina uppgifter i bakgrunden på den här servern. Det kan ta några minuter."
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:101
+msgid "Written by AI. Read it before you send it."
+msgstr "Skrivet av AI. Läs igenom det innan du skickar."
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:104
+msgid "Replacing would remove the images in this text, so the answer can only be inserted."
+msgstr "Att ersätta skulle ta bort bilderna i den här texten, så svaret kan bara infogas."
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:144
+msgid "Change the tone"
+msgstr "Ändra tonen"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:145
+#: src/frontend/src/components/Composer.vue:428
+msgid "Fix spelling and grammar"
+msgstr "Rätta stavning och grammatik"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:146
+#: src/frontend/src/components/Composer.vue:429
+msgid "Make it shorter"
+msgstr "Gör det kortare"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:147
+#: src/frontend/src/components/Composer.vue:430
+msgid "Make it clearer"
+msgstr "Gör det tydligare"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:148
+#: src/frontend/src/components/MessageCard.vue:71
+msgid "Translate"
+msgstr "Översätt"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:149
+msgid "Your own instruction"
+msgstr "Egen instruktion"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:214
+msgid "Generate"
+msgstr "Generera"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:218
+msgid "Stop"
+msgstr "Stoppa"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:221
+msgid "Change the request"
+msgstr "Ändra begäran"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:230
+msgid "Insert"
+msgstr "Infoga"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:230
+msgid "Insert below"
+msgstr "Infoga nedanför"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:232
+msgid "Replace my text"
+msgstr "Ersätt min text"
+
+#: src/frontend/src/components/AssistantComposeDialog.vue:232
+msgid "Replace"
+msgstr "Ersätt"
+
+#: src/frontend/src/components/AssistantScamCheck.vue:6
+msgid "Scam check"
+msgstr "Bedrägerikontroll"
+
+#: src/frontend/src/components/AssistantScamCheck.vue:7
+msgid "Checking the message for phishing and scams…"
+msgstr "Kontrollerar meddelandet efter nätfiske och bedrägerier …"
+
+#: src/frontend/src/components/AssistantScamCheck.vue:8
+msgid "Close scam check"
+msgstr "Stäng bedrägerikontrollen"
+
+#: src/frontend/src/components/AssistantScamCheck.vue:31
+msgid "An AI assessment: it can be wrong either way. When in doubt, contact the sender another way, and never enter passwords or payment details from a link in a mail."
+msgstr "En bedömning av AI: den kan ha fel åt båda hållen. Kontakta avsändaren på annat sätt om du är osäker, och ange aldrig lösenord eller betalningsuppgifter via en länk i ett mejl."
+
+#: src/frontend/src/components/AssistantScamCheck.vue:51
+msgid "Looks safe"
+msgstr "Ser säkert ut"
+
+#: src/frontend/src/components/AssistantScamCheck.vue:52
+msgid "Suspicious"
+msgstr "Misstänkt"
+
+#: src/frontend/src/components/AssistantScamCheck.vue:53
+msgid "Likely a scam"
+msgstr "Troligen ett bedrägeri"
+
+#: src/frontend/src/components/AssistantScamCheck.vue:54
+msgid "No clear verdict"
+msgstr "Ingen tydlig bedömning"
+
+#: src/frontend/src/components/AssistantSummary.vue:7
+msgid "Summarizing this message…"
+msgstr "Sammanfattar meddelandet …"
+
+#: src/frontend/src/components/AssistantSummary.vue:7
+msgid "Summarizing the conversation…"
+msgstr "Sammanfattar konversationen …"
+
+#: src/frontend/src/components/AssistantSummary.vue:8
+msgid "Close summary"
+msgstr "Stäng sammanfattningen"
+
+#: src/frontend/src/components/AssistantSummary.vue:10
+msgid "Copy summary"
+msgstr "Kopiera sammanfattningen"
+
+#: src/frontend/src/components/AssistantSummary.vue:15
+msgid "Written by AI. Check important details in the messages."
+msgstr "Skrivet av AI. Kontrollera viktiga detaljer i meddelandena."
+
+#: src/frontend/src/components/AssistantSummary.vue:20
+msgid "Only this message"
+msgstr "Bara det här meddelandet"
+
+#: src/frontend/src/components/AssistantSummary.vue:26
+msgid "Whole conversation"
+msgstr "Hela konversationen"
+
+#: src/frontend/src/components/AssistantSummary.vue:49
+msgid "Summary of {count} message"
+msgid_plural "Summary of {count} messages"
+msgstr[0] "Sammanfattning av {count} meddelande"
+msgstr[1] "Sammanfattning av {count} meddelanden"
+
+#: src/frontend/src/components/AssistantSummary.vue:50
+msgid "Summary"
+msgstr "Sammanfattning"
+
+#: src/frontend/src/components/AssistantTranslation.vue:6
+msgid "Translation"
+msgstr "Översättning"
+
+#: src/frontend/src/components/AssistantTranslation.vue:7
+msgid "Translating into {language}…"
+msgstr "Översätter till {language} …"
+
+#: src/frontend/src/components/AssistantTranslation.vue:8
+msgid "Close translation"
+msgstr "Stäng översättningen"
+
+#: src/frontend/src/components/AssistantTranslation.vue:10
+msgid "Copy translation"
+msgstr "Kopiera översättningen"
+
+#: src/frontend/src/components/AssistantTranslation.vue:29
+msgid "Translated by AI. The message is long: only its first part was translated."
+msgstr "Översatt av AI. Meddelandet är långt: bara den första delen översattes."
+
+#: src/frontend/src/components/AssistantTranslation.vue:30
+msgid "Translated by AI. The original is below."
+msgstr "Översatt av AI. Originalet finns nedanför."
+
+#: src/frontend/src/components/CommandBar.vue:3
+#: src/frontend/src/components/MessageCard.vue:38
+#: src/frontend/src/components/MessageMenu.vue:7
+msgid "Message actions"
+msgstr "Meddelandeåtgärder"
+
+#: src/frontend/src/components/CommandBar.vue:5
+#: src/frontend/src/components/CommandBar.vue:7
+msgid "Hide folders"
+msgstr "Dölj mappar"
+
+#: src/frontend/src/components/CommandBar.vue:5
+#: src/frontend/src/components/CommandBar.vue:7
+msgid "Show folders"
+msgstr "Visa mappar"
+
+#: src/frontend/src/components/CommandBar.vue:15
+#: src/frontend/src/components/Composer.vue:372
+#: src/frontend/src/store/shortcuts.js:16
+#: src/frontend/src/store/windows.js:163
+msgid "New message"
+msgstr "Nytt meddelande"
+
+#: src/frontend/src/components/CommandBar.vue:33
+#: src/frontend/src/components/ConversationView.vue:204
+#: src/frontend/src/folderUses.js:22
+msgid "Archive"
+msgstr "Arkivera"
+
+#: src/frontend/src/components/CommandBar.vue:37
+msgid "Move to"
+msgstr "Flytta till"
+
+#: src/frontend/src/components/CommandBar.vue:42
+#: src/frontend/src/components/MessageCard.vue:107
+#: src/frontend/src/components/MessageList.vue:167
+#: src/frontend/src/components/MessageList.vue:168
+#: src/frontend/src/components/MessageMenu.vue:38
+#: src/frontend/src/store/rules.js:140
+#: src/frontend/src/store/shortcuts.js:21
+msgid "Mark as read"
+msgstr "Markera som läst"
+
+#: src/frontend/src/components/CommandBar.vue:42
+#: src/frontend/src/components/MessageCard.vue:107
+#: src/frontend/src/components/MessageList.vue:167
+#: src/frontend/src/components/MessageList.vue:168
+#: src/frontend/src/components/MessageMenu.vue:38
+#: src/frontend/src/store/shortcuts.js:22
+msgid "Mark as unread"
+msgstr "Markera som oläst"
+
+#: src/frontend/src/components/CommandBar.vue:49
+#: src/frontend/src/components/MessageCard.vue:113
+#: src/frontend/src/components/MessageList.vue:173
+#: src/frontend/src/components/MessageList.vue:174
+#: src/frontend/src/components/MessageMenu.vue:44
+#: src/frontend/src/store/rules.js:141
+msgid "Flag"
+msgstr "Flagga"
+
+#: src/frontend/src/components/CommandBar.vue:53
+#: src/frontend/src/components/MessageList.vue:30
+#: src/frontend/src/components/RulesDialog.vue:227
+#: src/frontend/src/store/shortcuts.js:24
+msgid "Tag"
+msgstr "Tagga"
+
+#: src/frontend/src/components/CommandBar.vue:62
+msgid "Search scope"
+msgstr "Sökområde"
+
+#: src/frontend/src/components/CommandBar.vue:65
+msgid "This folder"
+msgstr "Den här mappen"
+
+#: src/frontend/src/components/CommandBar.vue:80
+msgid "Clear search"
+msgstr "Rensa sökningen"
+
+#: src/frontend/src/components/CommandBar.vue:87
+#: src/frontend/src/components/CommandBar.vue:88
+msgid "View settings"
+msgstr "Visningsinställningar"
+
+#: src/frontend/src/components/CommandBar.vue:103
+msgid "Density"
+msgstr "Täthet"
+
+#: src/frontend/src/components/CommandBar.vue:114
+msgid "Sender logos"
+msgstr "Avsändarlogotyper"
+
+#: src/frontend/src/components/CommandBar.vue:118
+msgid "Warn about suspicious senders"
+msgstr "Varna för misstänkta avsändare"
+
+#: src/frontend/src/components/CommandBar.vue:121
+msgid "Remember open folders"
+msgstr "Kom ihåg öppna mappar"
+
+#: src/frontend/src/components/CommandBar.vue:135
+#: src/frontend/src/components/FolderPane.vue:37
+#: src/frontend/src/components/FolderPane.vue:123
+#: src/frontend/src/components/MessageCard.vue:81
+#: src/frontend/src/components/MessageCard.vue:82
+#: src/frontend/src/components/TagPickerDialog.vue:5
+#: src/frontend/src/components/TagsDialog.vue:2
+msgid "Tags"
+msgstr "Taggar"
+
+#: src/frontend/src/components/CommandBar.vue:141
+#: src/frontend/src/components/TrustedSendersDialog.vue:2
+msgid "Trusted domains"
+msgstr "Betrodda domäner"
+
+#: src/frontend/src/components/CommandBar.vue:147
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:3
+msgid "Send later presets"
+msgstr "Förval för skicka senare"
+
+#: src/frontend/src/components/CommandBar.vue:153
+#: src/frontend/src/components/ShortcutsDialog.vue:2
+msgid "Keyboard shortcuts"
+msgstr "Kortkommandon"
+
+#: src/frontend/src/components/CommandBar.vue:183
+#: src/frontend/src/components/Composer.vue:368
+#: src/frontend/src/components/MessageCard.vue:370
+#: src/frontend/src/components/MessageMenu.vue:128
+#: src/frontend/src/components/ReplyGuardDialog.vue:65
+#: src/frontend/src/store/shortcuts.js:17
+msgid "Reply"
+msgstr "Svara"
+
+#: src/frontend/src/components/CommandBar.vue:184
+#: src/frontend/src/components/MessageCard.vue:371
+#: src/frontend/src/components/MessageMenu.vue:129
+#: src/frontend/src/store/shortcuts.js:18
+msgid "Reply all"
+msgstr "Svara alla"
+
+#: src/frontend/src/components/CommandBar.vue:185
+#: src/frontend/src/components/Composer.vue:370
+#: src/frontend/src/components/MessageCard.vue:372
+#: src/frontend/src/components/MessageMenu.vue:130
+#: src/frontend/src/store/shortcuts.js:19
+msgid "Forward"
+msgstr "Vidarebefordra"
+
+#: src/frontend/src/components/CommandBar.vue:189
+msgid "Right"
+msgstr "Höger"
+
+#: src/frontend/src/components/CommandBar.vue:190
+msgid "Bottom"
+msgstr "Nederkant"
+
+#: src/frontend/src/components/CommandBar.vue:191
+msgid "Off"
+msgstr "Av"
+
+#: src/frontend/src/components/CommandBar.vue:195
+msgid "Comfortable"
+msgstr "Luftig"
+
+#: src/frontend/src/components/CommandBar.vue:196
+msgid "Compact"
+msgstr "Kompakt"
+
+#: src/frontend/src/components/CommandBar.vue:200
+msgid "On all devices"
+msgstr "På alla enheter"
+
+#: src/frontend/src/components/CommandBar.vue:201
+msgid "In this browser only"
+msgstr "Bara i den här webbläsaren"
+
+#: src/frontend/src/components/CommandBar.vue:225
+msgid "Search all accounts"
+msgstr "Sök i alla konton"
+
+#: src/frontend/src/components/CommandBar.vue:229
+msgid "Search in {folder}"
+msgstr "Sök i {folder}"
+
+#: src/frontend/src/components/CommandBar.vue:229
+msgid "Search mail"
+msgstr "Sök e-post"
+
+#: src/frontend/src/components/CommandBar.vue:236
+#: src/frontend/src/components/MessageCard.vue:450
+#: src/frontend/src/components/MessageMenu.vue:149
+#: src/frontend/src/components/ReplyGuardDialog.vue:48
+#: src/frontend/src/store/shortcuts.js:47
+msgid "Could not prepare the message: {error}"
+msgstr "Det gick inte att förbereda meddelandet: {error}"
+
+#: src/frontend/src/components/Composer.vue:23
+#: src/frontend/src/components/Composer.vue:24
+msgid "Restore"
+msgstr "Återställ"
+
+#: src/frontend/src/components/Composer.vue:23
+#: src/frontend/src/components/Composer.vue:24
+msgid "Minimize"
+msgstr "Minimera"
+
+#: src/frontend/src/components/Composer.vue:32
+#: src/frontend/src/components/Composer.vue:33
+msgid "Open in a new window"
+msgstr "Öppna i ett nytt fönster"
+
+#: src/frontend/src/components/Composer.vue:33
+msgid "Open in a new window, once the uploads are done"
+msgstr "Öppna i ett nytt fönster när uppladdningarna är klara"
+
+#: src/frontend/src/components/Composer.vue:40
+#: src/frontend/src/components/Composer.vue:41
+msgid "Dock"
+msgstr "Docka"
+
+#: src/frontend/src/components/Composer.vue:40
+#: src/frontend/src/components/Composer.vue:41
+msgid "Enlarge"
+msgstr "Förstora"
+
+#: src/frontend/src/components/Composer.vue:56
+#: src/frontend/src/components/MessageCard.vue:427
+#: src/frontend/src/components/ScheduledView.vue:36
+#: src/frontend/src/store/rules.js:107
+msgid "From"
+msgstr "Från"
+
+#: src/frontend/src/components/Composer.vue:64
+#: src/frontend/src/components/MessageCard.vue:428
+#: src/frontend/src/components/ScheduledView.vue:157
+#: src/frontend/src/store/rules.js:108
+msgid "To"
+msgstr "Till"
+
+#: src/frontend/src/components/Composer.vue:69
+msgid "Cc/Bcc"
+msgstr "Kopia/Dold kopia"
+
+#: src/frontend/src/components/Composer.vue:73
+#: src/frontend/src/components/MessageCard.vue:429
+#: src/frontend/src/components/ScheduledView.vue:158
+#: src/frontend/src/store/rules.js:109
+msgid "Cc"
+msgstr "Kopia"
+
+#: src/frontend/src/components/Composer.vue:74
+#: src/frontend/src/components/ScheduledView.vue:159
+msgid "Bcc"
+msgstr "Dold kopia"
+
+#: src/frontend/src/components/Composer.vue:77
+#: src/frontend/src/store/rules.js:111
+msgid "Subject"
+msgstr "Ämne"
+
+#: src/frontend/src/components/Composer.vue:92
+#: src/frontend/src/components/Composer.vue:95
+msgid "Message"
+msgstr "Meddelande"
+
+#: src/frontend/src/components/Composer.vue:93
+#: src/frontend/src/components/Composer.vue:100
+msgid "Write your message"
+msgstr "Skriv ditt meddelande"
+
+#: src/frontend/src/components/Composer.vue:106
+#: src/frontend/src/components/MessageList.vue:238
+#: src/frontend/src/components/ScheduledView.vue:94
+#: src/frontend/src/store/rules.js:114
+msgid "Attachments"
+msgstr "Bilagor"
+
+#: src/frontend/src/components/Composer.vue:112
+msgid "Do not forward {name}"
+msgstr "Vidarebefordra inte {name}"
+
+#: src/frontend/src/components/Composer.vue:112
+msgid "Forward {name}"
+msgstr "Vidarebefordra {name}"
+
+#: src/frontend/src/components/Composer.vue:127
+msgid "Share link instead"
+msgstr "Dela länk i stället"
+
+#: src/frontend/src/components/Composer.vue:131
+#: src/frontend/src/components/RecipientInput.vue:13
+msgid "Remove {name}"
+msgstr "Ta bort {name}"
+
+#: src/frontend/src/components/Composer.vue:147
+msgid "Send (Ctrl+Enter)"
+msgstr "Skicka (Ctrl+Enter)"
+
+#: src/frontend/src/components/Composer.vue:153
+msgid "Uploading…"
+msgstr "Laddar upp …"
+
+#: src/frontend/src/components/Composer.vue:153
+msgid "Send"
+msgstr "Skicka"
+
+#: src/frontend/src/components/Composer.vue:157
+#: src/frontend/src/components/Composer.vue:158
+#: src/frontend/src/components/SendLaterDialog.vue:3
+msgid "Send later"
+msgstr "Skicka senare"
+
+#: src/frontend/src/components/Composer.vue:177
+#: src/frontend/src/components/ScheduledView.vue:73
+msgid "Pick date and time…"
+msgstr "Välj datum och tid …"
+
+#: src/frontend/src/components/Composer.vue:183
+msgid "Manage presets…"
+msgstr "Hantera förval …"
+
+#: src/frontend/src/components/Composer.vue:192
+msgid "Attach"
+msgstr "Bifoga"
+
+#: src/frontend/src/components/Composer.vue:193
+msgid "Attach files"
+msgstr "Bifoga filer"
+
+#: src/frontend/src/components/Composer.vue:201
+msgid "Upload from this device"
+msgstr "Ladda upp från den här enheten"
+
+#: src/frontend/src/components/Composer.vue:207
+#: src/frontend/src/store/files.js:73
+msgid "Attach from Files"
+msgstr "Bifoga från Filer"
+
+#: src/frontend/src/components/Composer.vue:213
+#: src/frontend/src/store/files.js:169
+msgid "Share link from Files"
+msgstr "Dela länk från Filer"
+
+#: src/frontend/src/components/Composer.vue:220
+msgid "Encryption and signature"
+msgstr "Kryptering och signatur"
+
+#: src/frontend/src/components/Composer.vue:225
+msgid "Encrypt"
+msgstr "Kryptera"
+
+#: src/frontend/src/components/Composer.vue:228
+msgid "Sign"
+msgstr "Signera"
+
+#: src/frontend/src/components/Composer.vue:239
+msgid "Attach my public key"
+msgstr "Bifoga min publika nyckel"
+
+#: src/frontend/src/components/Composer.vue:245
+#: src/frontend/src/components/Composer.vue:246
+#: src/frontend/src/components/MessageCard.vue:56
+#: src/frontend/src/components/MessageCard.vue:57
+#: src/frontend/src/components/OAuthSettingsDialog.vue:21
+msgid "Assistant"
+msgstr "Assistent"
+
+#: src/frontend/src/components/Composer.vue:254
+msgid "Write the reply…"
+msgstr "Skriv svaret …"
+
+#: src/frontend/src/components/Composer.vue:254
+msgid "Write the message…"
+msgstr "Skriv meddelandet …"
+
+#: src/frontend/src/components/Composer.vue:269
+msgid "Write in plain text, without formatting"
+msgstr "Skriv i oformaterad text"
+
+#: src/frontend/src/components/Composer.vue:269
+msgid "Write with formatting"
+msgstr "Skriv med formatering"
+
+#: src/frontend/src/components/Composer.vue:274
+#: src/frontend/src/components/SettingsDialog.vue:263
+msgid "Plain text"
+msgstr "Oformaterad text"
+
+#: src/frontend/src/components/Composer.vue:274
+#: src/frontend/src/components/SettingsDialog.vue:262
+msgid "Rich text"
+msgstr "Formaterad text"
+
+#: src/frontend/src/components/Composer.vue:281
+#: src/frontend/src/components/Composer.vue:282
+#: src/frontend/src/components/Composer.vue:599
+#: src/frontend/src/components/Composer.vue:694
+msgid "Discard"
+msgstr "Kasta"
+
+#: src/frontend/src/components/Composer.vue:305
+msgid "Switch to plain text?"
+msgstr "Byta till oformaterad text?"
+
+#: src/frontend/src/components/Composer.vue:306
+msgid "The images in the message are removed, and so is its formatting."
+msgstr "Bilderna i meddelandet tas bort, och likaså formateringen."
+
+#: src/frontend/src/components/Composer.vue:312
+msgid "Discard this message?"
+msgstr "Kasta det här meddelandet?"
+
+#: src/frontend/src/components/Composer.vue:313
+msgid "What you wrote and attached will be lost, and the saved draft is deleted."
+msgstr "Det du har skrivit och bifogat försvinner, och det sparade utkastet tas bort."
+
+#: src/frontend/src/components/Composer.vue:313
+msgid "What you wrote and attached will be lost."
+msgstr "Det du har skrivit och bifogat försvinner."
+
+#: src/frontend/src/components/Composer.vue:319
+msgid "Save this message as a draft?"
+msgstr "Spara meddelandet som utkast?"
+
+#: src/frontend/src/components/Composer.vue:320
+msgid "Keep it in Drafts to continue later, or discard what you wrote and attached."
+msgstr "Behåll det i Utkast för att fortsätta senare, eller kasta det du har skrivit och bifogat."
+
+#: src/frontend/src/components/Composer.vue:369
+msgid "Reply to all"
+msgstr "Svara alla"
+
+#: src/frontend/src/components/Composer.vue:371
+msgid "Draft"
+msgstr "Utkast"
+
+#: src/frontend/src/components/Composer.vue:377
+msgid "Saving…"
+msgstr "Sparar …"
+
+#: src/frontend/src/components/Composer.vue:378
+msgid "Draft saved {time}"
+msgstr "Utkastet sparades {time}"
+
+#: src/frontend/src/components/Composer.vue:379
+msgid "Could not save the draft"
+msgstr "Det gick inte att spara utkastet"
+
+#: src/frontend/src/components/Composer.vue:391
+msgid "Encrypted and signed ({kind})"
+msgstr "Krypterat och signerat ({kind})"
+
+#: src/frontend/src/components/Composer.vue:394
+msgid "Encrypted ({kind})"
+msgstr "Krypterat ({kind})"
+
+#: src/frontend/src/components/Composer.vue:396
+msgid "Signed ({kind})"
+msgstr "Signerat ({kind})"
+
+#: src/frontend/src/components/Composer.vue:396
+msgid "Not encrypted"
+msgstr "Inte krypterat"
+
+#: src/frontend/src/components/Composer.vue:406
+msgid "The message you are answering was encrypted, and yours quotes it. Send it unencrypted anyway?"
+msgstr "Meddelandet du svarar på var krypterat, och ditt svar citerar det. Vill du ändå skicka okrypterat?"
+
+#: src/frontend/src/components/Composer.vue:427
+msgid "Change the tone…"
+msgstr "Ändra tonen …"
+
+#: src/frontend/src/components/Composer.vue:431
+msgid "Translate…"
+msgstr "Översätt …"
+
+#: src/frontend/src/components/Composer.vue:432
+msgid "Rewrite with your own instruction…"
+msgstr "Skriv om med egen instruktion …"
+
+#: src/frontend/src/components/Composer.vue:474
+msgid "Write or select some text first."
+msgstr "Skriv eller markera lite text först."
+
+#: src/frontend/src/components/Composer.vue:537
+msgid "Keep rich text"
+msgstr "Behåll formaterad text"
+
+#: src/frontend/src/components/Composer.vue:538
+msgid "Switch to plain text"
+msgstr "Byt till oformaterad text"
+
+#: src/frontend/src/components/Composer.vue:552
+msgid "The draft could not be saved: {error}"
+msgstr "Det gick inte att spara utkastet: {error}"
+
+#: src/frontend/src/components/Composer.vue:557
+msgid "Close and keep the draft"
+msgstr "Stäng och behåll utkastet"
+
+#: src/frontend/src/components/Composer.vue:559
+msgid "Close and discard the message"
+msgstr "Stäng och kasta meddelandet"
+
+#: src/frontend/src/components/Composer.vue:598
+#: src/frontend/src/components/Composer.vue:693
+msgid "Keep writing"
+msgstr "Fortsätt skriva"
+
+#: src/frontend/src/components/Composer.vue:600
+msgid "Save draft"
+msgstr "Spara utkast"
+
+#: src/frontend/src/components/Composer.vue:701
+#: src/frontend/src/components/Composer.vue:716
+#: src/frontend/src/components/MessageCard.vue:469
+#: src/frontend/src/components/RichEditor.vue:648
+msgid "Could not open Files: {error}"
+msgstr "Det gick inte att öppna Filer: {error}"
+
+#: src/frontend/src/components/ComposerSecurity.vue:5
+msgid "You have no {kind} key for {address}. Create or import one under Settings → Encryption."
+msgstr "Du har ingen {kind}-nyckel för {address}. Skapa eller importera en under Inställningar → Kryptering."
+
+#: src/frontend/src/components/ComposerSecurity.vue:7
+msgid "Open settings"
+msgstr "Öppna inställningarna"
+
+#: src/frontend/src/components/ComposerSecurity.vue:14
+msgid "Looking for the recipients' keys…"
+msgstr "Letar efter mottagarnas nycklar …"
+
+#: src/frontend/src/components/ComposerSecurity.vue:18
+msgid "Encrypted with {kind}. Add recipients to check their keys."
+msgstr "Krypterat med {kind}. Lägg till mottagare för att kontrollera deras nycklar."
+
+#: src/frontend/src/components/ComposerSecurity.vue:23
+msgid "No {kind} key was found for {addresses}, who could not read the message."
+msgid_plural "No {kind} keys were found for {addresses}, who could not read the message."
+msgstr[0] "Ingen {kind}-nyckel hittades för {addresses}, som inte skulle kunna läsa meddelandet."
+msgstr[1] "Inga {kind}-nycklar hittades för {addresses}, som inte skulle kunna läsa meddelandet."
+
+#: src/frontend/src/components/ComposerSecurity.vue:26
+msgid "Use {kind} instead"
+msgstr "Använd {kind} i stället"
+
+#: src/frontend/src/components/ComposerSecurity.vue:31
+msgid "Encrypted with {kind} for {count} recipient and you."
+msgid_plural "Encrypted with {kind} for {count} recipients and you."
+msgstr[0] "Krypterat med {kind} för {count} mottagare och dig."
+msgstr[1] "Krypterat med {kind} för {count} mottagare och dig."
+
+#: src/frontend/src/components/ComposerSecurity.vue:34
+msgid "Recipients can tell from the encryption how many keys it is for, Bcc included."
+msgstr "Mottagarna kan se på krypteringen hur många nycklar den gäller, dold kopia inräknad."
+
+#: src/frontend/src/components/ComposerSecurity.vue:40
+msgid "Signed with your {kind} key."
+msgstr "Signerat med din {kind}-nyckel."
+
+#: src/frontend/src/components/ConnectionResult.vue:6
+msgid "{protocol}: connected"
+msgstr "{protocol}: ansluten"
+
+#: src/frontend/src/components/ConnectionResult.vue:6
+msgid "{protocol}: failed"
+msgstr "{protocol}: misslyckades"
+
+#: src/frontend/src/components/ConversationView.vue:2
+msgid "Conversation"
+msgstr "Konversation"
+
+#: src/frontend/src/components/ConversationView.vue:5
+#: src/frontend/src/components/MessageList.vue:333
+#: src/frontend/src/components/MessageList.vue:340
+#: src/frontend/src/components/ScheduledList.vue:6
+#: src/frontend/src/components/TagsDialog.vue:112
+msgid "{count} message"
+msgid_plural "{count} messages"
+msgstr[0] "{count} meddelande"
+msgstr[1] "{count} meddelanden"
+
+#: src/frontend/src/components/ConversationView.vue:8
+msgid "older messages left out"
+msgstr "äldre meddelanden utelämnade"
+
+#: src/frontend/src/components/ConversationView.vue:12
+msgid "Collapse all"
+msgstr "Fäll ihop alla"
+
+#: src/frontend/src/components/ConversationView.vue:12
+msgid "Expand all"
+msgstr "Fäll ut alla"
+
+#: src/frontend/src/components/ConversationView.vue:28
+msgid "New since you last looked"
+msgstr "Nytt sedan du senast tittade"
+
+#: src/frontend/src/components/ConversationView.vue:35
+msgid "Show the message this one answers"
+msgstr "Visa meddelandet som detta svarar på"
+
+#: src/frontend/src/components/ConversationView.vue:41
+msgid "one of {count} answers to it"
+msgid_plural "one of {count} answers to it"
+msgstr[0] "ett av {count} svar på det"
+msgstr[1] "ett av {count} svar på det"
+
+#: src/frontend/src/components/ConversationView.vue:52
+msgid "+ {name} added"
+msgstr "+ {name} tillagd"
+
+#: src/frontend/src/components/ConversationView.vue:58
+msgid "− {name} left out"
+msgstr "− {name} utelämnad"
+
+#: src/frontend/src/components/ConversationView.vue:79
+#: src/frontend/src/components/MessageList.vue:145
+#: src/frontend/src/components/ScheduledList.vue:44
+msgid "Has attachments"
+msgstr "Har bilagor"
+
+#: src/frontend/src/components/ConversationView.vue:83
+#: src/frontend/src/components/MessageList.vue:150
+msgid "Encrypted"
+msgstr "Krypterat"
+
+#: src/frontend/src/components/ConversationView.vue:83
+#: src/frontend/src/components/MessageList.vue:150
+msgid "Signed"
+msgstr "Signerat"
+
+#: src/frontend/src/components/ConversationView.vue:90
+msgid "Could not open the message: {error}"
+msgstr "Det gick inte att öppna meddelandet: {error}"
+
+#: src/frontend/src/components/ConversationView.vue:115
+msgid "{count} new"
+msgid_plural "{count} new"
+msgstr[0] "{count} nytt"
+msgstr[1] "{count} nya"
+
+#: src/frontend/src/components/ConversationView.vue:202
+#: src/frontend/src/components/MessageList.vue:383
+#: src/frontend/src/folderUses.js:17
+msgid "Inbox"
+msgstr "Inkorg"
+
+#: src/frontend/src/components/ConversationView.vue:203
+#: src/frontend/src/folderUses.js:19
+msgid "Sent"
+msgstr "Skickat"
+
+#: src/frontend/src/components/ConversationView.vue:205
+#: src/frontend/src/folderUses.js:18
+msgid "Drafts"
+msgstr "Utkast"
+
+#: src/frontend/src/components/ConversationView.vue:206
+#: src/frontend/src/folderUses.js:21
+msgid "Trash"
+msgstr "Papperskorg"
+
+#: src/frontend/src/components/ConversationView.vue:207
+#: src/frontend/src/folderUses.js:20
+msgid "Junk"
+msgstr "Skräppost"
+
+#: src/frontend/src/components/ConversationView.vue:217
+msgid "Me"
+msgstr "Jag"
+
+#: src/frontend/src/components/ConversationView.vue:220
+#: src/frontend/src/components/MessageCard.vue:404
+#: src/frontend/src/components/MessageList.vue:628
+#: src/frontend/src/store/notifications.js:78
+msgid "Unknown sender"
+msgstr "Okänd avsändare"
+
+#: src/frontend/src/components/ConversationView.vue:233
+msgid "Answers your message from {when}"
+msgstr "Svarar på ditt meddelande från {when}"
+
+#: src/frontend/src/components/ConversationView.vue:234
+msgid "Answers {name}’s message from {when}"
+msgstr "Svarar på meddelandet från {name} {when}"
+
+#: src/frontend/src/components/DeceptiveLinkDialog.vue:4
+msgid "This link leads somewhere else"
+msgstr "Den här länken leder någon annanstans"
+
+#: src/frontend/src/components/DeceptiveLinkDialog.vue:10
+msgid "The link shows {shown}, but it leads to {host}."
+msgstr "Länken visar {shown}, men leder till {host}."
+
+#: src/frontend/src/components/DeceptiveLinkDialog.vue:16
+msgid "Only open it if you expected this address. Phishing messages hide where their links go this way."
+msgstr "Öppna den bara om du väntade dig den här adressen. Nätfiskemeddelanden döljer på det här sättet vart deras länkar leder."
+
+#: src/frontend/src/components/DeceptiveLinkDialog.vue:35
+msgid "Open {host}"
+msgstr "Öppna {host}"
+
+#: src/frontend/src/components/EncryptionSettings.vue:4
+msgid "Read OpenPGP and S/MIME encrypted mail and check signatures. Private keys are kept on this server, protected by their passphrase; while a key is unlocked, the server can use it to read your encrypted mail."
+msgstr "Läs e-post som krypterats med OpenPGP och S/MIME och kontrollera signaturer. Privata nycklar sparas på den här servern, skyddade av sin lösenfras; medan en nyckel är upplåst kan servern använda den för att läsa din krypterade e-post."
+
+#: src/frontend/src/components/EncryptionSettings.vue:14
+msgid "Your keys"
+msgstr "Dina nycklar"
+
+#: src/frontend/src/components/EncryptionSettings.vue:16
+msgid "You have no private keys yet. Import one, or create an OpenPGP key below."
+msgstr "Du har inga privata nycklar än. Importera en, eller skapa en OpenPGP-nyckel nedan."
+
+#: src/frontend/src/components/EncryptionSettings.vue:32
+msgid "Lock all keys now"
+msgstr "Lås alla nycklar nu"
+
+#: src/frontend/src/components/EncryptionSettings.vue:35
+msgid "Other people's keys"
+msgstr "Andras nycklar"
+
+#: src/frontend/src/components/EncryptionSettings.vue:37
+msgid "Import someone's public key or certificate to check their signatures."
+msgstr "Importera någons publika nyckel eller certifikat för att kontrollera deras signaturer."
+
+#: src/frontend/src/components/EncryptionSettings.vue:47
+msgid "Import a key or certificate"
+msgstr "Importera en nyckel eller ett certifikat"
+
+#: src/frontend/src/components/EncryptionSettings.vue:49
+msgid "An OpenPGP key (.asc, .gpg), a PKCS#12 file with your S/MIME certificate and private key (.p12, .pfx), or a certificate (.pem, .crt, .cer). You can also paste an OpenPGP key."
+msgstr "En OpenPGP-nyckel (.asc, .gpg), en PKCS#12-fil med ditt S/MIME-certifikat och din privata nyckel (.p12, .pfx) eller ett certifikat (.pem, .crt, .cer). Du kan också klistra in en OpenPGP-nyckel."
+
+#: src/frontend/src/components/EncryptionSettings.vue:55
+msgid "Key file"
+msgstr "Nyckelfil"
+
+#: src/frontend/src/components/EncryptionSettings.vue:61
+msgid "-----BEGIN PGP PUBLIC KEY BLOCK-----"
+msgstr "-----BEGIN PGP PUBLIC KEY BLOCK-----"
+
+#: src/frontend/src/components/EncryptionSettings.vue:62
+msgid "Pasted key"
+msgstr "Inklistrad nyckel"
+
+#: src/frontend/src/components/EncryptionSettings.vue:64
+msgid "Passphrase or file password (for private keys)"
+msgstr "Lösenfras eller fillösenord (för privata nycklar)"
+
+#: src/frontend/src/components/EncryptionSettings.vue:75
+msgid "Import"
+msgstr "Importera"
+
+#: src/frontend/src/components/EncryptionSettings.vue:80
+msgid "Create an OpenPGP key"
+msgstr "Skapa en OpenPGP-nyckel"
+
+#: src/frontend/src/components/EncryptionSettings.vue:82
+msgid "For"
+msgstr "För"
+
+#: src/frontend/src/components/EncryptionSettings.vue:89
+msgid "Passphrase (at least 8 characters)"
+msgstr "Lösenfras (minst 8 tecken)"
+
+#: src/frontend/src/components/EncryptionSettings.vue:94
+msgid "Repeat the passphrase"
+msgstr "Upprepa lösenfrasen"
+
+#: src/frontend/src/components/EncryptionSettings.vue:96
+msgid "The passphrases differ."
+msgstr "Lösenfraserna skiljer sig åt."
+
+#: src/frontend/src/components/EncryptionSettings.vue:96
+msgid "Without it the key cannot be used. It cannot be recovered."
+msgstr "Utan den kan nyckeln inte användas. Den går inte att återställa."
+
+#: src/frontend/src/components/EncryptionSettings.vue:99
+msgid "Valid for"
+msgstr "Giltig i"
+
+#: src/frontend/src/components/EncryptionSettings.vue:101
+msgid "1 year"
+msgstr "1 år"
+
+#: src/frontend/src/components/EncryptionSettings.vue:102
+msgid "2 years"
+msgstr "2 år"
+
+#: src/frontend/src/components/EncryptionSettings.vue:103
+msgid "3 years"
+msgstr "3 år"
+
+#: src/frontend/src/components/EncryptionSettings.vue:104
+msgid "5 years"
+msgstr "5 år"
+
+#: src/frontend/src/components/EncryptionSettings.vue:105
+msgid "Does not expire"
+msgstr "Går inte ut"
+
+#: src/frontend/src/components/EncryptionSettings.vue:115
+msgid "Creating the key, this takes a few seconds…"
+msgstr "Skapar nyckeln, det tar några sekunder …"
+
+#: src/frontend/src/components/EncryptionSettings.vue:115
+msgid "Create key"
+msgstr "Skapa nyckel"
+
+#: src/frontend/src/components/EncryptionSettings.vue:142
+msgid "Could not load your keys: {error}"
+msgstr "Det gick inte att läsa in dina nycklar: {error}"
+
+#: src/frontend/src/components/EncryptionSettings.vue:152
+msgid "Delete your private key for {address}? Mail encrypted to it cannot be read here any more unless you import it again."
+msgstr "Ta bort din privata nyckel för {address}? E-post som krypterats till den kan inte längre läsas här om du inte importerar den igen."
+
+#: src/frontend/src/components/EncryptionSettings.vue:153
+msgid "Delete the key for {address}?"
+msgstr "Ta bort nyckeln för {address}?"
+
+#: src/frontend/src/components/EncryptionSettings.vue:170
+msgid "Saved in a new contact, {name}"
+msgstr "Sparad i en ny kontakt, {name}"
+
+#: src/frontend/src/components/EncryptionSettings.vue:171
+msgid "Saved in the contact {name}"
+msgstr "Sparad i kontakten {name}"
+
+#: src/frontend/src/components/EncryptionSettings.vue:179
+msgid "Publish your public key on keys.openpgp.org, so others can find it for {addresses}? The key server sends each address an e-mail with a link; the address is published only once you open it."
+msgstr "Publicera din publika nyckel på keys.openpgp.org så att andra kan hitta den för {addresses}? Nyckelservern skickar ett mejl med en länk till varje adress; adressen publiceras först när du öppnar länken."
+
+#: src/frontend/src/components/EncryptionSettings.vue:188
+msgid "keys.openpgp.org sent a confirmation link to {addresses}. Open it to publish the key."
+msgstr "keys.openpgp.org skickade en bekräftelselänk till {addresses}. Öppna den för att publicera nyckeln."
+
+#: src/frontend/src/components/EncryptionSettings.vue:190
+msgid "Your key is published for {addresses}."
+msgstr "Din nyckel är publicerad för {addresses}."
+
+#: src/frontend/src/components/EncryptionSettings.vue:192
+msgid "Your key was uploaded. keys.openpgp.org publishes addresses only once they are confirmed."
+msgstr "Din nyckel laddades upp. keys.openpgp.org publicerar adresser först när de har bekräftats."
+
+#: src/frontend/src/components/EncryptionSettings.vue:235
+msgid "Imported {count} key"
+msgid_plural "Imported {count} keys"
+msgstr[0] "{count} nyckel importerades"
+msgstr[1] "{count} nycklar importerades"
+
+#: src/frontend/src/components/EncryptionSettings.vue:267
+msgid "Your key for {address} is ready"
+msgstr "Din nyckel för {address} är klar"
+
+#: src/frontend/src/components/FolderItem.vue:9
+msgid "Collapse {name}"
+msgstr "Fäll ihop {name}"
+
+#: src/frontend/src/components/FolderItem.vue:9
+msgid "Expand {name}"
+msgstr "Fäll ut {name}"
+
+#: src/frontend/src/components/FolderItem.vue:20
+msgid "Folder actions"
+msgstr "Mappåtgärder"
+
+#: src/frontend/src/components/FolderItem.vue:25
+msgid "New subfolder"
+msgstr "Ny undermapp"
+
+#: src/frontend/src/components/FolderItem.vue:31
+#: src/frontend/src/components/TagsDialog.vue:72
+#: src/frontend/src/store/actions.js:198
+msgid "Rename"
+msgstr "Byt namn"
+
+#: src/frontend/src/components/FolderNameDialog.vue:9
+msgid "Folder name"
+msgstr "Mappnamn"
+
+#: src/frontend/src/components/FolderPane.vue:2
+msgid "Folders"
+msgstr "Mappar"
+
+#: src/frontend/src/components/FolderPane.vue:10
+msgid "{count} account"
+msgid_plural "{count} accounts"
+msgstr[0] "{count} konto"
+msgstr[1] "{count} konton"
+
+#: src/frontend/src/components/FolderPane.vue:18
+msgid "Smart folders"
+msgstr "Smarta mappar"
+
+#: src/frontend/src/components/FolderPane.vue:18
+msgid "Unified folders"
+msgstr "Samlade mappar"
+
+#: src/frontend/src/components/FolderPane.vue:51
+msgid "Account actions"
+msgstr "Kontoåtgärder"
+
+#: src/frontend/src/components/FolderPane.vue:62
+#: src/frontend/src/components/SettingsDialog.vue:142
+msgid "Customize…"
+msgstr "Anpassa …"
+
+#: src/frontend/src/components/FolderPane.vue:68
+#: src/frontend/src/components/RulesDialog.vue:58
+msgid "Rules"
+msgstr "Regler"
+
+#: src/frontend/src/components/FolderPane.vue:74
+#: src/frontend/src/store/actions.js:184
+msgid "New folder"
+msgstr "Ny mapp"
+
+#: src/frontend/src/components/FolderPane.vue:80
+msgid "Refresh folders"
+msgstr "Uppdatera mappar"
+
+#: src/frontend/src/components/FolderPane.vue:86
+#: src/frontend/src/components/RulesDialog.vue:104
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:94
+#: src/frontend/src/components/SettingsDialog.vue:148
+#: src/frontend/src/components/TagsDialog.vue:78
+msgid "Move up"
+msgstr "Flytta upp"
+
+#: src/frontend/src/components/FolderPane.vue:92
+#: src/frontend/src/components/RulesDialog.vue:110
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:99
+#: src/frontend/src/components/SettingsDialog.vue:154
+#: src/frontend/src/components/TagsDialog.vue:84
+msgid "Move down"
+msgstr "Flytta ned"
+
+#: src/frontend/src/components/FolderPane.vue:103
+msgid "Loading folders…"
+msgstr "Läser in mappar …"
+
+#: src/frontend/src/components/InvitationCard.vue:34
+msgid "Organized by {name}"
+msgstr "Arrangeras av {name}"
+
+#: src/frontend/src/components/InvitationCard.vue:38
+msgid "{count} attendee"
+msgid_plural "{count} attendees"
+msgstr[0] "{count} deltagare"
+msgstr[1] "{count} deltagare"
+
+#: src/frontend/src/components/InvitationCard.vue:45
+msgid "optional"
+msgstr "valfri"
+
+#: src/frontend/src/components/InvitationCard.vue:53
+msgid "In your calendar {calendar}"
+msgstr "I din kalender {calendar}"
+
+#: src/frontend/src/components/InvitationCard.vue:59
+msgid "Not in your calendar"
+msgstr "Inte i din kalender"
+
+#: src/frontend/src/components/InvitationCard.vue:64
+msgid "Your calendar has a newer version of this event than this message."
+msgstr "Din kalender har en nyare version av den här händelsen än det här meddelandet."
+
+#: src/frontend/src/components/InvitationCard.vue:67
+msgid "You are not on the list of attendees (the invitation may have reached you through a list). An answer is sent as {address}."
+msgstr "Du finns inte med bland deltagarna (inbjudan kan ha nått dig via en lista). Ett svar skickas som {address}."
+
+#: src/frontend/src/components/InvitationCard.vue:93
+msgid "Remove from calendar"
+msgstr "Ta bort från kalendern"
+
+#: src/frontend/src/components/InvitationCard.vue:99
+msgid "Update the answer in your calendar"
+msgstr "Uppdatera svaret i din kalender"
+
+#: src/frontend/src/components/InvitationCard.vue:106
+msgid "Calendar"
+msgstr "Kalender"
+
+#: src/frontend/src/components/InvitationCard.vue:117
+msgid "Send my answer to {name}"
+msgstr "Skicka mitt svar till {name}"
+
+#: src/frontend/src/components/InvitationCard.vue:173
+msgid "This message contains calendar data that cannot be read."
+msgstr "Det här meddelandet innehåller kalenderdata som inte kan läsas."
+
+#: src/frontend/src/components/InvitationCard.vue:174
+msgid "The calendar information could not be loaded: {error}"
+msgstr "Det gick inte att läsa in kalenderinformationen: {error}"
+
+#: src/frontend/src/components/InvitationCard.vue:187
+#: src/frontend/src/components/InvitationCard.vue:201
+msgid "Event"
+msgstr "Händelse"
+
+#: src/frontend/src/components/InvitationCard.vue:192
+msgid "Updated invitation"
+msgstr "Uppdaterad inbjudan"
+
+#: src/frontend/src/components/InvitationCard.vue:193
+msgid "Invitation"
+msgstr "Inbjudan"
+
+#: src/frontend/src/components/InvitationCard.vue:195
+msgid "Cancelled event"
+msgstr "Inställd händelse"
+
+#: src/frontend/src/components/InvitationCard.vue:200
+msgid "{count} event"
+msgid_plural "{count} events"
+msgstr[0] "{count} händelse"
+msgstr[1] "{count} händelser"
+
+#: src/frontend/src/components/InvitationCard.vue:231
+msgid "Accept"
+msgstr "Tacka ja"
+
+#: src/frontend/src/components/InvitationCard.vue:232
+#: src/frontend/src/components/InvitationCard.vue:381
+msgid "Maybe"
+msgstr "Kanske"
+
+#: src/frontend/src/components/InvitationCard.vue:233
+msgid "Decline"
+msgstr "Tacka nej"
+
+#: src/frontend/src/components/InvitationCard.vue:238
+msgid "Update in calendar"
+msgstr "Uppdatera i kalendern"
+
+#: src/frontend/src/components/InvitationCard.vue:241
+msgid "Add {count} event to calendar"
+msgid_plural "Add {count} events to calendar"
+msgstr[0] "Lägg till {count} händelse i kalendern"
+msgstr[1] "Lägg till {count} händelser i kalendern"
+
+#: src/frontend/src/components/InvitationCard.vue:242
+msgid "Add to calendar"
+msgstr "Lägg till i kalendern"
+
+#: src/frontend/src/components/InvitationCard.vue:269
+msgid "Declined, and the organizer was told"
+msgstr "Nej tackat, och arrangören har meddelats"
+
+#: src/frontend/src/components/InvitationCard.vue:269
+#: src/frontend/src/components/InvitationCard.vue:382
+msgid "Declined"
+msgstr "Nej tackat"
+
+#: src/frontend/src/components/InvitationCard.vue:271
+msgid "Saved in your calendar, and the organizer was told"
+msgstr "Sparat i din kalender, och arrangören har meddelats"
+
+#: src/frontend/src/components/InvitationCard.vue:271
+msgid "Saved in your calendar"
+msgstr "Sparat i din kalender"
+
+#: src/frontend/src/components/InvitationCard.vue:279
+msgid "Nothing was added: the events are in read-only calendars"
+msgstr "Inget lades till: händelserna finns i skrivskyddade kalendrar"
+
+#: src/frontend/src/components/InvitationCard.vue:280
+msgid "{count} event saved in your calendar"
+msgid_plural "{count} events saved in your calendar"
+msgstr[0] "{count} händelse sparades i din kalender"
+msgstr[1] "{count} händelser sparades i din kalender"
+
+#: src/frontend/src/components/InvitationCard.vue:287
+msgid "Removed from your calendar"
+msgstr "Borttagen från din kalender"
+
+#: src/frontend/src/components/InvitationCard.vue:287
+msgid "Answer updated in your calendar"
+msgstr "Svaret uppdaterades i din kalender"
+
+#: src/frontend/src/components/InvitationCard.vue:318
+msgid "No date given"
+msgstr "Inget datum angivet"
+
+#: src/frontend/src/components/InvitationCard.vue:327
+msgid "{date}, all day"
+msgstr "{date}, heldag"
+
+#: src/frontend/src/components/InvitationCard.vue:328
+msgid "{start} – {end}, all day"
+msgstr "{start} – {end}, heldag"
+
+#: src/frontend/src/components/InvitationCard.vue:352
+msgid "One occurrence of a repeating event"
+msgstr "Ett tillfälle av en återkommande händelse"
+
+#: src/frontend/src/components/InvitationCard.vue:357
+msgid "Repeats daily"
+msgstr "Upprepas dagligen"
+
+#: src/frontend/src/components/InvitationCard.vue:357
+msgid "Repeats every {count} day"
+msgid_plural "Repeats every {count} days"
+msgstr[0] "Upprepas var {count}:e dag"
+msgstr[1] "Upprepas var {count}:e dag"
+
+#: src/frontend/src/components/InvitationCard.vue:358
+msgid "Repeats weekly"
+msgstr "Upprepas varje vecka"
+
+#: src/frontend/src/components/InvitationCard.vue:358
+msgid "Repeats every {count} week"
+msgid_plural "Repeats every {count} weeks"
+msgstr[0] "Upprepas var {count}:e vecka"
+msgstr[1] "Upprepas var {count}:e vecka"
+
+#: src/frontend/src/components/InvitationCard.vue:359
+msgid "Repeats monthly"
+msgstr "Upprepas varje månad"
+
+#: src/frontend/src/components/InvitationCard.vue:359
+msgid "Repeats every {count} month"
+msgid_plural "Repeats every {count} months"
+msgstr[0] "Upprepas var {count}:e månad"
+msgstr[1] "Upprepas var {count}:e månad"
+
+#: src/frontend/src/components/InvitationCard.vue:360
+msgid "Repeats yearly"
+msgstr "Upprepas varje år"
+
+#: src/frontend/src/components/InvitationCard.vue:360
+msgid "Repeats every {count} year"
+msgid_plural "Repeats every {count} years"
+msgstr[0] "Upprepas vart {count}:e år"
+msgstr[1] "Upprepas vart {count}:e år"
+
+#: src/frontend/src/components/InvitationCard.vue:362
+msgid "Repeats"
+msgstr "Upprepas"
+
+#: src/frontend/src/components/InvitationCard.vue:368
+msgid "{count} accepted"
+msgstr "{count} tackade ja"
+
+#: src/frontend/src/components/InvitationCard.vue:369
+msgid "{count} maybe"
+msgstr "{count} kanske"
+
+#: src/frontend/src/components/InvitationCard.vue:370
+msgid "{count} declined"
+msgstr "{count} tackade nej"
+
+#: src/frontend/src/components/InvitationCard.vue:380
+msgid "Accepted"
+msgstr "Tackade ja"
+
+#: src/frontend/src/components/InvitationCard.vue:383
+msgid "No answer yet"
+msgstr "Inget svar än"
+
+#: src/frontend/src/components/InvitationCard.vue:388
+msgid "You accepted"
+msgstr "Du tackade ja"
+
+#: src/frontend/src/components/InvitationCard.vue:389
+msgid "You said maybe"
+msgstr "Du svarade kanske"
+
+#: src/frontend/src/components/InvitationCard.vue:390
+msgid "You declined"
+msgstr "Du tackade nej"
+
+#: src/frontend/src/components/InvitationCard.vue:391
+msgid "You have not answered"
+msgstr "Du har inte svarat"
+
+#: src/frontend/src/components/InvitationCard.vue:396
+msgid "Answer to an invitation"
+msgstr "Svar på en inbjudan"
+
+#: src/frontend/src/components/InvitationCard.vue:400
+msgid "{name} accepted"
+msgstr "{name} tackade ja"
+
+#: src/frontend/src/components/InvitationCard.vue:401
+msgid "{name} said maybe"
+msgstr "{name} svarade kanske"
+
+#: src/frontend/src/components/InvitationCard.vue:402
+msgid "{name} declined"
+msgstr "{name} tackade nej"
+
+#: src/frontend/src/components/InvitationCard.vue:403
+msgid "{name} answered"
+msgstr "{name} svarade"
+
+#: src/frontend/src/components/KeyRow.vue:8
+msgid "No address"
+msgstr "Ingen adress"
+
+#: src/frontend/src/components/KeyRow.vue:13
+msgid "Unlocked"
+msgstr "Upplåst"
+
+#: src/frontend/src/components/KeyRow.vue:13
+#: src/frontend/src/components/KeyRow.vue:102
+msgid "Locked"
+msgstr "Låst"
+
+#: src/frontend/src/components/KeyRow.vue:20
+msgid "Key actions"
+msgstr "Nyckelåtgärder"
+
+#: src/frontend/src/components/KeyRow.vue:25
+#: src/frontend/src/components/KeyUnlockForm.vue:11
+msgid "Unlock"
+msgstr "Lås upp"
+
+#: src/frontend/src/components/KeyRow.vue:31
+msgid "Download public key"
+msgstr "Ladda ned publik nyckel"
+
+#: src/frontend/src/components/KeyRow.vue:31
+msgid "Download certificate"
+msgstr "Ladda ned certifikat"
+
+#: src/frontend/src/components/KeyRow.vue:37
+msgid "Save to contact"
+msgstr "Spara i kontakt"
+
+#: src/frontend/src/components/KeyRow.vue:43
+msgid "Publish on keys.openpgp.org…"
+msgstr "Publicera på keys.openpgp.org …"
+
+#: src/frontend/src/components/KeyRow.vue:76
+msgid "From Contacts"
+msgstr "Från Kontakter"
+
+#: src/frontend/src/components/KeyRow.vue:77
+msgid "Published by the recipient's domain"
+msgstr "Publicerad av mottagarens domän"
+
+#: src/frontend/src/components/KeyRow.vue:78
+msgid "From keys.openpgp.org"
+msgstr "Från keys.openpgp.org"
+
+#: src/frontend/src/components/KeyRow.vue:79
+msgid "From a signed message"
+msgstr "Från ett signerat meddelande"
+
+#: src/frontend/src/components/KeyRow.vue:80
+msgid "From an Autocrypt header"
+msgstr "Från ett Autocrypt-huvud"
+
+#: src/frontend/src/components/KeyRow.vue:96
+msgid "Expired {date}"
+msgstr "Gick ut {date}"
+
+#: src/frontend/src/components/KeyRow.vue:97
+msgid "Expires {date}"
+msgstr "Går ut {date}"
+
+#: src/frontend/src/components/KeyRow.vue:101
+msgid "Unlocked until {time}"
+msgstr "Upplåst till {time}"
+
+#: src/frontend/src/components/KeyRow.vue:104
+msgid "No passphrase"
+msgstr "Ingen lösenfras"
+
+#: src/frontend/src/components/KeyUnlockForm.vue:38
+msgid "Passphrase for {address}"
+msgstr "Lösenfras för {address}"
+
+#: src/frontend/src/components/KeyUnlockForm.vue:39
+msgid "Passphrase"
+msgstr "Lösenfras"
+
+#: src/frontend/src/components/MessageBody.vue:6
+msgid "Message content"
+msgstr "Meddelandets innehåll"
+
+#: src/frontend/src/components/MessageBody.vue:119
+msgid "Show quoted text"
+msgstr "Visa citerad text"
+
+#: src/frontend/src/components/MessageBody.vue:142
+msgid "Shows {shown} but leads to {host}"
+msgstr "Visar {shown} men leder till {host}"
+
+#: src/frontend/src/components/MessageCard.vue:16
+msgid "Collapse"
+msgstr "Fäll ihop"
+
+#: src/frontend/src/components/MessageCard.vue:26
+msgid "Hide details"
+msgstr "Dölj detaljer"
+
+#: src/frontend/src/components/MessageCard.vue:26
+msgid "Show details"
+msgstr "Visa detaljer"
+
+#: src/frontend/src/components/MessageCard.vue:29
+msgid "To: {recipients}"
+msgstr "Till: {recipients}"
+
+#: src/frontend/src/components/MessageCard.vue:31
+msgid "Cc: {recipients}"
+msgstr "Kopia: {recipients}"
+
+#: src/frontend/src/components/MessageCard.vue:41
+#: src/frontend/src/components/MessageCard.vue:42
+msgid "Continue editing"
+msgstr "Fortsätt redigera"
+
+#: src/frontend/src/components/MessageCard.vue:65
+msgid "Summarize"
+msgstr "Sammanfatta"
+
+#: src/frontend/src/components/MessageCard.vue:77
+msgid "Check for scams"
+msgstr "Kontrollera bedrägeri"
+
+#: src/frontend/src/components/MessageCard.vue:88
+#: src/frontend/src/components/MessageCard.vue:89
+#: src/frontend/src/components/MessageMenu.vue:21
+msgid "Open in new window"
+msgstr "Öppna i nytt fönster"
+
+#: src/frontend/src/components/MessageCard.vue:97
+#: src/frontend/src/components/MessageCard.vue:98
+msgid "Show in dark colours"
+msgstr "Visa i mörka färger"
+
+#: src/frontend/src/components/MessageCard.vue:97
+#: src/frontend/src/components/MessageCard.vue:98
+msgid "Show in original colours"
+msgstr "Visa i originalfärger"
+
+#: src/frontend/src/components/MessageCard.vue:102
+#: src/frontend/src/components/MessageList.vue:179
+#: src/frontend/src/components/MessageList.vue:180
+msgid "More actions"
+msgstr "Fler åtgärder"
+
+#: src/frontend/src/components/MessageCard.vue:113
+#: src/frontend/src/components/MessageList.vue:173
+#: src/frontend/src/components/MessageList.vue:174
+#: src/frontend/src/components/MessageMenu.vue:44
+msgid "Remove flag"
+msgstr "Ta bort flagga"
+
+#: src/frontend/src/components/MessageCard.vue:119
+#: src/frontend/src/components/MessageMenu.vue:50
+msgid "Move…"
+msgstr "Flytta …"
+
+#: src/frontend/src/components/MessageCard.vue:133
+#: src/frontend/src/components/MessageMenu.vue:72
+msgid "Create task…"
+msgstr "Skapa uppgift …"
+
+#: src/frontend/src/components/MessageCard.vue:139
+#: src/frontend/src/components/MessageMenu.vue:79
+msgid "Create rule…"
+msgstr "Skapa regel …"
+
+#: src/frontend/src/components/MessageCard.vue:147
+#: src/frontend/src/components/MessageMenu.vue:87
+msgid "Add sender to contacts"
+msgstr "Lägg till avsändaren i kontakter"
+
+#: src/frontend/src/components/MessageCard.vue:154
+msgid "View headers"
+msgstr "Visa huvuden"
+
+#: src/frontend/src/components/MessageCard.vue:160
+msgid "View source"
+msgstr "Visa källa"
+
+#: src/frontend/src/components/MessageCard.vue:166
+#: src/frontend/src/components/MessageMenu.vue:93
+msgid "Download message (.eml)"
+msgstr "Ladda ned meddelandet (.eml)"
+
+#: src/frontend/src/components/MessageCard.vue:177
+#: src/frontend/src/components/MessageList.vue:143
+#: src/frontend/src/components/MessageList.vue:237
+#: src/frontend/src/store/unified.js:24
+msgid "Flagged"
+msgstr "Flaggade"
+
+#: src/frontend/src/components/MessageCard.vue:204
+msgid "The domain is spelled {ascii} in plain letters."
+msgstr "Domänen stavas {ascii} med vanliga bokstäver."
+
+#: src/frontend/src/components/MessageCard.vue:212
+msgid "Ask the Assistant"
+msgstr "Fråga Assistenten"
+
+#: src/frontend/src/components/MessageCard.vue:215
+msgid "Trust {domain}"
+msgstr "Lita på {domain}"
+
+#: src/frontend/src/components/MessageCard.vue:224
+msgid "Remote images are blocked to protect your privacy."
+msgstr "Fjärrbilder blockeras för att skydda din integritet."
+
+#: src/frontend/src/components/MessageCard.vue:226
+msgid "Show images"
+msgstr "Visa bilder"
+
+#: src/frontend/src/components/MessageCard.vue:246
+msgid "{count} attachment"
+msgid_plural "{count} attachments"
+msgstr[0] "{count} bilaga"
+msgstr[1] "{count} bilagor"
+
+#: src/frontend/src/components/MessageCard.vue:254
+msgid "Save all to Files"
+msgstr "Spara alla i Filer"
+
+#: src/frontend/src/components/MessageCard.vue:261
+msgid "Download {name}"
+msgstr "Ladda ned {name}"
+
+#: src/frontend/src/components/MessageCard.vue:274
+#: src/frontend/src/store/files.js:192
+msgid "Save {name} to Files"
+msgstr "Spara {name} i Filer"
+
+#: src/frontend/src/components/MessageCard.vue:275
+msgid "Save to Files"
+msgstr "Spara i Filer"
+
+#: src/frontend/src/components/MessageCard.vue:282
+msgid "Import {name} as a key"
+msgstr "Importera {name} som nyckel"
+
+#: src/frontend/src/components/MessageCard.vue:283
+msgid "Import key"
+msgstr "Importera nyckel"
+
+#: src/frontend/src/components/MessageCard.vue:392
+msgid "Could not trust {domain}: {error}"
+msgstr "Det gick inte att lita på {domain}: {error}"
+
+#: src/frontend/src/components/MessageCard.vue:430
+msgid "Reply to"
+msgstr "Svara till"
+
+#: src/frontend/src/components/MessageCard.vue:458
+msgid "Imported the key for {addresses}"
+msgid_plural "Imported {count} keys"
+msgstr[0] "Nyckeln för {addresses} importerades"
+msgstr[1] "{count} nycklar importerades"
+
+#: src/frontend/src/components/MessageCard.vue:461
+msgid "Could not import the key: {error}"
+msgstr "Det gick inte att importera nyckeln: {error}"
+
+#: src/frontend/src/components/MessageCard.vue:477
+msgid "Could not open the draft: {error}"
+msgstr "Det gick inte att öppna utkastet: {error}"
+
+#: src/frontend/src/components/MessageList.vue:4
+#: src/frontend/src/store/shortcuts.js:25
+msgid "Search"
+msgstr "Sök"
+
+#: src/frontend/src/components/MessageList.vue:10
+msgid "Select messages by clicking them"
+msgstr "Markera meddelanden genom att klicka på dem"
+
+#: src/frontend/src/components/MessageList.vue:13
+msgid "Select"
+msgstr "Markera"
+
+#: src/frontend/src/components/MessageList.vue:29
+msgid "Show messages with a tag"
+msgstr "Visa meddelanden med en tagg"
+
+#: src/frontend/src/components/MessageList.vue:49
+msgid "{count} selected"
+msgid_plural "{count} selected"
+msgstr[0] "{count} markerat"
+msgstr[1] "{count} markerade"
+
+#: src/frontend/src/components/MessageList.vue:52
+#: src/frontend/src/components/MessageList.vue:235
+msgid "All"
+msgstr "Alla"
+
+#: src/frontend/src/components/MessageList.vue:55
+#: src/frontend/src/components/SettingsDialog.vue:246
+msgid "None"
+msgstr "Inga"
+
+#: src/frontend/src/components/MessageList.vue:58
+#: src/frontend/src/components/RulesDialog.vue:558
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:74
+#: src/frontend/src/components/TagPickerDialog.vue:81
+#: src/frontend/src/components/TagsDialog.vue:5
+msgid "Done"
+msgstr "Klar"
+
+#: src/frontend/src/components/MessageList.vue:62
+msgid "Finds subjects, senders and recipients of messages this app has already loaded. To search message text and older mail, search a single folder."
+msgstr "Hittar ämnen, avsändare och mottagare för meddelanden som appen redan har läst in. Sök i en enskild mapp för att söka i meddelandetext och äldre e-post."
+
+#: src/frontend/src/components/MessageList.vue:68
+msgid "{account}: {error} Showing the messages loaded before."
+msgstr "{account}: {error} Visar meddelandena som lästes in tidigare."
+
+#: src/frontend/src/components/MessageList.vue:74
+msgid "Search failed"
+msgstr "Sökningen misslyckades"
+
+#: src/frontend/src/components/MessageList.vue:74
+msgid "Could not load the messages"
+msgstr "Det gick inte att läsa in meddelandena"
+
+#: src/frontend/src/components/MessageList.vue:83
+msgid "Search results"
+msgstr "Sökresultat"
+
+#: src/frontend/src/components/MessageList.vue:83
+msgid "Messages"
+msgstr "Meddelanden"
+
+#: src/frontend/src/components/MessageList.vue:122
+msgid "Selected"
+msgstr "Markerade"
+
+#: src/frontend/src/components/MessageList.vue:133
+msgid "{count} message in this conversation"
+msgid_plural "{count} messages in this conversation"
+msgstr[0] "{count} meddelande i den här konversationen"
+msgstr[1] "{count} meddelanden i den här konversationen"
+
+#: src/frontend/src/components/MessageList.vue:144
+msgid "Answered"
+msgstr "Besvarat"
+
+#: src/frontend/src/components/MessageList.vue:199
+msgid "More results"
+msgstr "Fler resultat"
+
+#: src/frontend/src/components/MessageList.vue:199
+msgid "Load older messages"
+msgstr "Läs in äldre meddelanden"
+
+#: src/frontend/src/components/MessageList.vue:236
+#: src/frontend/src/store/unified.js:23
+msgid "Unread"
+msgstr "Olästa"
+
+#: src/frontend/src/components/MessageList.vue:325
+msgid "First {count} results"
+msgstr "De första {count} resultaten"
+
+#: src/frontend/src/components/MessageList.vue:332
+msgid "{count} result"
+msgid_plural "{count} results"
+msgstr[0] "{count} resultat"
+msgstr[1] "{count} resultat"
+
+#: src/frontend/src/components/MessageList.vue:345
+msgid "No messages found"
+msgstr "Inga meddelanden hittades"
+
+#: src/frontend/src/components/MessageList.vue:349
+#: src/frontend/src/components/MessageList.vue:358
+msgid "No messages tagged {tag}"
+msgstr "Inga meddelanden taggade med {tag}"
+
+#: src/frontend/src/components/MessageList.vue:352
+#: src/frontend/src/components/MessageList.vue:368
+msgid "No unread messages"
+msgstr "Inga olästa meddelanden"
+
+#: src/frontend/src/components/MessageList.vue:353
+#: src/frontend/src/components/MessageList.vue:369
+msgid "No flagged messages"
+msgstr "Inga flaggade meddelanden"
+
+#: src/frontend/src/components/MessageList.vue:354
+msgid "No messages with attachments"
+msgstr "Inga meddelanden med bilagor"
+
+#: src/frontend/src/components/MessageList.vue:362
+msgid "No messages in your inboxes"
+msgstr "Inga meddelanden i dina inkorgar"
+
+#: src/frontend/src/components/MessageList.vue:363
+msgid "No drafts"
+msgstr "Inga utkast"
+
+#: src/frontend/src/components/MessageList.vue:364
+msgid "No sent messages"
+msgstr "Inga skickade meddelanden"
+
+#: src/frontend/src/components/MessageList.vue:365
+msgid "No archived messages"
+msgstr "Inga arkiverade meddelanden"
+
+#: src/frontend/src/components/MessageList.vue:366
+msgid "No junk"
+msgstr "Ingen skräppost"
+
+#: src/frontend/src/components/MessageList.vue:367
+msgid "Trash is empty"
+msgstr "Papperskorgen är tom"
+
+#: src/frontend/src/components/MessageList.vue:372
+msgid "No messages in this folder"
+msgstr "Inga meddelanden i den här mappen"
+
+#: src/frontend/src/components/MessageList.vue:593
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:19
+#: src/frontend/src/components/TaskDialog.vue:102
+msgid "Today"
+msgstr "Idag"
+
+#: src/frontend/src/components/MessageList.vue:596
+msgid "Yesterday"
+msgstr "Igår"
+
+#: src/frontend/src/components/MessageList.vue:602
+msgid "Last week"
+msgstr "Förra veckan"
+
+#: src/frontend/src/components/MessageList.vue:633
+msgid "me"
+msgstr "jag"
+
+#: src/frontend/src/components/MessageList.vue:647
+#: src/frontend/src/components/MessageSourceDialog.vue:10
+#: src/frontend/src/components/MessageView.vue:18
+#: src/frontend/src/components/RulesDialog.vue:40
+#: src/frontend/src/components/RulesDialog.vue:290
+#: src/frontend/src/components/ScheduledList.vue:45
+#: src/frontend/src/components/ScheduledView.vue:20
+#: src/frontend/src/store/windows.js:135
+msgid "(no subject)"
+msgstr "(inget ämne)"
+
+#: src/frontend/src/components/MessageMenu.vue:15
+msgid "Open"
+msgstr "Öppna"
+
+#: src/frontend/src/components/MessageMenu.vue:56
+msgid "Tags…"
+msgstr "Taggar …"
+
+#: src/frontend/src/components/MessageMenu.vue:62
+msgid "Delete {count} message"
+msgid_plural "Delete {count} messages"
+msgstr[0] "Ta bort {count} meddelande"
+msgstr[1] "Ta bort {count} meddelanden"
+
+#: src/frontend/src/components/MessageSecurity.vue:2
+msgid "Encryption and signatures"
+msgstr "Kryptering och signaturer"
+
+#: src/frontend/src/components/MessageSecurity.vue:27
+msgid "Fingerprint: {fingerprint}"
+msgstr "Fingeravtryck: {fingerprint}"
+
+#: src/frontend/src/components/MessageSecurity.vue:73
+msgid "Encrypted with {kind}"
+msgstr "Krypterat med {kind}"
+
+#: src/frontend/src/components/MessageSecurity.vue:74
+msgid "This message is encrypted with {kind}"
+msgstr "Det här meddelandet är krypterat med {kind}"
+
+#: src/frontend/src/components/MessageSecurity.vue:75
+msgid "None of your keys can open this message"
+msgstr "Ingen av dina nycklar kan öppna det här meddelandet"
+
+#: src/frontend/src/components/MessageSecurity.vue:76
+msgid "This encrypted message is too large to decrypt"
+msgstr "Det här krypterade meddelandet är för stort för att dekrypteras"
+
+#: src/frontend/src/components/MessageSecurity.vue:77
+msgid "This encrypted message could not be decrypted"
+msgstr "Det här krypterade meddelandet kunde inte dekrypteras"
+
+#: src/frontend/src/components/MessageSecurity.vue:83
+msgid "Only you and the other recipients can read it."
+msgstr "Bara du och de andra mottagarna kan läsa det."
+
+#: src/frontend/src/components/MessageSecurity.vue:84
+msgid "Enter your passphrase to read it. Your key stays unlocked for 30 minutes after you last use it."
+msgstr "Ange din lösenfras för att läsa det. Nyckeln förblir upplåst i 30 minuter efter att du senast använde den."
+
+#: src/frontend/src/components/MessageSecurity.vue:85
+msgid "It was encrypted for a key you have not imported. Import the private key under Settings → Encryption."
+msgstr "Det krypterades för en nyckel som du inte har importerat. Importera den privata nyckeln under Inställningar → Kryptering."
+
+#: src/frontend/src/components/MessageSecurity.vue:86
+msgid "Download the message (.eml) and open it in a mail program that has your key."
+msgstr "Ladda ned meddelandet (.eml) och öppna det i ett e-postprogram som har din nyckel."
+
+#: src/frontend/src/components/MessageSecurity.vue:87
+msgid "The encrypted data is damaged or uses a method that is not supported."
+msgstr "Den krypterade datan är skadad eller använder en metod som inte stöds."
+
+#: src/frontend/src/components/MessageSecurity.vue:96
+msgid "an unknown signer"
+msgstr "en okänd undertecknare"
+
+#: src/frontend/src/components/MessageSecurity.vue:118
+msgid "Signed by {signer} ({kind})"
+msgstr "Signerat av {signer} ({kind})"
+
+#: src/frontend/src/components/MessageSecurity.vue:119
+msgid "Signed by {signer}, but the certificate is not trusted"
+msgstr "Signerat av {signer}, men certifikatet är inte betrott"
+
+#: src/frontend/src/components/MessageSecurity.vue:120
+msgid "Signed with {kind}, by a key you do not have"
+msgstr "Signerat med {kind}, av en nyckel som du inte har"
+
+#: src/frontend/src/components/MessageSecurity.vue:121
+msgid "Signed with {kind}"
+msgstr "Signerat med {kind}"
+
+#: src/frontend/src/components/MessageSecurity.vue:122
+msgid "The signature is not valid"
+msgstr "Signaturen är inte giltig"
+
+#: src/frontend/src/components/MessageSecurity.vue:129
+msgid "The message has not been changed since it was signed."
+msgstr "Meddelandet har inte ändrats sedan det signerades."
+
+#: src/frontend/src/components/MessageSecurity.vue:130
+msgid "The signature is intact, but the key does not belong to the sender's address."
+msgstr "Signaturen är intakt, men nyckeln hör inte till avsändarens adress."
+
+#: src/frontend/src/components/MessageSecurity.vue:132
+msgid "The message is unchanged, but its certificate could not be checked: {reason}"
+msgstr "Meddelandet är oförändrat, men dess certifikat kunde inte kontrolleras: {reason}"
+
+#: src/frontend/src/components/MessageSecurity.vue:133
+msgid "The message is unchanged, but its certificate was not issued by an authority this server trusts."
+msgstr "Meddelandet är oförändrat, men dess certifikat har inte utfärdats av en utfärdare som den här servern litar på."
+
+#: src/frontend/src/components/MessageSecurity.vue:135
+msgid "Import the sender's public key (key ID {keyId}) to check it."
+msgstr "Importera avsändarens publika nyckel (nyckel-id {keyId}) för att kontrollera den."
+
+#: src/frontend/src/components/MessageSecurity.vue:136
+msgid "Import the sender's public key to check it."
+msgstr "Importera avsändarens publika nyckel för att kontrollera den."
+
+#: src/frontend/src/components/MessageSecurity.vue:137
+msgid "The message is too large to check its signature here."
+msgstr "Meddelandet är för stort för att dess signatur ska kunna kontrolleras här."
+
+#: src/frontend/src/components/MessageSecurity.vue:138
+msgid "The message may have been changed after it was signed. Be careful with what it asks."
+msgstr "Meddelandet kan ha ändrats efter att det signerades. Var försiktig med det som det ber om."
+
+#: src/frontend/src/components/MessageSourceDialog.vue:3
+msgid "Message headers"
+msgstr "Meddelandehuvuden"
+
+#: src/frontend/src/components/MessageSourceDialog.vue:3
+msgid "Message source"
+msgstr "Meddelandets källa"
+
+#: src/frontend/src/components/MessageSourceDialog.vue:20
+msgid "Showing the first {shown} of {size}. Download the message to see all of it."
+msgstr "Visar de första {shown} av {size}. Ladda ned meddelandet för att se allt."
+
+#: src/frontend/src/components/MessageSourceDialog.vue:100
+msgid "Copied the part that is shown"
+msgstr "Den visade delen kopierades"
+
+#: src/frontend/src/components/MessageSourceDialog.vue:101
+msgid "Copied to the clipboard"
+msgstr "Kopierat till urklipp"
+
+#: src/frontend/src/components/MessageSourceDialog.vue:103
+msgid "Could not copy to the clipboard"
+msgstr "Det gick inte att kopiera till urklipp"
+
+#: src/frontend/src/components/MessageSourceDialog.vue:116
+msgid "Download .eml"
+msgstr "Ladda ned .eml"
+
+#: src/frontend/src/components/MessageSourceDialog.vue:117
+msgid "Copy"
+msgstr "Kopiera"
+
+#: src/frontend/src/components/MessageView.vue:13
+#: src/frontend/src/components/MessageView.vue:14
+#: src/frontend/src/components/ScheduledView.vue:15
+#: src/frontend/src/components/ScheduledView.vue:16
+msgid "Back to the list"
+msgstr "Tillbaka till listan"
+
+#: src/frontend/src/components/MoveDialog.vue:3
+msgid "Move message"
+msgid_plural "Move {count} messages"
+msgstr[0] "Flytta meddelandet"
+msgstr[1] "Flytta {count} meddelanden"
+
+#: src/frontend/src/components/MoveDialog.vue:9
+msgid "Find folder"
+msgstr "Hitta mapp"
+
+#: src/frontend/src/components/MoveDialog.vue:11
+msgid "Target folder"
+msgstr "Målmapp"
+
+#: src/frontend/src/components/MoveDialog.vue:21
+msgid "No matching folder"
+msgstr "Ingen matchande mapp"
+
+#: src/frontend/src/components/MoveDialog.vue:52
+msgid "Move"
+msgstr "Flytta"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:10
+msgid "Suspicious senders"
+msgstr "Misstänkta avsändare"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:16
+msgid "Warn about newly registered sender domains"
+msgstr "Varna för nyregistrerade avsändardomäner"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:19
+msgid "Asks the domain registry (RDAP) when an unfamiliar sender’s domain was registered. The registries learn which domains your users receive mail from, not who receives it."
+msgstr "Frågar domänregistret (RDAP) när en okänd avsändares domän registrerades. Registren får veta vilka domäner dina användare får e-post från, inte vem som tar emot den."
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:27
+msgid "Offer the Nextcloud Assistant in mail"
+msgstr "Erbjud Nextcloud Assistent i e-posten"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:30
+msgid "Users can have messages and conversations summarized, translated and checked for scams, and get help writing and rewriting. Only when they ask, the text goes to the AI provider set up for the Nextcloud Assistant (Administration settings → Artificial intelligence). Nothing is offered while no provider is set up."
+msgstr "Användarna kan låta sammanfatta, översätta och bedrägerikontrollera meddelanden och konversationer, och få hjälp att skriva och skriva om. Texten skickas till den AI-leverantör som har ställts in för Nextcloud Assistent (Administrationsinställningar → Artificiell intelligens) bara när de ber om det. Inget erbjuds så länge ingen leverantör är inställd."
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:32
+msgid "Sign-in providers"
+msgstr "Inloggningsleverantörer"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:34
+msgid "Let users add Google and Microsoft accounts by signing in, instead of typing app passwords. Register Sockless Mail as a web application with the provider, allow this callback URL, and enter the client id and secret here."
+msgstr "Låt användarna lägga till Google- och Microsoft-konton genom att logga in, i stället för att skriva in applösenord. Registrera Sockless Mail som en webbapplikation hos leverantören, tillåt den här återanrops-URL:en och ange klient-id och hemlighet här."
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:37
+msgid "Callback URL to register"
+msgstr "Återanrops-URL att registrera"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:51
+msgid "enabled"
+msgstr "aktiverad"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:51
+msgid "not set up"
+msgstr "inte inställd"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:54
+msgid "Client id"
+msgstr "Klient-id"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:56
+msgid "Leave empty and save to turn this provider off."
+msgstr "Lämna tomt och spara för att stänga av den här leverantören."
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:59
+msgid "Client secret"
+msgstr "Klienthemlighet"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:62
+msgid "Stored encrypted. Leave empty to keep it."
+msgstr "Sparas krypterad. Lämna tomt för att behålla den."
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:66
+msgid "Tenant"
+msgstr "Klientorganisation"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:68
+msgid "“common” for work and personal accounts, “organizations”, “consumers”, or your tenant id."
+msgstr "”common” för jobb- och privatkonton, ”organizations”, ”consumers” eller ditt klientorganisations-id."
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:71
+msgid "Callback URL"
+msgstr "Återanrops-URL"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:73
+msgid "Exactly as registered with the provider."
+msgstr "Exakt som den är registrerad hos leverantören."
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:80
+msgid "Save {provider}"
+msgstr "Spara {provider}"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:124
+#: src/frontend/src/components/OAuthSettingsDialog.vue:161
+msgid "Could not save: {error}"
+msgstr "Det gick inte att spara: {error}"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:155
+msgid "{provider} sign-in saved"
+msgstr "Inloggning med {provider} sparades"
+
+#: src/frontend/src/components/OAuthSettingsDialog.vue:156
+msgid "{provider} sign-in turned off"
+msgstr "Inloggning med {provider} stängdes av"
+
+#: src/frontend/src/components/RecipientInput.vue:4
+msgid "{field} recipients"
+msgstr "{field}-mottagare"
+
+#: src/frontend/src/components/RecipientInput.vue:30
+msgid "Suggestions"
+msgstr "Förslag"
+
+#: src/frontend/src/components/RecipientInput.vue:42
+msgid "Group, {count} member"
+msgid_plural "Group, {count} members"
+msgstr[0] "Grupp, {count} medlem"
+msgstr[1] "Grupp, {count} medlemmar"
+
+#: src/frontend/src/components/RecipientInput.vue:49
+msgid "In {book}"
+msgstr "I {book}"
+
+#: src/frontend/src/components/ReplyGuardDialog.vue:4
+msgid "There are newer messages"
+msgstr "Det finns nyare meddelanden"
+
+#: src/frontend/src/components/ReplyGuardDialog.vue:4
+msgid "Some people are not in this reply"
+msgstr "Vissa personer finns inte med i det här svaret"
+
+#: src/frontend/src/components/ReplyGuardDialog.vue:10
+msgid "{count} message in this conversation came after the one you are answering, from {people}."
+msgid_plural "{count} messages in this conversation came after the one you are answering, from {people}."
+msgstr[0] "{count} meddelande i den här konversationen kom efter det du svarar på, från {people}."
+msgstr[1] "{count} meddelanden i den här konversationen kom efter det du svarar på, från {people}."
+
+#: src/frontend/src/components/ReplyGuardDialog.vue:18
+msgid "Earlier in the conversation, {people} took part, but they would not get this reply."
+msgstr "Tidigare i konversationen deltog {people}, men de skulle inte få det här svaret."
+
+#: src/frontend/src/components/ReplyGuardDialog.vue:21
+msgid "Add them back to Cc"
+msgstr "Lägg tillbaka dem som kopia"
+
+#: src/frontend/src/components/ReplyGuardDialog.vue:61
+msgid "Show them"
+msgstr "Visa dem"
+
+#: src/frontend/src/components/ReplyGuardDialog.vue:65
+msgid "Reply anyway"
+msgstr "Svara ändå"
+
+#: src/frontend/src/components/ReplyGuardDialog.vue:70
+msgid "Reply to the latest"
+msgstr "Svara på det senaste"
+
+#: src/frontend/src/components/RichEditor.vue:3
+msgid "Formatting"
+msgstr "Formatering"
+
+#: src/frontend/src/components/RichEditor.vue:5
+msgid "Paragraph style"
+msgstr "Styckeformat"
+
+#: src/frontend/src/components/RichEditor.vue:9
+msgid "Normal"
+msgstr "Normal"
+
+#: src/frontend/src/components/RichEditor.vue:12
+msgid "Heading {level}"
+msgstr "Rubrik {level}"
+
+#: src/frontend/src/components/RichEditor.vue:16
+msgid "Font"
+msgstr "Typsnitt"
+
+#: src/frontend/src/components/RichEditor.vue:24
+msgid "Font size"
+msgstr "Teckenstorlek"
+
+#: src/frontend/src/components/RichEditor.vue:28
+#: src/frontend/src/store/rules.js:113
+msgid "Size"
+msgstr "Storlek"
+
+#: src/frontend/src/components/RichEditor.vue:48
+#: src/frontend/src/components/RichEditor.vue:49
+#: src/frontend/src/components/RichEditor.vue:63
+msgid "Text colour"
+msgstr "Textfärg"
+
+#: src/frontend/src/components/RichEditor.vue:57
+#: src/frontend/src/components/RichEditor.vue:58
+#: src/frontend/src/components/RichEditor.vue:63
+msgid "Highlight"
+msgstr "Markera med färg"
+
+#: src/frontend/src/components/RichEditor.vue:92
+#: src/frontend/src/components/RichEditor.vue:93
+msgid "Link"
+msgstr "Länk"
+
+#: src/frontend/src/components/RichEditor.vue:103
+msgid "Link address"
+msgstr "Länkadress"
+
+#: src/frontend/src/components/RichEditor.vue:106
+#: src/frontend/src/components/RichEditor.vue:176
+#: src/frontend/src/components/RulesDialog.vue:547
+msgid "Apply"
+msgstr "Verkställ"
+
+#: src/frontend/src/components/RichEditor.vue:107
+msgid "Remove"
+msgstr "Ta bort"
+
+#: src/frontend/src/components/RichEditor.vue:113
+#: src/frontend/src/components/RichEditor.vue:114
+msgid "Insert image"
+msgstr "Infoga bild"
+
+#: src/frontend/src/components/RichEditor.vue:122
+msgid "From this device"
+msgstr "Från den här enheten"
+
+#: src/frontend/src/components/RichEditor.vue:128
+msgid "From Files"
+msgstr "Från Filer"
+
+#: src/frontend/src/components/RichEditor.vue:139
+#: src/frontend/src/components/RichEditor.vue:140
+msgid "Clear formatting"
+msgstr "Rensa formatering"
+
+#: src/frontend/src/components/RichEditor.vue:147
+#: src/frontend/src/components/RichEditor.vue:148
+msgid "Undo"
+msgstr "Ångra"
+
+#: src/frontend/src/components/RichEditor.vue:155
+#: src/frontend/src/components/RichEditor.vue:156
+msgid "Redo"
+msgstr "Gör om"
+
+#: src/frontend/src/components/RichEditor.vue:168
+msgid "Image"
+msgstr "Bild"
+
+#: src/frontend/src/components/RichEditor.vue:173
+msgid "Description for people who cannot see the image"
+msgstr "Beskrivning för den som inte kan se bilden"
+
+#: src/frontend/src/components/RichEditor.vue:174
+msgid "Describe the image"
+msgstr "Beskriv bilden"
+
+#: src/frontend/src/components/RichEditor.vue:192
+msgid "The image was made smaller to keep the message small. Send it as it was instead."
+msgstr "Bilden gjordes mindre för att hålla meddelandet litet. Skicka den som den var i stället."
+
+#: src/frontend/src/components/RichEditor.vue:194
+msgid "Full quality"
+msgstr "Full kvalitet"
+
+#: src/frontend/src/components/RichEditor.vue:198
+#: src/frontend/src/components/RichEditor.vue:199
+msgid "Alternative text"
+msgstr "Alternativtext"
+
+#: src/frontend/src/components/RichEditor.vue:206
+#: src/frontend/src/components/RichEditor.vue:207
+msgid "Remove image"
+msgstr "Ta bort bild"
+
+#: src/frontend/src/components/RichEditor.vue:254
+msgid "Default font"
+msgstr "Standardtypsnitt"
+
+#: src/frontend/src/components/RichEditor.vue:263
+msgid "Black"
+msgstr "Svart"
+
+#: src/frontend/src/components/RichEditor.vue:264
+#: src/frontend/src/components/RichEditor.vue:277
+msgid "Grey"
+msgstr "Grå"
+
+#: src/frontend/src/components/RichEditor.vue:265
+msgid "Red"
+msgstr "Röd"
+
+#: src/frontend/src/components/RichEditor.vue:266
+msgid "Orange"
+msgstr "Orange"
+
+#: src/frontend/src/components/RichEditor.vue:267
+#: src/frontend/src/components/RichEditor.vue:274
+msgid "Green"
+msgstr "Grön"
+
+#: src/frontend/src/components/RichEditor.vue:268
+msgid "Teal"
+msgstr "Blågrön"
+
+#: src/frontend/src/components/RichEditor.vue:269
+#: src/frontend/src/components/RichEditor.vue:275
+msgid "Blue"
+msgstr "Blå"
+
+#: src/frontend/src/components/RichEditor.vue:270
+msgid "Purple"
+msgstr "Lila"
+
+#: src/frontend/src/components/RichEditor.vue:273
+msgid "Yellow"
+msgstr "Gul"
+
+#: src/frontend/src/components/RichEditor.vue:276
+msgid "Pink"
+msgstr "Rosa"
+
+#: src/frontend/src/components/RichEditor.vue:371
+msgid "Bold"
+msgstr "Fetstil"
+
+#: src/frontend/src/components/RichEditor.vue:372
+msgid "Italic"
+msgstr "Kursiv"
+
+#: src/frontend/src/components/RichEditor.vue:373
+msgid "Underline"
+msgstr "Understrykning"
+
+#: src/frontend/src/components/RichEditor.vue:374
+msgid "Strikethrough"
+msgstr "Genomstrykning"
+
+#: src/frontend/src/components/RichEditor.vue:378
+msgid "Bulleted list"
+msgstr "Punktlista"
+
+#: src/frontend/src/components/RichEditor.vue:379
+msgid "Numbered list"
+msgstr "Numrerad lista"
+
+#: src/frontend/src/components/RichEditor.vue:380
+msgid "Quote"
+msgstr "Citat"
+
+#: src/frontend/src/components/RichEditor.vue:381
+msgid "Align left"
+msgstr "Vänsterjustera"
+
+#: src/frontend/src/components/RichEditor.vue:382
+msgid "Center"
+msgstr "Centrera"
+
+#: src/frontend/src/components/RichEditor.vue:383
+msgid "Align right"
+msgstr "Högerjustera"
+
+#: src/frontend/src/components/RichEditor.vue:559
+#: src/frontend/src/components/RichEditor.vue:759
+msgid "Could not upload {name}: {error}"
+msgstr "Det gick inte att ladda upp {name}: {error}"
+
+#: src/frontend/src/components/RichEditor.vue:638
+msgid "{count} image of the pasted content could not be added."
+msgid_plural "{count} images of the pasted content could not be added."
+msgstr[0] "{count} bild i det inklistrade innehållet kunde inte läggas till."
+msgstr[1] "{count} bilder i det inklistrade innehållet kunde inte läggas till."
+
+#: src/frontend/src/components/RichEditor.vue:674
+#: src/frontend/src/components/RichEditor.vue:686
+msgid "Could not add {name}: {error}"
+msgstr "Det gick inte att lägga till {name}: {error}"
+
+#: src/frontend/src/components/RichEditor.vue:676
+msgid "it cannot be shown in a message"
+msgstr "den kan inte visas i ett meddelande"
+
+#: src/frontend/src/components/RichEditor.vue:734
+msgid "Small"
+msgstr "Liten"
+
+#: src/frontend/src/components/RichEditor.vue:734
+msgid "200 pixels wide"
+msgstr "200 pixlar bred"
+
+#: src/frontend/src/components/RichEditor.vue:735
+msgid "Medium"
+msgstr "Mellan"
+
+#: src/frontend/src/components/RichEditor.vue:735
+msgid "400 pixels wide"
+msgstr "400 pixlar bred"
+
+#: src/frontend/src/components/RichEditor.vue:736
+msgid "Large"
+msgstr "Stor"
+
+#: src/frontend/src/components/RichEditor.vue:736
+msgid "640 pixels wide"
+msgstr "640 pixlar bred"
+
+#: src/frontend/src/components/RichEditor.vue:737
+msgid "Fit"
+msgstr "Anpassa"
+
+#: src/frontend/src/components/RichEditor.vue:737
+msgid "As large as it is, at most as wide as the message"
+msgstr "Så stor som den är, högst lika bred som meddelandet"
+
+#: src/frontend/src/components/RulesDialog.vue:3
+msgid "Rules for {account}"
+msgstr "Regler för {account}"
+
+#: src/frontend/src/components/RulesDialog.vue:16
+msgid "Run \"{name}\" once on messages that are already in a folder. The newest {count} messages are checked."
+msgstr "Kör ”{name}” en gång på meddelanden som redan finns i en mapp. De {count} nyaste meddelandena kontrolleras."
+
+#: src/frontend/src/components/RulesDialog.vue:19
+#: src/frontend/src/components/RulesDialog.vue:212
+msgid "Folder"
+msgstr "Mapp"
+
+#: src/frontend/src/components/RulesDialog.vue:30
+msgid "Find matching messages"
+msgstr "Hitta matchande meddelanden"
+
+#: src/frontend/src/components/RulesDialog.vue:35
+msgid "{matched} of the newest message matches."
+msgid_plural "{matched} of the newest {count} messages match."
+msgstr[0] "{matched} av det nyaste meddelandet matchar."
+msgstr[1] "{matched} av de {count} nyaste meddelandena matchar."
+
+#: src/frontend/src/components/RulesDialog.vue:44
+msgid "and {count} more"
+msgstr "och {count} till"
+
+#: src/frontend/src/components/RulesDialog.vue:53
+msgid "Rules sort new mail arriving in the inbox, also while Sockless Mail is closed. They run from top to bottom."
+msgstr "Regler sorterar ny e-post som kommer till inkorgen, även när Sockless Mail är stängt. De körs uppifrån och ned."
+
+#: src/frontend/src/components/RulesDialog.vue:56
+msgid "No rules yet."
+msgstr "Inga regler än."
+
+#: src/frontend/src/components/RulesDialog.vue:69
+msgid "Drag to reorder"
+msgstr "Dra för att ändra ordning"
+
+#: src/frontend/src/components/RulesDialog.vue:76
+msgid "Enable {name}"
+msgstr "Aktivera {name}"
+
+#: src/frontend/src/components/RulesDialog.vue:87
+#: src/frontend/src/components/SettingsDialog.vue:137
+msgid "Actions for {name}"
+msgstr "Åtgärder för {name}"
+
+#: src/frontend/src/components/RulesDialog.vue:92
+#: src/frontend/src/components/ScheduledView.vue:80
+msgid "Edit"
+msgstr "Redigera"
+
+#: src/frontend/src/components/RulesDialog.vue:98
+msgid "Run on existing messages…"
+msgstr "Kör på befintliga meddelanden …"
+
+#: src/frontend/src/components/RulesDialog.vue:132
+msgid "When a new message"
+msgstr "När ett nytt meddelande"
+
+#: src/frontend/src/components/RulesDialog.vue:135
+msgid "matches all conditions"
+msgstr "matchar alla villkor"
+
+#: src/frontend/src/components/RulesDialog.vue:138
+msgid "matches any condition"
+msgstr "matchar något villkor"
+
+#: src/frontend/src/components/RulesDialog.vue:143
+msgid "Field"
+msgstr "Fält"
+
+#: src/frontend/src/components/RulesDialog.vue:153
+msgid "Header name"
+msgstr "Namn på huvud"
+
+#: src/frontend/src/components/RulesDialog.vue:154
+msgid "List-Id"
+msgstr "List-Id"
+
+#: src/frontend/src/components/RulesDialog.vue:155
+msgid "Comparison"
+msgstr "Jämförelse"
+
+#: src/frontend/src/components/RulesDialog.vue:166
+msgid "Size in KB"
+msgstr "Storlek i KB"
+
+#: src/frontend/src/components/RulesDialog.vue:168
+msgid "KB"
+msgstr "KB"
+
+#: src/frontend/src/components/RulesDialog.vue:174
+msgid "Value"
+msgstr "Värde"
+
+#: src/frontend/src/components/RulesDialog.vue:175
+msgid "Regular expression"
+msgstr "Reguljärt uttryck"
+
+#: src/frontend/src/components/RulesDialog.vue:178
+#: src/frontend/src/components/RulesDialog.vue:179
+msgid "Remove condition"
+msgstr "Ta bort villkor"
+
+#: src/frontend/src/components/RulesDialog.vue:196
+msgid "Add condition"
+msgstr "Lägg till villkor"
+
+#: src/frontend/src/components/RulesDialog.vue:201
+msgid "Do this"
+msgstr "Gör så här"
+
+#: src/frontend/src/components/RulesDialog.vue:203
+msgid "Action"
+msgstr "Åtgärd"
+
+#: src/frontend/src/components/RulesDialog.vue:217
+msgid "{folder} (not found)"
+msgstr "{folder} (hittades inte)"
+
+#: src/frontend/src/components/RulesDialog.vue:229
+msgid "Choose a tag"
+msgstr "Välj en tagg"
+
+#: src/frontend/src/components/RulesDialog.vue:232
+#: src/frontend/src/store/rules.js:186
+msgid "(deleted tag)"
+msgstr "(borttagen tagg)"
+
+#: src/frontend/src/components/RulesDialog.vue:239
+msgid "Create a tag…"
+msgstr "Skapa en tagg …"
+
+#: src/frontend/src/components/RulesDialog.vue:243
+#: src/frontend/src/components/RulesDialog.vue:244
+msgid "Remove action"
+msgstr "Ta bort åtgärd"
+
+#: src/frontend/src/components/RulesDialog.vue:261
+msgid "Add action"
+msgstr "Lägg till åtgärd"
+
+#: src/frontend/src/components/RulesDialog.vue:264
+msgid "Then stop: do not run later rules on the message"
+msgstr "Stoppa sedan: kör inte senare regler på meddelandet"
+
+#: src/frontend/src/components/RulesDialog.vue:267
+msgid "A rule that moves the message is always the last one to run on it."
+msgstr "En regel som flyttar meddelandet är alltid den sista som körs på det."
+
+#: src/frontend/src/components/RulesDialog.vue:272
+msgid "Enabled"
+msgstr "Aktiverad"
+
+#: src/frontend/src/components/RulesDialog.vue:281
+msgid "Test on recent inbox messages"
+msgstr "Testa på de senaste meddelandena i inkorgen"
+
+#: src/frontend/src/components/RulesDialog.vue:285
+msgid "Matches {matched} of the newest message."
+msgid_plural "Matches {matched} of the newest {count} messages."
+msgstr[0] "Matchar {matched} av det nyaste meddelandet."
+msgstr[1] "Matchar {matched} av de {count} nyaste meddelandena."
+
+#: src/frontend/src/components/RulesDialog.vue:359
+msgid "Could not load the rules: {error}"
+msgstr "Det gick inte att läsa in reglerna: {error}"
+
+#: src/frontend/src/components/RulesDialog.vue:405
+msgid "Could not save the rules: {error}"
+msgstr "Det gick inte att spara reglerna: {error}"
+
+#: src/frontend/src/components/RulesDialog.vue:442
+msgid "No matches yet"
+msgstr "Inga träffar än"
+
+#: src/frontend/src/components/RulesDialog.vue:445
+msgid "Matched {count} message, last on {date}"
+msgid_plural "Matched {count} messages, last on {date}"
+msgstr[0] "Matchade {count} meddelande, senast {date}"
+msgstr[1] "Matchade {count} meddelanden, senast {date}"
+
+#: src/frontend/src/components/RulesDialog.vue:472
+msgid "\"{name}\" was applied to {count} message"
+msgid_plural "\"{name}\" was applied to {count} messages"
+msgstr[0] "”{name}” tillämpades på {count} meddelande"
+msgstr[1] "”{name}” tillämpades på {count} meddelanden"
+
+#: src/frontend/src/components/RulesDialog.vue:538
+#: src/frontend/src/components/RulesDialog.vue:571
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:71
+msgid "Back"
+msgstr "Tillbaka"
+
+#: src/frontend/src/components/RulesDialog.vue:546
+msgid "Apply to {count} message"
+msgid_plural "Apply to {count} messages"
+msgstr[0] "Tillämpa på {count} meddelande"
+msgstr[1] "Tillämpa på {count} meddelanden"
+
+#: src/frontend/src/components/RulesDialog.vue:560
+msgid "New rule"
+msgstr "Ny regel"
+
+#: src/frontend/src/components/RulesDialog.vue:578
+msgid "Save rule"
+msgstr "Spara regel"
+
+#: src/frontend/src/components/ScheduledFolderRow.vue:11
+#: src/frontend/src/components/ScheduledList.vue:5
+msgid "Scheduled"
+msgstr "Schemalagda"
+
+#: src/frontend/src/components/ScheduledFolderRow.vue:16
+msgid "{count} not sent"
+msgid_plural "{count} not sent"
+msgstr[0] "{count} inte skickat"
+msgstr[1] "{count} inte skickade"
+
+#: src/frontend/src/components/ScheduledList.vue:9
+msgid "Sent by the server at their time, whether or not the app is open."
+msgstr "Skickas av servern vid sin tid, oavsett om appen är öppen eller inte."
+
+#: src/frontend/src/components/ScheduledList.vue:16
+msgid "Nothing scheduled"
+msgstr "Inget schemalagt"
+
+#: src/frontend/src/components/ScheduledList.vue:17
+msgid "Use the clock button next to Send to send a message later."
+msgstr "Använd klockknappen bredvid Skicka för att skicka ett meddelande senare."
+
+#: src/frontend/src/components/ScheduledList.vue:22
+msgid "Scheduled messages"
+msgstr "Schemalagda meddelanden"
+
+#: src/frontend/src/components/ScheduledList.vue:80
+msgid "Not sent"
+msgstr "Inte skickat"
+
+#: src/frontend/src/components/ScheduledList.vue:81
+msgid "Retrying, was due {time}"
+msgstr "Försöker igen, skulle ha skickats {time}"
+
+#: src/frontend/src/components/ScheduledList.vue:82
+msgid "Sending…"
+msgstr "Skickar …"
+
+#: src/frontend/src/components/ScheduledView.vue:24
+msgid "This message was not sent."
+msgstr "Det här meddelandet skickades inte."
+
+#: src/frontend/src/components/ScheduledView.vue:25
+msgid "Try again now, choose a new time, or edit it."
+msgstr "Försök igen nu, välj en ny tid eller redigera det."
+
+#: src/frontend/src/components/ScheduledView.vue:29
+msgid "The last attempt failed: {error} The next attempt is at {time}."
+msgstr "Det senaste försöket misslyckades: {error} Nästa försök sker {time}."
+
+#: src/frontend/src/components/ScheduledView.vue:32
+msgid "Sends {time}"
+msgstr "Skickas {time}"
+
+#: src/frontend/src/components/ScheduledView.vue:50
+msgid "Try again now"
+msgstr "Försök igen nu"
+
+#: src/frontend/src/components/ScheduledView.vue:50
+msgid "Send now"
+msgstr "Skicka nu"
+
+#: src/frontend/src/components/ScheduledView.vue:54
+msgid "Reschedule"
+msgstr "Schemalägg om"
+
+#: src/frontend/src/components/ScheduledView.vue:86
+#: src/frontend/src/components/ScheduledView.vue:230
+msgid "Cancel sending"
+msgstr "Avbryt sändningen"
+
+#: src/frontend/src/components/ScheduledView.vue:113
+msgid "Cancel sending?"
+msgstr "Avbryta sändningen?"
+
+#: src/frontend/src/components/ScheduledView.vue:114
+msgid "The message is not sent. It goes back to Drafts, where you can continue it."
+msgstr "Meddelandet skickas inte. Det flyttas tillbaka till Utkast, där du kan fortsätta skriva det."
+
+#: src/frontend/src/components/ScheduledView.vue:191
+msgid "The message is back in Drafts. Open it there to continue."
+msgstr "Meddelandet är tillbaka i Utkast. Öppna det där för att fortsätta."
+
+#: src/frontend/src/components/ScheduledView.vue:223
+msgid "Not sent. The message is back in Drafts."
+msgstr "Inte skickat. Meddelandet är tillbaka i Utkast."
+
+#: src/frontend/src/components/ScheduledView.vue:229
+msgid "Keep it scheduled"
+msgstr "Behåll det schemalagt"
+
+#: src/frontend/src/components/SendLaterDialog.vue:12
+msgid "Date and time"
+msgstr "Datum och tid"
+
+#: src/frontend/src/components/SendLaterDialog.vue:15
+msgid "Sent by the server: you can close the browser meanwhile. Time zone: {zone}"
+msgstr "Skickas av servern: du kan stänga webbläsaren under tiden. Tidszon: {zone}"
+
+#: src/frontend/src/components/SendLaterDialog.vue:50
+msgid "Choose a date and a time."
+msgstr "Välj ett datum och en tid."
+
+#: src/frontend/src/components/SendLaterDialog.vue:53
+msgid "Choose a time at least a few minutes from now."
+msgstr "Välj en tid minst några minuter fram i tiden."
+
+#: src/frontend/src/components/SendLaterDialog.vue:67
+msgid "Schedule"
+msgstr "Schemalägg"
+
+#: src/frontend/src/components/SendLaterDialog.vue:67
+msgid "Send {time}"
+msgstr "Skicka {time}"
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:16
+msgid "When"
+msgstr "När"
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:22
+#: src/frontend/src/components/TaskDialog.vue:103
+msgid "Tomorrow"
+msgstr "I morgon"
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:25
+msgid "Next weekday"
+msgstr "Nästa veckodag"
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:28
+msgid "Hours from now"
+msgstr "Timmar från nu"
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:31
+msgid "Day of the week"
+msgstr "Veckodag"
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:42
+msgid "Hours"
+msgstr "Timmar"
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:43
+msgid "hours"
+msgstr "timmar"
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:46
+msgid "at"
+msgstr "kl."
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:54
+msgid "Offer it on"
+msgstr "Erbjud det på"
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:82
+msgid "Offered in the Send later menu, in this order. Times are in your time zone."
+msgstr "Erbjuds i menyn Skicka senare, i den här ordningen. Tiderna är i din tidszon."
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:84
+msgid "These are the built-in presets."
+msgstr "Det här är de inbyggda förvalen."
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:86
+msgid "No presets: Send later offers only \"Pick date and time\"."
+msgstr "Inga förval: Skicka senare erbjuder bara ”Välj datum och tid”."
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:104
+msgid "Edit {name}"
+msgstr "Redigera {name}"
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:109
+msgid "Delete {name}"
+msgstr "Ta bort {name}"
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:120
+msgid "Add preset"
+msgstr "Lägg till förval"
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:215
+msgid "Offered now as {time}."
+msgstr "Erbjuds nu som {time}."
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:216
+msgid "Not offered right now."
+msgstr "Erbjuds inte just nu."
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:223
+msgid "Give the preset a name."
+msgstr "Ge förvalet ett namn."
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:227
+#: src/SocklessMail.Api/Scheduling/SendLaterPresets.cs:105
+msgid "Choose between 1 and {max} hours."
+msgstr "Välj mellan 1 och {max} timmar."
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:228
+msgid "Choose a time."
+msgstr "Välj en tid."
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:259
+msgid "Presets saved"
+msgstr "Förvalen sparades"
+
+#: src/frontend/src/components/SendLaterPresetsDialog.vue:269
+msgid "Restore defaults"
+msgstr "Återställ standardvärden"
+
+#: src/frontend/src/components/ServerFields.vue:7
+msgid "Server"
+msgstr "Server"
+
+#: src/frontend/src/components/ServerFields.vue:15
+msgid "Port"
+msgstr "Port"
+
+#: src/frontend/src/components/ServerFields.vue:20
+msgid "Security"
+msgstr "Säkerhet"
+
+#: src/frontend/src/components/ServerFields.vue:24
+msgid "None (unencrypted)"
+msgstr "Ingen (okrypterad)"
+
+#: src/frontend/src/components/SettingsDialog.vue:5
+msgid "Writing"
+msgstr "Skriva"
+
+#: src/frontend/src/components/SettingsDialog.vue:7
+msgid "Open new messages, replies and forwards"
+msgstr "Öppna nya meddelanden, svar och vidarebefordringar"
+
+#: src/frontend/src/components/SettingsDialog.vue:17
+msgid "If the browser blocks the window, allow pop-ups for this site. Meanwhile messages open large."
+msgstr "Om webbläsaren blockerar fönstret, tillåt popup-fönster för den här webbplatsen. Under tiden öppnas meddelanden i stort format."
+
+#: src/frontend/src/components/SettingsDialog.vue:22
+msgid "When closing a message you are writing"
+msgstr "När du stänger ett meddelande du skriver"
+
+#: src/frontend/src/components/SettingsDialog.vue:33
+msgid "A message with nothing written or attached always just closes."
+msgstr "Ett meddelande utan text eller bilagor stängs alltid direkt."
+
+#: src/frontend/src/components/SettingsDialog.vue:38
+msgid "Write new messages in"
+msgstr "Skriv nya meddelanden i"
+
+#: src/frontend/src/components/SettingsDialog.vue:50
+#: src/frontend/src/components/SettingsDialog.vue:134
+msgid "Notifications"
+msgstr "Aviseringar"
+
+#: src/frontend/src/components/SettingsDialog.vue:55
+msgid "Show desktop notifications for new mail on this device"
+msgstr "Visa skrivbordsaviseringar för ny e-post på den här enheten"
+
+#: src/frontend/src/components/SettingsDialog.vue:61
+msgid "Send a test notification"
+msgstr "Skicka en testavisering"
+
+#: src/frontend/src/components/SettingsDialog.vue:64
+msgid "This browser cannot show notifications."
+msgstr "Den här webbläsaren kan inte visa aviseringar."
+
+#: src/frontend/src/components/SettingsDialog.vue:67
+msgid "Notifications are blocked for this site. Allow them in the browser's site settings, then turn this on."
+msgstr "Aviseringar är blockerade för den här webbplatsen. Tillåt dem i webbläsarens webbplatsinställningar och slå sedan på detta."
+
+#: src/frontend/src/components/SettingsDialog.vue:70
+msgid "New mail is announced over a push connection, which needs Nextcloud's HaRP proxy. Ask your administrator."
+msgstr "Ny e-post meddelas över en push-anslutning, som kräver Nextclouds HaRP-proxy. Fråga din administratör."
+
+#: src/frontend/src/components/SettingsDialog.vue:73
+msgid "For unread mail arriving in an inbox, while Mail is open in a tab or as an installed app. Accounts can be left out below."
+msgstr "För oläst e-post som kommer till en inkorg, medan E-post är öppet i en flik eller som installerad app. Konton kan uteslutas nedan."
+
+#: src/frontend/src/components/SettingsDialog.vue:76
+msgid "Number on the app icon and in the tab title"
+msgstr "Antal på appikonen och i flikens titel"
+
+#: src/frontend/src/components/SettingsDialog.vue:87
+msgid "The inboxes in All accounts are counted. The icon shows it once Sockless Mail is installed as an app: open it from the app menu and choose Install in the browser's address bar or menu."
+msgstr "Inkorgarna i Alla konton räknas. Ikonen visar det när Sockless Mail är installerad som app: öppna den från appmenyn och välj Installera i webbläsarens adressfält eller meny."
+
+#: src/frontend/src/components/SettingsDialog.vue:96
+msgid "Drag accounts to change their order. Accounts left out of All accounts keep their own folders. Conversations group each message with its replies, wherever they are kept."
+msgstr "Dra konton för att ändra deras ordning. Konton som utesluts ur Alla konton behåller sina egna mappar. Konversationer grupperar varje meddelande med dess svar, var de än sparas."
+
+#: src/frontend/src/components/SettingsDialog.vue:118
+msgid "Show {name} in All accounts"
+msgstr "Visa {name} i Alla konton"
+
+#: src/frontend/src/components/SettingsDialog.vue:120
+msgid "In All accounts"
+msgstr "I Alla konton"
+
+#: src/frontend/src/components/SettingsDialog.vue:125
+msgid "Show the mail of {name} as conversations"
+msgstr "Visa e-posten i {name} som konversationer"
+
+#: src/frontend/src/components/SettingsDialog.vue:127
+msgid "Conversations"
+msgstr "Konversationer"
+
+#: src/frontend/src/components/SettingsDialog.vue:132
+msgid "Show notifications for new mail of {name}"
+msgstr "Visa aviseringar för ny e-post i {name}"
+
+#: src/frontend/src/components/SettingsDialog.vue:161
+msgid "Encryption"
+msgstr "Kryptering"
+
+#: src/frontend/src/components/SettingsDialog.vue:209
+#: src/frontend/src/components/SettingsDialog.vue:220
+#: src/frontend/src/components/SettingsDialog.vue:237
+msgid "Could not save the change: {error}"
+msgstr "Det gick inte att spara ändringen: {error}"
+
+#: src/frontend/src/components/SettingsDialog.vue:228
+msgid "This browser does not show notifications from a page."
+msgstr "Den här webbläsaren visar inte aviseringar från en sida."
+
+#: src/frontend/src/components/SettingsDialog.vue:244
+msgid "New mail since you last looked"
+msgstr "Ny e-post sedan du senast tittade"
+
+#: src/frontend/src/components/SettingsDialog.vue:244
+msgid "Unread mail that arrived while Sockless Mail was not in front, on any device"
+msgstr "Oläst e-post som kom medan Sockless Mail inte var i förgrunden, på valfri enhet"
+
+#: src/frontend/src/components/SettingsDialog.vue:245
+msgid "All unread mail"
+msgstr "All oläst e-post"
+
+#: src/frontend/src/components/SettingsDialog.vue:250
+msgid "Small, docked at the bottom"
+msgstr "Litet, dockat längst ned"
+
+#: src/frontend/src/components/SettingsDialog.vue:251
+msgid "Large, over the mailbox"
+msgstr "Stort, över postlådan"
+
+#: src/frontend/src/components/SettingsDialog.vue:252
+msgid "In a separate window"
+msgstr "I ett separat fönster"
+
+#: src/frontend/src/components/SettingsDialog.vue:256
+msgid "Keep it as a draft"
+msgstr "Behåll det som utkast"
+
+#: src/frontend/src/components/SettingsDialog.vue:256
+msgid "Saved in Drafts, to continue later"
+msgstr "Sparas i Utkast, för att fortsätta senare"
+
+#: src/frontend/src/components/SettingsDialog.vue:257
+msgid "Ask"
+msgstr "Fråga"
+
+#: src/frontend/src/components/SettingsDialog.vue:258
+msgid "Discard it"
+msgstr "Kasta det"
+
+#: src/frontend/src/components/SettingsDialog.vue:258
+msgid "The saved draft is deleted too"
+msgstr "Det sparade utkastet tas också bort"
+
+#: src/frontend/src/components/ShortcutsDialog.vue:11
+msgid "or"
+msgstr "eller"
+
+#: src/frontend/src/components/TagPickerDialog.vue:4
+msgid "Tag {count} message"
+msgid_plural "Tag {count} messages"
+msgstr[0] "Tagga {count} meddelande"
+msgstr[1] "Tagga {count} meddelanden"
+
+#: src/frontend/src/components/TagPickerDialog.vue:11
+msgid "Find or create a tag"
+msgstr "Hitta eller skapa en tagg"
+
+#: src/frontend/src/components/TagPickerDialog.vue:11
+#: src/frontend/src/components/TagsDialog.vue:34
+msgid "New tag"
+msgstr "Ny tagg"
+
+#: src/frontend/src/components/TagPickerDialog.vue:33
+msgid "Create tag \"{name}\""
+msgstr "Skapa taggen ”{name}”"
+
+#: src/frontend/src/components/TagPickerDialog.vue:36
+msgid "No tags yet. Type a name to create one."
+msgstr "Inga taggar än. Skriv ett namn för att skapa en."
+
+#: src/frontend/src/components/TagPickerDialog.vue:76
+msgid "Manage tags…"
+msgstr "Hantera taggar …"
+
+#: src/frontend/src/components/TagPickerDialog.vue:110
+msgid "Could not create the tag: {error}"
+msgstr "Det gick inte att skapa taggen: {error}"
+
+#: src/frontend/src/components/TagsDialog.vue:8
+msgid "Tags work across all accounts. Most mail servers keep them, so other mail programs see them too."
+msgstr "Taggar fungerar i alla konton. De flesta e-postservrar sparar dem, så att andra e-postprogram också ser dem."
+
+#: src/frontend/src/components/TagsDialog.vue:11
+msgid "The mail server of {accounts} keeps no tags; Sockless Mail keeps them for it, so other mail programs do not see them."
+msgid_plural "The mail servers of {accounts} keep no tags; Sockless Mail keeps them for them, so other mail programs do not see them."
+msgstr[0] "E-postservern för {accounts} sparar inga taggar; Sockless Mail sparar dem åt den, så andra e-postprogram ser dem inte."
+msgstr[1] "E-postservrarna för {accounts} sparar inga taggar; Sockless Mail sparar dem åt dem, så andra e-postprogram ser dem inte."
+
+#: src/frontend/src/components/TagsDialog.vue:17
+msgid "Tags of {accounts} are Outlook categories, so Outlook shows them too."
+msgid_plural "Tags of {accounts} are Outlook categories, so Outlook shows them too."
+msgstr[0] "Taggarna för {accounts} är Outlook-kategorier, så Outlook visar dem också."
+msgstr[1] "Taggarna för {accounts} är Outlook-kategorier, så Outlook visar dem också."
+
+#: src/frontend/src/components/TagsDialog.vue:23
+msgid "Sign in to {accounts} again in the account settings to show its tags in Outlook as categories."
+msgid_plural "Sign in to {accounts} again in the account settings to show their tags in Outlook as categories."
+msgstr[0] "Logga in på {accounts} igen i kontoinställningarna för att visa dess taggar som kategorier i Outlook."
+msgstr[1] "Logga in på {accounts} igen i kontoinställningarna för att visa deras taggar som kategorier i Outlook."
+
+#: src/frontend/src/components/TagsDialog.vue:31
+msgid "Color of the new tag"
+msgstr "Färg på den nya taggen"
+
+#: src/frontend/src/components/TagsDialog.vue:46
+msgid "Color of {name}"
+msgstr "Färg på {name}"
+
+#: src/frontend/src/components/TagsDialog.vue:59
+msgid "The keyword the mail server stores"
+msgstr "Nyckelordet som e-postservern sparar"
+
+#: src/frontend/src/components/TagsDialog.vue:66
+msgid "Save name"
+msgstr "Spara namn"
+
+#: src/frontend/src/components/TagsDialog.vue:96
+msgid "No tags yet."
+msgstr "Inga taggar än."
+
+#: src/frontend/src/components/TagsDialog.vue:101
+msgid "Found on your messages"
+msgstr "Hittade på dina meddelanden"
+
+#: src/frontend/src/components/TagsDialog.vue:104
+msgid "Other mail programs (or Outlook) tagged messages with these. Use one as a tag to show it here as well."
+msgstr "Andra e-postprogram (eller Outlook) har taggat meddelanden med dessa. Använd en som tagg för att visa den här också."
+
+#: src/frontend/src/components/TagsDialog.vue:111
+msgid "Outlook category"
+msgstr "Outlook-kategori"
+
+#: src/frontend/src/components/TagsDialog.vue:115
+msgid "Use as tag"
+msgstr "Använd som tagg"
+
+#: src/frontend/src/components/TagsDialog.vue:122
+msgid "Delete {name}?"
+msgstr "Ta bort {name}?"
+
+#: src/frontend/src/components/TagsDialog.vue:127
+msgid "Also remove it from all messages"
+msgstr "Ta även bort den från alla meddelanden"
+
+#: src/frontend/src/components/TagsDialog.vue:131
+msgid "Other mail programs will no longer see the tag either."
+msgstr "Andra e-postprogram kommer inte heller längre att se taggen."
+
+#: src/frontend/src/components/TagsDialog.vue:132
+msgid "Messages keep the keyword on the server; it shows up again under \"Found on your messages\"."
+msgstr "Meddelandena behåller nyckelordet på servern; det dyker upp igen under ”Hittade på dina meddelanden”."
+
+#: src/frontend/src/components/TagsDialog.vue:229
+msgid "Could not change {name}: {error}"
+msgstr "Det gick inte att ändra {name}: {error}"
+
+#: src/frontend/src/components/TagsDialog.vue:240
+msgid "Could not reorder the tags: {error}"
+msgstr "Det gick inte att ändra ordning på taggarna: {error}"
+
+#: src/frontend/src/components/TagsDialog.vue:250
+msgid "Could not add the tag: {error}"
+msgstr "Det gick inte att lägga till taggen: {error}"
+
+#: src/frontend/src/components/TagsDialog.vue:285
+msgid "Could not delete {name}: {error}"
+msgstr "Det gick inte att ta bort {name}: {error}"
+
+#: src/frontend/src/components/TaskDialog.vue:3
+#: src/frontend/src/components/TaskDialog.vue:155
+msgid "Create task"
+msgstr "Skapa uppgift"
+
+#: src/frontend/src/components/TaskDialog.vue:12
+msgid "You have no task list you can add tasks to. Create one in the Tasks app."
+msgstr "Du har ingen uppgiftslista som du kan lägga till uppgifter i. Skapa en i appen Uppgifter."
+
+#: src/frontend/src/components/TaskDialog.vue:15
+msgid "Title"
+msgstr "Titel"
+
+#: src/frontend/src/components/TaskDialog.vue:24
+msgid "Task list"
+msgstr "Uppgiftslista"
+
+#: src/frontend/src/components/TaskDialog.vue:27
+msgid "Due"
+msgstr "Förfaller"
+
+#: src/frontend/src/components/TaskDialog.vue:42
+msgid "Date"
+msgstr "Datum"
+
+#: src/frontend/src/components/TaskDialog.vue:45
+msgid "At a time"
+msgstr "Vid en tid"
+
+#: src/frontend/src/components/TaskDialog.vue:50
+msgid "Time"
+msgstr "Tid"
+
+#: src/frontend/src/components/TaskDialog.vue:58
+msgid "Include the message text in the notes"
+msgstr "Ta med meddelandets text i anteckningarna"
+
+#: src/frontend/src/components/TaskDialog.vue:101
+msgid "No due date"
+msgstr "Inget förfallodatum"
+
+#: src/frontend/src/components/TaskDialog.vue:104
+msgid "Next week"
+msgstr "Nästa vecka"
+
+#: src/frontend/src/components/TaskDialog.vue:105
+msgid "Pick a date"
+msgstr "Välj ett datum"
+
+#: src/frontend/src/components/TaskDialog.vue:170
+msgid "Task created in {list}. Click to open it in Tasks."
+msgstr "Uppgiften skapades i {list}. Klicka för att öppna den i Uppgifter."
+
+#: src/frontend/src/components/TrustedSendersDialog.vue:7
+msgid "Mail from these domains and their subdomains is never marked as suspicious. Domains imitating them still are."
+msgstr "E-post från dessa domäner och deras underdomäner markeras aldrig som misstänkt. Domäner som imiterar dem markeras fortfarande."
+
+#: src/frontend/src/components/TrustedSendersDialog.vue:16
+msgid "No trusted domains yet. Use \"Trust this domain\" on a warning to add one."
+msgstr "Inga betrodda domäner än. Använd ”Lita på den här domänen” i en varning för att lägga till en."
+
+#: src/frontend/src/components/TrustedSendersDialog.vue:22
+#: src/frontend/src/components/TrustedSendersDialog.vue:23
+msgid "Stop trusting {domain}"
+msgstr "Sluta lita på {domain}"
+
+#: src/frontend/src/components/TrustedSendersDialog.vue:55
+msgid "Could not load the trusted domains: {error}"
+msgstr "Det gick inte att läsa in de betrodda domänerna: {error}"
+
+#: src/frontend/src/components/TrustedSendersDialog.vue:66
+msgid "Could not stop trusting {domain}: {error}"
+msgstr "Det gick inte att sluta lita på {domain}: {error}"
+
+#: src/frontend/src/components/UnlockKeyDialog.vue:2
+msgid "Unlock your key"
+msgstr "Lås upp din nyckel"
+
+#: src/frontend/src/components/accountDrag.js:45
+msgid "Could not change the order: {error}"
+msgstr "Det gick inte att ändra ordningen: {error}"
+
+#: src/frontend/src/store/actions.js:51
+msgid "{action} failed: {error}"
+msgstr "{action} misslyckades: {error}"
+
+#: src/frontend/src/store/actions.js:58
+#: src/frontend/src/store/actions.js:104
+msgid "Marking as unread"
+msgstr "Markering som oläst"
+
+#: src/frontend/src/store/actions.js:58
+#: src/frontend/src/store/actions.js:104
+msgid "Marking as read"
+msgstr "Markering som läst"
+
+#: src/frontend/src/store/actions.js:66
+#: src/frontend/src/store/actions.js:80
+#: src/frontend/src/store/actions.js:112
+msgid "Flagging"
+msgstr "Flaggning"
+
+#: src/frontend/src/store/actions.js:80
+msgid "Removing the flag"
+msgstr "Borttagning av flagga"
+
+#: src/frontend/src/store/actions.js:121
+msgid "Tagging"
+msgstr "Taggning"
+
+#: src/frontend/src/store/actions.js:121
+msgid "Removing the tag"
+msgstr "Borttagning av tagg"
+
+#: src/frontend/src/store/actions.js:157
+msgid "Moving"
+msgstr "Flytt"
+
+#: src/frontend/src/store/actions.js:168
+#: src/frontend/src/store/actions.js:177
+msgid "Deleting"
+msgstr "Borttagning"
+
+#: src/frontend/src/store/actions.js:184
+msgid "New subfolder of {name}"
+msgstr "Ny undermapp till {name}"
+
+#: src/frontend/src/store/actions.js:186
+msgid "Create"
+msgstr "Skapa"
+
+#: src/frontend/src/store/actions.js:189
+msgid "Folder {name} created"
+msgstr "Mappen {name} skapades"
+
+#: src/frontend/src/store/actions.js:196
+msgid "Rename {name}"
+msgstr "Byt namn på {name}"
+
+#: src/frontend/src/store/actions.js:225
+msgid "Folder {name} deleted"
+msgstr "Mappen {name} togs bort"
+
+#: src/frontend/src/store/actions.js:227
+msgid "Deleting the folder"
+msgstr "Borttagning av mappen"
+
+#: src/frontend/src/store/assistant.js:32
+msgid "Neutral"
+msgstr "Neutral"
+
+#: src/frontend/src/store/assistant.js:33
+msgid "Friendly"
+msgstr "Vänlig"
+
+#: src/frontend/src/store/assistant.js:34
+msgid "Formal"
+msgstr "Formell"
+
+#: src/frontend/src/store/assistant.js:35
+msgid "Concise"
+msgstr "Koncis"
+
+#: src/frontend/src/store/assistant.js:36
+msgid "Warm"
+msgstr "Varm"
+
+#: src/frontend/src/store/assistant.js:37
+msgid "Apologetic"
+msgstr "Ursäktande"
+
+#: src/frontend/src/store/assistant.js:38
+msgid "Confident"
+msgstr "Självsäker"
+
+#: src/frontend/src/store/assistant.js:39
+msgid "Enthusiastic"
+msgstr "Entusiastisk"
+
+#: src/frontend/src/store/assistant.js:313
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:469
+msgid "The Assistant task no longer exists."
+msgstr "Assistentens uppgift finns inte längre."
+
+#: src/frontend/src/store/compose.js:52
+msgid "Send or discard the message you are writing first."
+msgstr "Skicka eller kasta meddelandet du skriver först."
+
+#: src/frontend/src/store/compose.js:172
+msgid "The message you are answering is encrypted. Unlock your key to quote it."
+msgstr "Meddelandet du svarar på är krypterat. Lås upp din nyckel för att citera det."
+
+#: src/frontend/src/store/compose.js:226
+msgid "This draft is encrypted. Unlock your key to continue it."
+msgstr "Det här utkastet är krypterat. Lås upp din nyckel för att fortsätta med det."
+
+#: src/frontend/src/store/compose.js:535
+msgid "Draft saved in Drafts"
+msgstr "Utkastet sparades i Utkast"
+
+#: src/frontend/src/store/compose.js:567
+#: src/frontend/src/store/scheduled.js:143
+msgid "Message sent"
+msgstr "Meddelandet skickades"
+
+#: src/frontend/src/store/compose.js:585
+msgid "Wait until all attachments and images are uploaded."
+msgstr "Vänta tills alla bilagor och bilder har laddats upp."
+
+#: src/frontend/src/store/compose.js:593
+msgid "You have sent many messages in a short time. Wait a few minutes and try again."
+msgstr "Du har skickat många meddelanden på kort tid. Vänta några minuter och försök igen."
+
+#: src/frontend/src/store/compose.js:597
+#: src/SocklessMail.Api/Crypto/OutgoingSecurity.cs:172
+msgid "Unlock your key to sign this message."
+msgstr "Lås upp din nyckel för att signera det här meddelandet."
+
+#: src/frontend/src/store/compose.js:609
+#: src/frontend/src/store/scheduled.js:156
+msgid "Scheduled for {time}"
+msgstr "Schemalagt till {time}"
+
+#: src/frontend/src/store/files.js:29
+msgid "Choose"
+msgstr "Välj"
+
+#: src/frontend/src/store/files.js:54
+msgid "Files"
+msgstr "Filer"
+
+#: src/frontend/src/store/files.js:56
+msgid "Save to {folder}"
+msgstr "Spara i {folder}"
+
+#: src/frontend/src/store/files.js:81
+msgid "Insert image from Files"
+msgstr "Infoga bild från Filer"
+
+#: src/frontend/src/store/files.js:122
+msgid "Adding {count} file from Files"
+msgid_plural "Adding {count} files from Files"
+msgstr[0] "Lägger till {count} fil från Filer"
+msgstr[1] "Lägger till {count} filer från Filer"
+
+#: src/frontend/src/store/files.js:193
+msgid "Save {count} attachment to Files"
+msgid_plural "Save {count} attachments to Files"
+msgstr[0] "Spara {count} bilaga i Filer"
+msgstr[1] "Spara {count} bilagor i Filer"
+
+#: src/frontend/src/store/files.js:198
+msgid "Saving to Files…"
+msgstr "Sparar i Filer …"
+
+#: src/frontend/src/store/files.js:214
+msgid "Saved as {path}"
+msgstr "Sparad som {path}"
+
+#: src/frontend/src/store/files.js:216
+msgid "Saved {count} file to {folder}"
+msgid_plural "Saved {count} files to {folder}"
+msgstr[0] "{count} fil sparades i {folder}"
+msgstr[1] "{count} filer sparades i {folder}"
+
+#: src/frontend/src/store/files.js:219
+msgid "{count} attachment could not be saved"
+msgid_plural "{count} attachments could not be saved"
+msgstr[0] "{count} bilaga kunde inte sparas"
+msgstr[1] "{count} bilagor kunde inte sparas"
+
+#: src/frontend/src/store/navigation.js:103
+msgid "Could not reorder the accounts: {error}"
+msgstr "Det gick inte att ändra ordning på kontona: {error}"
+
+#: src/frontend/src/store/navigation.js:115
+msgid "Could not delete the account: {error}"
+msgstr "Det gick inte att ta bort kontot: {error}"
+
+#: src/frontend/src/store/notifications.js:59
+msgid "Notifications for new mail look like this."
+msgstr "Aviseringar om ny e-post ser ut så här."
+
+#: src/frontend/src/store/notifications.js:82
+msgid "(No subject)"
+msgstr "(Inget ämne)"
+
+#: src/frontend/src/store/notifications.js:118
+msgid "%n new message"
+msgid_plural "%n new messages"
+msgstr[0] "%n nytt meddelande"
+msgstr[1] "%n nya meddelanden"
+
+#: src/frontend/src/store/oauth.js:49
+msgid "The sign-in window was blocked. Allow pop-ups for this site and try again."
+msgstr "Inloggningsfönstret blockerades. Tillåt popup-fönster för den här webbplatsen och försök igen."
+
+#: src/frontend/src/store/oauth.js:62
+#: src/SocklessMail.Api/Api/OAuthEndpoints.cs:242
+msgid "The sign-in was cancelled."
+msgstr "Inloggningen avbröts."
+
+#: src/frontend/src/store/oauth.js:78
+msgid "The sign-in window was closed before the sign-in finished."
+msgstr "Inloggningsfönstret stängdes innan inloggningen var klar."
+
+#: src/frontend/src/store/rules.js:110
+msgid "To or Cc"
+msgstr "Till eller Kopia"
+
+#: src/frontend/src/store/rules.js:112
+msgid "Header"
+msgstr "Huvud"
+
+#: src/frontend/src/store/rules.js:118
+msgid "contains"
+msgstr "innehåller"
+
+#: src/frontend/src/store/rules.js:119
+msgid "does not contain"
+msgstr "innehåller inte"
+
+#: src/frontend/src/store/rules.js:120
+msgid "is"
+msgstr "är"
+
+#: src/frontend/src/store/rules.js:121
+msgid "is not"
+msgstr "är inte"
+
+#: src/frontend/src/store/rules.js:122
+msgid "starts with"
+msgstr "börjar med"
+
+#: src/frontend/src/store/rules.js:123
+msgid "ends with"
+msgstr "slutar med"
+
+#: src/frontend/src/store/rules.js:124
+msgid "matches regex"
+msgstr "matchar reguljärt uttryck"
+
+#: src/frontend/src/store/rules.js:128
+msgid "is larger than"
+msgstr "är större än"
+
+#: src/frontend/src/store/rules.js:129
+msgid "is smaller than"
+msgstr "är mindre än"
+
+#: src/frontend/src/store/rules.js:133
+msgid "has attachments"
+msgstr "har bilagor"
+
+#: src/frontend/src/store/rules.js:134
+msgid "has no attachments"
+msgstr "har inga bilagor"
+
+#: src/frontend/src/store/rules.js:138
+msgid "Move to folder"
+msgstr "Flytta till mapp"
+
+#: src/frontend/src/store/rules.js:139
+msgid "Copy to folder"
+msgstr "Kopiera till mapp"
+
+#: src/frontend/src/store/rules.js:142
+msgid "Move to Trash"
+msgstr "Flytta till papperskorgen"
+
+#: src/frontend/src/store/rules.js:143
+msgid "Add tag"
+msgstr "Lägg till tagg"
+
+#: src/frontend/src/store/rules.js:190
+msgid " and "
+msgstr " och "
+
+#: src/frontend/src/store/rules.js:190
+msgid " or "
+msgstr " eller "
+
+#: src/frontend/src/store/rules.js:191
+msgid "If {conditions}: {actions}"
+msgstr "Om {conditions}: {actions}"
+
+#: src/frontend/src/store/scheduled.js:71
+msgid "(no recipients)"
+msgstr "(inga mottagare)"
+
+#: src/frontend/src/store/scheduled.js:74
+msgid "To {names} and {count} more"
+msgstr "Till {names} och {count} till"
+
+#: src/frontend/src/store/scheduled.js:75
+msgid "To {names}"
+msgstr "Till {names}"
+
+#: src/frontend/src/store/scheduled.js:141
+msgid "The message could not be sent."
+msgstr "Meddelandet kunde inte skickas."
+
+#: src/frontend/src/store/sendLater.js:20
+msgid "Tomorrow morning"
+msgstr "I morgon bitti"
+
+#: src/frontend/src/store/sendLater.js:21
+msgid "After lunch"
+msgstr "Efter lunch"
+
+#: src/frontend/src/store/sendLater.js:22
+msgid "Monday morning"
+msgstr "Måndag morgon"
+
+#: src/frontend/src/store/sendLater.js:23
+msgid "In 1 hour"
+msgstr "Om 1 timme"
+
+#: src/frontend/src/store/sendLater.js:69
+msgid "Today at {time}"
+msgstr "Idag kl. {time}"
+
+#: src/frontend/src/store/sendLater.js:70
+msgid "Tomorrow at {time}"
+msgstr "I morgon kl. {time}"
+
+#: src/frontend/src/store/sendLater.js:71
+msgid "Next {day} at {time}"
+msgstr "Nästa {day} kl. {time}"
+
+#: src/frontend/src/store/sendLater.js:72
+msgid "In {count} hour"
+msgid_plural "In {count} hours"
+msgstr[0] "Om {count} timme"
+msgstr[1] "Om {count} timmar"
+
+#: src/frontend/src/store/sendLater.js:78
+msgid "{when}, offered on {days}"
+msgstr "{when}, erbjuds på {days}"
+
+#: src/frontend/src/store/senders.js:167
+msgid "A link shows {known} but leads to {domain}, which imitates it."
+msgstr "En länk visar {known} men leder till {domain}, som imiterar den."
+
+#: src/frontend/src/store/senders.js:168
+msgid "A link shows {known} but leads to {domain}."
+msgstr "En länk visar {known} men leder till {domain}."
+
+#: src/frontend/src/store/senders.js:172
+msgid "Replies would go to {domain}, which imitates {known}."
+msgstr "Svar skulle gå till {domain}, som imiterar {known}."
+
+#: src/frontend/src/store/senders.js:180
+msgid "The sender's domain is not {known}: it imitates it with letters from another alphabet."
+msgstr "Avsändarens domän är inte {known}: den imiterar den med bokstäver från ett annat alfabet."
+
+#: src/frontend/src/store/senders.js:182
+msgid "{domain} imitates {known} with look-alike characters."
+msgstr "{domain} imiterar {known} med tecken som ser likadana ut."
+
+#: src/frontend/src/store/senders.js:184
+msgid "{domain} has the name of {known} with another ending."
+msgstr "{domain} har namnet {known} med en annan ändelse."
+
+#: src/frontend/src/store/senders.js:186
+msgid "{domain} is one letter away from {known}."
+msgstr "{domain} skiljer sig med en bokstav från {known}."
+
+#: src/frontend/src/store/senders.js:189
+msgid "{domain} contains the name of {known} but does not belong to it."
+msgstr "{domain} innehåller namnet {known} men hör inte till den."
+
+#: src/frontend/src/store/senders.js:191
+msgid "{domain} mixes letters from different alphabets."
+msgstr "{domain} blandar bokstäver från olika alfabet."
+
+#: src/frontend/src/store/senders.js:193
+msgid "The sender's name shows {known}, but the message comes from {domain}."
+msgstr "Avsändarens namn visar {known}, men meddelandet kommer från {domain}."
+
+#: src/frontend/src/store/senders.js:195
+msgid "Your mail server could not verify that this message really comes from {domain}."
+msgstr "Din e-postserver kunde inte bekräfta att meddelandet verkligen kommer från {domain}."
+
+#: src/frontend/src/store/senders.js:197
+msgid "Replies would go to {domain}."
+msgstr "Svar skulle gå till {domain}."
+
+#: src/frontend/src/store/senders.js:201
+msgid "{domain} was registered today."
+msgstr "{domain} registrerades idag."
+
+#: src/frontend/src/store/senders.js:202
+msgid "{domain} was registered only {days} day ago."
+msgid_plural "{domain} was registered only {days} days ago."
+msgstr[0] "{domain} registrerades för bara {days} dag sedan."
+msgstr[1] "{domain} registrerades för bara {days} dagar sedan."
+
+#: src/frontend/src/store/senders.js:205
+msgid "Something about {domain} looks suspicious."
+msgstr "Något med {domain} ser misstänkt ut."
+
+#: src/frontend/src/store/senders.js:215
+msgid "This message may be a phishing attempt"
+msgstr "Det här meddelandet kan vara ett nätfiskeförsök"
+
+#: src/frontend/src/store/senders.js:216
+msgid "Be careful with this sender"
+msgstr "Var försiktig med den här avsändaren"
+
+#: src/frontend/src/store/shortcuts.js:23
+msgid "Flag or remove the flag"
+msgstr "Flagga eller ta bort flaggan"
+
+#: src/frontend/src/store/shortcuts.js:26
+msgid "Clear the selection, or close the message"
+msgstr "Rensa markeringen eller stäng meddelandet"
+
+#: src/frontend/src/store/shortcuts.js:27
+msgid "Show keyboard shortcuts"
+msgstr "Visa kortkommandon"
+
+#: src/frontend/src/store/shortcuts.js:32
+msgid "Previous or next message (in the list)"
+msgstr "Föregående eller nästa meddelande (i listan)"
+
+#: src/frontend/src/store/shortcuts.js:33
+msgid "Select or deselect the message (in the list)"
+msgstr "Markera eller avmarkera meddelandet (i listan)"
+
+#: src/frontend/src/store/shortcuts.js:34
+msgid "Extend the selection (in the list)"
+msgstr "Utöka markeringen (i listan)"
+
+#: src/frontend/src/store/shortcuts.js:35
+msgid "Select all loaded messages (in the list)"
+msgstr "Markera alla inlästa meddelanden (i listan)"
+
+#: src/frontend/src/store/shortcuts.js:36
+msgid "Message actions (in the list)"
+msgstr "Meddelandeåtgärder (i listan)"
+
+#: src/frontend/src/store/shortcuts.js:37
+msgid "Send (in the composer)"
+msgstr "Skicka (i skrivfönstret)"
+
+#: src/frontend/src/store/windows.js:56
+msgid "The browser blocked the new window. Allow pop-ups for this site to open messages in their own window."
+msgstr "Webbläsaren blockerade det nya fönstret. Tillåt popup-fönster för den här webbplatsen för att öppna meddelanden i egna fönster."
+
+#: src/frontend/src/store/windows.js:151
+msgid "The message could not be moved to this window. It is saved in Drafts."
+msgstr "Meddelandet kunde inte flyttas till det här fönstret. Det är sparat i Utkast."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:61
+msgid "Use a colour like #1a62d6."
+msgstr "Använd en färg som #1a62d6."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:68
+msgid "Use at most three characters."
+msgstr "Använd högst tre tecken."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:73
+msgid "Choose one of the offered icons."
+msgstr "Välj en av de erbjudna ikonerna."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:123
+msgid "A request body is required."
+msgstr "En begärandetext krävs."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:135
+msgid "Enter a name for the account."
+msgstr "Ange ett namn för kontot."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:136
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:138
+#: src/SocklessMail.Api/Api/OAuthEndpoints.cs:95
+#: src/SocklessMail.Api/Api/OAuthEndpoints.cs:100
+msgid "Use at most 200 characters."
+msgstr "Använd högst 200 tecken."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:140
+#: src/SocklessMail.Api/Api/ContactsEndpoints.cs:43
+#: src/SocklessMail.Api/Api/ContactsEndpoints.cs:70
+msgid "Enter a valid email address."
+msgstr "Ange en giltig e-postadress."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:142
+msgid "Enter the login name."
+msgstr "Ange inloggningsnamnet."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:143
+msgid "Use at most 320 characters."
+msgstr "Använd högst 320 tecken."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:147
+msgid "Enter the password."
+msgstr "Ange lösenordet."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:150
+msgid "The password is too long."
+msgstr "Lösenordet är för långt."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:161
+msgid "Server settings are required."
+msgstr "Serverinställningar krävs."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:166
+msgid "Enter the server name."
+msgstr "Ange servernamnet."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:168
+msgid "Enter only the server name, without protocol or path."
+msgstr "Ange bara servernamnet, utan protokoll eller sökväg."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:169
+msgid "Enter a port between 1 and 65535."
+msgstr "Ange en port mellan 1 och 65535."
+
+#: src/SocklessMail.Api/Accounts/AccountContracts.cs:170
+msgid "Choose a security setting."
+msgstr "Välj en säkerhetsinställning."
+
+#: src/SocklessMail.Api/Accounts/AccountService.cs:9
+msgid "A user can have at most {max} accounts."
+msgstr "En användare kan ha högst {max} konton."
+
+#: src/SocklessMail.Api/Accounts/MailCredential.cs:40
+msgid "The stored credential cannot be decrypted; the password has to be entered again."
+msgstr "De sparade inloggningsuppgifterna kan inte dekrypteras; lösenordet måste anges igen."
+
+#: src/SocklessMail.Api/Accounts/ViewStates.cs:102
+msgid "Choose server or browser."
+msgstr "Välj server eller webbläsare."
+
+#: src/SocklessMail.Api/Accounts/ViewStates.cs:160
+msgid "Give an account and folder, or a unified view."
+msgstr "Ange ett konto och en mapp, eller en samlad vy."
+
+#: src/SocklessMail.Api/Accounts/ViewStates.cs:169
+msgid "At most {max} expanded folders per account."
+msgstr "Högst {max} utfällda mappar per konto."
+
+#: src/SocklessMail.Api/Accounts/ViewStates.cs:174
+msgid "Not a folder id."
+msgstr "Inte ett mapp-id."
+
+#: src/SocklessMail.Api/Api/AccountEndpoints.cs:85
+msgid "The list must contain each of your accounts exactly once."
+msgstr "Listan måste innehålla vart och ett av dina konton exakt en gång."
+
+#: src/SocklessMail.Api/Api/ComposeEndpoints.cs:35
+msgid "Attachments may be at most {megabytes} MB."
+msgstr "Bilagor får vara högst {megabytes} MB."
+
+#: src/SocklessMail.Api/Api/ComposeEndpoints.cs:67
+msgid "The image could not be fetched."
+msgstr "Bilden kunde inte hämtas."
+
+#: src/SocklessMail.Api/Api/ComposeEndpoints.cs:83
+msgid "Use reply, replyAll, forward or edit."
+msgstr "Använd reply, replyAll, forward eller edit."
+
+#: src/SocklessMail.Api/Api/ContactsEndpoints.cs:49
+msgid "Names may be at most 200 characters."
+msgstr "Namn får vara högst 200 tecken."
+
+#: src/SocklessMail.Api/Api/ContactsEndpoints.cs:58
+msgid "Choose an address book you can add contacts to."
+msgstr "Välj en adressbok som du kan lägga till kontakter i."
+
+#: src/SocklessMail.Api/Api/CryptoEndpoints.cs:27
+msgid "Ask for at most {max} addresses."
+msgstr "Fråga efter högst {max} adresser."
+
+#: src/SocklessMail.Api/Api/CryptoEndpoints.cs:83
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:70
+msgid "The passphrase is wrong."
+msgstr "Lösenfrasen är fel."
+
+#: src/SocklessMail.Api/Api/CryptoEndpoints.cs:163
+msgid "The attachment is too large for a key."
+msgstr "Bilagan är för stor för att vara en nyckel."
+
+#: src/SocklessMail.Api/Api/CryptoEndpoints.cs:172
+msgid "This is a private key. Import it under Settings → Encryption, with its passphrase."
+msgstr "Det här är en privat nyckel. Importera den under Inställningar → Kryptering, med dess lösenfras."
+
+#: src/SocklessMail.Api/Api/MailboxEndpoints.cs:211
+msgid "Ask for at most {max} conversations."
+msgstr "Fråga efter högst {max} konversationer."
+
+#: src/SocklessMail.Api/Api/MailboxEndpoints.cs:252
+msgid "Choose a filter."
+msgstr "Välj ett filter."
+
+#: src/SocklessMail.Api/Api/MailboxEndpoints.cs:309
+#: src/SocklessMail.Api/Mailbox/UnifiedFolders.cs:388
+msgid "The stored password cannot be decrypted. Enter it again in the account settings."
+msgstr "Det sparade lösenordet kan inte dekrypteras. Ange det igen i kontoinställningarna."
+
+#: src/SocklessMail.Api/Api/MailboxEndpoints.cs:328
+#: src/SocklessMail.Api/Mailbox/UnifiedFolders.cs:390
+msgid "The mail server refused the request."
+msgstr "E-postservern avvisade begäran."
+
+#: src/SocklessMail.Api/Api/OAuthEndpoints.cs:71
+msgid "Signing in with this provider is not set up. Ask your administrator."
+msgstr "Inloggning med den här leverantören är inte inställd. Fråga din administratör."
+
+#: src/SocklessMail.Api/Api/OAuthEndpoints.cs:77
+msgid "Too many sign-ins in progress. Wait a few minutes and try again."
+msgstr "För många inloggningar pågår. Vänta några minuter och försök igen."
+
+#: src/SocklessMail.Api/Api/OAuthEndpoints.cs:148
+msgid "You signed in as {email}, but this account is {username}. Sign in with that address, or add a new account."
+msgstr "Du loggade in som {email}, men det här kontot är {username}. Logga in med den adressen, eller lägg till ett nytt konto."
+
+#: src/SocklessMail.Api/Api/OAuthEndpoints.cs:200
+msgid "This sign-in has expired. Start it again in Sockless Mail."
+msgstr "Inloggningen har gått ut. Starta den igen i Sockless Mail."
+
+#: src/SocklessMail.Api/Api/OAuthEndpoints.cs:206
+msgid "This sign-in was started by another user."
+msgstr "Den här inloggningen startades av en annan användare."
+
+#: src/SocklessMail.Api/Api/OAuthEndpoints.cs:211
+msgid "This sign-in has already been handled. You can close this window."
+msgstr "Den här inloggningen har redan hanterats. Du kan stänga fönstret."
+
+#: src/SocklessMail.Api/Api/OAuthEndpoints.cs:216
+msgid "Signed in as {email}. You can close this window."
+msgstr "Inloggad som {email}. Du kan stänga fönstret."
+
+#: src/SocklessMail.Api/Api/OAuthEndpoints.cs:236
+msgid "Signing in with this provider is no longer set up. Ask your administrator."
+msgstr "Inloggning med den här leverantören är inte längre inställd. Fråga din administratör."
+
+#: src/SocklessMail.Api/Api/OAuthEndpoints.cs:254
+msgid "The sign-in code was not accepted. Try again."
+msgstr "Inloggningskoden godtogs inte. Försök igen."
+
+#: src/SocklessMail.Api/Api/OAuthEndpoints.cs:275
+msgid "The sign-in has expired or was not completed. Sign in again."
+msgstr "Inloggningen har gått ut eller slutfördes inte. Logga in igen."
+
+#: src/SocklessMail.Api/Api/SenderEndpoints.cs:22
+msgid "At most {max} senders."
+msgstr "Högst {max} avsändare."
+
+#: src/SocklessMail.Api/Api/SenderEndpoints.cs:35
+msgid "Enter a domain name."
+msgstr "Ange ett domännamn."
+
+#: src/SocklessMail.Api/Api/TagEndpoints.cs:135
+msgid "Outlook could not rename the category for {account}: {error}"
+msgstr "Outlook kunde inte byta namn på kategorin för {account}: {error}"
+
+#: src/SocklessMail.Api/Api/TagEndpoints.cs:185
+msgid "The tag could not be removed from {count} messages. Try again later."
+msgstr "Taggen kunde inte tas bort från {count} meddelanden. Försök igen senare."
+
+#: src/SocklessMail.Api/Api/TagEndpoints.cs:198
+msgid "Outlook could not remove the category for {account}: {error}"
+msgstr "Outlook kunde inte ta bort kategorin för {account}: {error}"
+
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:127
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:182
+msgid "Choose one of the offered tones."
+msgstr "Välj en av de erbjudna tonerna."
+
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:135
+msgid "Say what the message should be about."
+msgstr "Säg vad meddelandet ska handla om."
+
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:157
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:194
+msgid "Say how the text should change."
+msgstr "Säg hur texten ska ändras."
+
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:166
+msgid "There is no text to rewrite."
+msgstr "Det finns ingen text att skriva om."
+
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:241
+msgid "Encrypted messages are not given to the Assistant."
+msgstr "Krypterade meddelanden lämnas inte till Assistenten."
+
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:275
+msgid "Choose one of the offered languages."
+msgstr "Välj ett av de erbjudna språken."
+
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:334
+msgid "This is too long for the Assistant (at most {max} characters)."
+msgstr "Det här är för långt för Assistenten (högst {max} tecken)."
+
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:409
+msgid "Too many Assistant requests. Try again in a minute or two."
+msgstr "För många förfrågningar till Assistenten. Försök igen om en minut eller två."
+
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:411
+msgid "Nextcloud did not accept the Assistant request."
+msgstr "Nextcloud godtog inte förfrågan till Assistenten."
+
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:416
+msgid "Nextcloud could not be reached."
+msgstr "Nextcloud kunde inte nås."
+
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:458
+msgid "Your administrator turned the Assistant off for mail."
+msgstr "Din administratör har stängt av Assistenten för e-post."
+
+#: src/SocklessMail.Api/Assistant/AssistantService.cs:463
+msgid "The Nextcloud Assistant cannot do this here: no AI provider is set up for it."
+msgstr "Nextcloud Assistent kan inte göra det här: ingen AI-leverantör är inställd för den."
+
+#: src/SocklessMail.Api/Calendar/InvitationService.cs:68
+msgid "Answer accepted, tentative or declined."
+msgstr "Svara accepted, tentative eller declined."
+
+#: src/SocklessMail.Api/Calendar/InvitationService.cs:73
+msgid "The comment may be at most 1000 characters."
+msgstr "Kommentaren får vara högst 1000 tecken."
+
+#: src/SocklessMail.Api/Calendar/InvitationService.cs:80
+msgid "This is no invitation to answer."
+msgstr "Det här är ingen inbjudan att svara på."
+
+#: src/SocklessMail.Api/Calendar/InvitationService.cs:137
+msgid "This calendar message cannot be added as an event."
+msgstr "Det här kalendermeddelandet kan inte läggas till som en händelse."
+
+#: src/SocklessMail.Api/Calendar/InvitationService.cs:181
+msgid "The event is not in your calendar."
+msgstr "Händelsen finns inte i din kalender."
+
+#: src/SocklessMail.Api/Calendar/InvitationService.cs:184
+#: src/SocklessMail.Api/Calendar/NextcloudCalendars.cs:178
+msgid "This calendar is read-only."
+msgstr "Den här kalendern är skrivskyddad."
+
+#: src/SocklessMail.Api/Calendar/InvitationService.cs:214
+msgid "Only cancellations and replies change an event this way."
+msgstr "Bara inställningar och svar ändrar en händelse på det här sättet."
+
+#: src/SocklessMail.Api/Calendar/InvitationService.cs:247
+msgid "The calendar data in this message cannot be read: {error}"
+msgstr "Kalenderdatan i det här meddelandet kan inte läsas: {error}"
+
+#: src/SocklessMail.Api/Calendar/InvitationService.cs:298
+msgid "Choose a calendar you can add events to."
+msgstr "Välj en kalender som du kan lägga till händelser i."
+
+#: src/SocklessMail.Api/Calendar/Invitations.cs:55
+msgid "The calendar data contains no event."
+msgstr "Kalenderdatan innehåller ingen händelse."
+
+#: src/SocklessMail.Api/Calendar/Invitations.cs:60
+msgid "The calendar data contains more than {max} events."
+msgstr "Kalenderdatan innehåller fler än {max} händelser."
+
+#: src/SocklessMail.Api/Calendar/NextcloudCalendars.cs:24
+msgid "Nextcloud Calendar did not answer. Try again in a moment."
+msgstr "Nextcloud Kalender svarade inte. Försök igen om en stund."
+
+#: src/SocklessMail.Api/Calendar/NextcloudCalendars.cs:27
+msgid "The event was changed in the calendar in the meantime. Try again."
+msgstr "Händelsen ändrades i kalendern under tiden. Försök igen."
+
+#: src/SocklessMail.Api/Calendar/NextcloudCalendars.cs:182
+#: src/SocklessMail.Api/Calendar/NextcloudCalendars.cs:204
+#: src/SocklessMail.Api/Calendar/NextcloudCalendars.cs:260
+msgid "The calendar no longer exists."
+msgstr "Kalendern finns inte längre."
+
+#: src/SocklessMail.Api/Calendar/NextcloudCalendars.cs:184
+msgid "There is not enough space left in your Nextcloud."
+msgstr "Det finns inte tillräckligt med utrymme kvar i ditt Nextcloud."
+
+#: src/SocklessMail.Api/Calendar/NextcloudCalendars.cs:191
+msgid "Nextcloud did not accept this event."
+msgstr "Nextcloud godtog inte den här händelsen."
+
+#: src/SocklessMail.Api/Calendar/NextcloudCalendars.cs:265
+msgid "The event no longer exists."
+msgstr "Händelsen finns inte längre."
+
+#: src/SocklessMail.Api/Contacts/NextcloudContacts.cs:23
+msgid "The contact or address book no longer exists."
+msgstr "Kontakten eller adressboken finns inte längre."
+
+#: src/SocklessMail.Api/Contacts/NextcloudContacts.cs:26
+msgid "Nextcloud Contacts did not answer. Try again in a moment."
+msgstr "Nextcloud Kontakter svarade inte. Försök igen om en stund."
+
+#: src/SocklessMail.Api/Contacts/NextcloudContacts.cs:150
+#: src/SocklessMail.Api/Contacts/NextcloudContacts.cs:176
+msgid "The contact was changed in the meantime. Try again."
+msgstr "Kontakten ändrades under tiden. Försök igen."
+
+#: src/SocklessMail.Api/Contacts/NextcloudContacts.cs:172
+msgid "This address book is read-only."
+msgstr "Den här adressboken är skrivskyddad."
+
+#: src/SocklessMail.Api/Crypto/CryptoContexts.cs:52
+msgid "None of your private keys opens this message."
+msgstr "Ingen av dina privata nycklar öppnar det här meddelandet."
+
+#: src/SocklessMail.Api/Crypto/CryptoContexts.cs:65
+msgid "No public key was found for {address}."
+msgstr "Ingen publik nyckel hittades för {address}."
+
+#: src/SocklessMail.Api/Crypto/CryptoContexts.cs:77
+msgid "No private key to sign with was found for {address}."
+msgstr "Ingen privat nyckel att signera med hittades för {address}."
+
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:55
+msgid "Enter the file's password."
+msgstr "Ange filens lösenord."
+
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:55
+#: src/SocklessMail.Api/Crypto/SmimeCertificates.cs:69
+msgid "The password is wrong."
+msgstr "Lösenordet är fel."
+
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:70
+msgid "Enter the key's passphrase."
+msgstr "Ange nyckelns lösenfras."
+
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:84
+msgid "This is not an OpenPGP key, a certificate or a PKCS#12 file."
+msgstr "Det här är inte en OpenPGP-nyckel, ett certifikat eller en PKCS#12-fil."
+
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:116
+msgid "You can keep at most {max} keys."
+msgstr "Du kan ha högst {max} nycklar."
+
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:129
+msgid "Choose the address of one of your accounts."
+msgstr "Välj adressen till ett av dina konton."
+
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:135
+msgid "Use a passphrase of at least {min} characters."
+msgstr "Använd en lösenfras på minst {min} tecken."
+
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:141
+msgid "Choose between 1 and 10 years, or no expiry."
+msgstr "Välj mellan 1 och 10 år, eller ingen giltighetstid."
+
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:147
+msgid "The name is too long."
+msgstr "Namnet är för långt."
+
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:183
+msgid "This is not one of your own keys."
+msgstr "Det här är inte en av dina egna nycklar."
+
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:306
+msgid "The file could not be read."
+msgstr "Filen kunde inte läsas."
+
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:315
+msgid "Choose a key file or paste a key."
+msgstr "Välj en nyckelfil eller klistra in en nyckel."
+
+#: src/SocklessMail.Api/Crypto/CryptoKeyStore.cs:318
+msgid "The file is too large for a key."
+msgstr "Filen är för stor för att vara en nyckel."
+
+#: src/SocklessMail.Api/Crypto/KeySharing.cs:147
+msgid "The key names no address."
+msgstr "Nyckeln anger ingen adress."
+
+#: src/SocklessMail.Api/Crypto/KeySharing.cs:162
+msgid "You have no address book to save contacts in."
+msgstr "Du har ingen adressbok att spara kontakter i."
+
+#: src/SocklessMail.Api/Crypto/KeySharing.cs:184
+msgid "Only your own OpenPGP keys can be published."
+msgstr "Bara dina egna OpenPGP-nycklar kan publiceras."
+
+#: src/SocklessMail.Api/Crypto/KeySharing.cs:220
+msgid "keys.openpgp.org could not be reached. Try again later."
+msgstr "keys.openpgp.org kunde inte nås. Försök igen senare."
+
+#: src/SocklessMail.Api/Crypto/KeyUnlocks.cs:33
+msgid "The stored private key cannot be decrypted; import it again."
+msgstr "Den sparade privata nyckeln kan inte dekrypteras; importera den igen."
+
+#: src/SocklessMail.Api/Crypto/MessageSecurity.cs:502
+msgid "The signature could not be read."
+msgstr "Signaturen kunde inte läsas."
+
+#: src/SocklessMail.Api/Crypto/OpenPgpKeys.cs:72
+#: src/SocklessMail.Api/Crypto/OpenPgpKeys.cs:76
+msgid "This is not an OpenPGP key."
+msgstr "Det här är inte en OpenPGP-nyckel."
+
+#: src/SocklessMail.Api/Crypto/OutgoingSecurity.cs:47
+msgid "Choose OpenPGP or S/MIME."
+msgstr "Välj OpenPGP eller S/MIME."
+
+#: src/SocklessMail.Api/Crypto/OutgoingSecurity.cs:89
+msgid "You have no {kind} key for {address}, so you could not read this message yourself. Create or import one under Settings → Encryption."
+msgstr "Du har ingen {kind}-nyckel för {address}, så du skulle inte själv kunna läsa meddelandet. Skapa eller importera en under Inställningar → Kryptering."
+
+#: src/SocklessMail.Api/Crypto/OutgoingSecurity.cs:94
+msgid "There is no {kind} key for {addresses}."
+msgstr "Det finns ingen {kind}-nyckel för {addresses}."
+
+#: src/SocklessMail.Api/Crypto/OutgoingSecurity.cs:176
+msgid "You have no {kind} key for {address} to sign with. Create or import one under Settings → Encryption."
+msgstr "Du har ingen {kind}-nyckel för {address} att signera med. Skapa eller importera en under Inställningar → Kryptering."
+
+#: src/SocklessMail.Api/Crypto/OutgoingSecurity.cs:186
+msgid "You have no OpenPGP key for {address} to attach."
+msgstr "Du har ingen OpenPGP-nyckel för {address} att bifoga."
+
+#: src/SocklessMail.Api/Crypto/SmimeCertificates.cs:54
+msgid "The PKCS#12 file holds no private key."
+msgstr "PKCS#12-filen innehåller ingen privat nyckel."
+
+#: src/SocklessMail.Api/Crypto/SmimeCertificates.cs:73
+msgid "This is not a PKCS#12 file."
+msgstr "Det här är inte en PKCS#12-fil."
+
+#: src/SocklessMail.Api/Crypto/SmimeCertificates.cs:100
+#: src/SocklessMail.Api/Crypto/SmimeCertificates.cs:104
+msgid "This is not a certificate."
+msgstr "Det här är inte ett certifikat."
+
+#: src/SocklessMail.Api/Files/FilesService.cs:23
+msgid "Choose between 1 and {max} files."
+msgstr "Välj mellan 1 och {max} filer."
+
+#: src/SocklessMail.Api/Files/FilesService.cs:59
+msgid "Larger than {megabytes} MB; insert a share link instead."
+msgstr "Större än {megabytes} MB; infoga en delningslänk i stället."
+
+#: src/SocklessMail.Api/Files/FilesService.cs:75
+msgid "Choose a file or folder."
+msgstr "Välj en fil eller mapp."
+
+#: src/SocklessMail.Api/Files/FilesService.cs:88
+#: src/SocklessMail.Api/Rules/RuleStore.cs:314
+msgid "Choose a folder."
+msgstr "Välj en mapp."
+
+#: src/SocklessMail.Api/Files/FilesService.cs:92
+msgid "Choose between 1 and {max} attachments."
+msgstr "Välj mellan 1 och {max} bilagor."
+
+#: src/SocklessMail.Api/Files/FilesService.cs:105
+msgid "The attachment no longer exists."
+msgstr "Bilagan finns inte längre."
+
+#: src/SocklessMail.Api/Files/FilesService.cs:120
+#: src/SocklessMail.Api/Files/NextcloudFiles.cs:73
+msgid "Folders cannot be attached; insert a share link instead."
+msgstr "Mappar kan inte bifogas; infoga en delningslänk i stället."
+
+#: src/SocklessMail.Api/Files/NextcloudFiles.cs:22
+msgid "The file no longer exists in Files."
+msgstr "Filen finns inte längre i Filer."
+
+#: src/SocklessMail.Api/Files/NextcloudFiles.cs:25
+msgid "The folder no longer exists in Files."
+msgstr "Mappen finns inte längre i Filer."
+
+#: src/SocklessMail.Api/Files/NextcloudFiles.cs:28
+msgid "Nextcloud Files did not answer. Try again in a moment."
+msgstr "Nextcloud Filer svarade inte. Försök igen om en stund."
+
+#: src/SocklessMail.Api/Files/NextcloudFiles.cs:187
+msgid "You cannot add files to this folder."
+msgstr "Du kan inte lägga till filer i den här mappen."
+
+#: src/SocklessMail.Api/Files/NextcloudFiles.cs:191
+msgid "There is not enough space left in your Files."
+msgstr "Det finns inte tillräckligt med utrymme kvar i dina Filer."
+
+#: src/SocklessMail.Api/Files/NextcloudFiles.cs:198
+msgid "Could not find a free file name in this folder. Try again."
+msgstr "Hittade inget ledigt filnamn i den här mappen. Försök igen."
+
+#: src/SocklessMail.Api/Files/NextcloudFiles.cs:222
+msgid "Nextcloud did not create a public link for this file. Public links may be turned off, or need a password; share it from the Files app instead."
+msgstr "Nextcloud skapade ingen publik länk för den här filen. Publika länkar kan vara avstängda eller kräva ett lösenord; dela den från appen Filer i stället."
+
+#: src/SocklessMail.Api/Mail/ConnectionErrors.cs:25
+msgid "The server rejected the username or password."
+msgstr "Servern avvisade användarnamnet eller lösenordet."
+
+#: src/SocklessMail.Api/Mail/ConnectionErrors.cs:42
+msgid "The server does not offer a supported way to log in."
+msgstr "Servern erbjuder inget sätt att logga in som stöds."
+
+#: src/SocklessMail.Api/Mail/ConnectionErrors.cs:50
+msgid "Connecting to {server} failed unexpectedly."
+msgstr "Anslutningen till {server} misslyckades oväntat."
+
+#: src/SocklessMail.Api/Mail/ConnectionErrors.cs:58
+msgid "The secure connection to {server} failed. The port or security setting may be wrong."
+msgstr "Den säkra anslutningen till {server} misslyckades. Porten eller säkerhetsinställningen kan vara fel."
+
+#: src/SocklessMail.Api/Mail/ImapConnections.cs:59
+msgid "The connection to {server} was lost. Try again."
+msgstr "Anslutningen till {server} bröts. Försök igen."
+
+#: src/SocklessMail.Api/Mail/PolicySocketConnector.cs:29
+msgid "The server name \"{host}\" could not be resolved."
+msgstr "Servernamnet ”{host}” kunde inte slås upp."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:21
+msgid "Set seen, flagged or both."
+msgstr "Ange seen, flagged eller båda."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:54
+msgid "Choose a different folder."
+msgstr "Välj en annan mapp."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:60
+msgid "Messages cannot be moved into this folder."
+msgstr "Meddelanden kan inte flyttas till den här mappen."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:105
+msgid "This account has no Trash folder. Delete the messages permanently?"
+msgstr "Det här kontot har ingen papperskorg. Ta bort meddelandena permanent?"
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:150
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:317
+msgid "A folder named \"{name}\" already exists here."
+msgstr "En mapp med namnet ”{name}” finns redan här."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:170
+msgid "The inbox cannot be renamed."
+msgstr "Inkorgen kan inte byta namn."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:211
+msgid "The inbox cannot be deleted."
+msgstr "Inkorgen kan inte tas bort."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:223
+msgid "Delete or move the folder's subfolders first."
+msgstr "Ta bort eller flytta mappens undermappar först."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:252
+msgid "Select at least one message."
+msgstr "Markera minst ett meddelande."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:257
+#: src/SocklessMail.Api/Rules/RuleEngine.cs:183
+msgid "At most {max} messages at once."
+msgstr "Högst {max} meddelanden åt gången."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:270
+msgid "The folder has changed on the server. Reload it and try again."
+msgstr "Mappen har ändrats på servern. Läs in den igen och försök på nytt."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:284
+msgid "Enter a folder name."
+msgstr "Ange ett mappnamn."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:289
+#: src/SocklessMail.Api/Mailbox/SearchTerms.cs:23
+#: src/SocklessMail.Api/Rules/RuleStore.cs:187
+#: src/SocklessMail.Api/Rules/RuleStore.cs:277
+msgid "Use at most {max} characters."
+msgstr "Använd högst {max} tecken."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:294
+msgid "The name cannot contain \"{separator}\", \"*\" or \"%\"."
+msgstr "Namnet får inte innehålla ”{separator}”, ”*” eller ”%”."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Actions.cs:299
+msgid "This name is reserved."
+msgstr "Det här namnet är reserverat."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:109
+msgid "Unlock your key to read the message you are answering."
+msgstr "Lås upp din nyckel för att läsa meddelandet du svarar på."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:110
+msgid "The encrypted message cannot be decrypted with your keys."
+msgstr "Det krypterade meddelandet kan inte dekrypteras med dina nycklar."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:293
+msgid "A Drafts folder could not be created."
+msgstr "En utkastmapp kunde inte skapas."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:322
+msgid "Add at least one recipient."
+msgstr "Lägg till minst en mottagare."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:327
+msgid "At most {max} recipients per message."
+msgstr "Högst {max} mottagare per meddelande."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:333
+msgid "The subject is too long."
+msgstr "Ämnet är för långt."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:340
+msgid "The message is too long."
+msgstr "Meddelandet är för långt."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:349
+msgid "At most {max} attachments per message."
+msgstr "Högst {max} bilagor per meddelande."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:355
+msgid "At most {max} images per message."
+msgstr "Högst {max} bilder per meddelande."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:362
+msgid "An attachment has expired or was removed. Attach it again."
+msgstr "En bilaga har gått ut eller tagits bort. Bifoga den igen."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:384
+msgid "An image in the message has expired or was removed. Insert it again."
+msgstr "En bild i meddelandet har gått ut eller tagits bort. Infoga den igen."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:472
+msgid "Attachments and images may total at most {megabytes} MB."
+msgstr "Bilagor och bilder får tillsammans vara högst {megabytes} MB."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:480
+msgid "Attachments and images of an encrypted message can only be sent or saved encrypted. Turn on Encrypt, or remove them."
+msgstr "Bilagor och bilder i ett krypterat meddelande kan bara skickas eller sparas krypterade. Slå på Kryptera, eller ta bort dem."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:533
+msgid "The server refused the recipient {address}."
+msgstr "Servern avvisade mottagaren {address}."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:537
+msgid "The server does not accept {address} as the sender."
+msgstr "Servern godtar inte {address} som avsändare."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:541
+msgid "The server refused the message (it may be too large)."
+msgstr "Servern avvisade meddelandet (det kan vara för stort)."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:546
+msgid "The connection broke while sending. Check Sent before trying again."
+msgstr "Anslutningen bröts under sändningen. Kontrollera Skickat innan du försöker igen."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:574
+msgid "The message was sent, but this account has no Sent folder to keep a copy in."
+msgstr "Meddelandet skickades, men det här kontot har ingen mapp för skickat att spara en kopia i."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:589
+msgid "The message was sent, but the copy could not be saved to Sent."
+msgstr "Meddelandet skickades, men kopian kunde inte sparas i Skickat."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:635
+#: src/SocklessMail.Api/Mailbox/MailboxService.Compose.cs:687
+msgid "An attachment of the forwarded message no longer exists."
+msgstr "En bilaga i det vidarebefordrade meddelandet finns inte längre."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Tags.cs:27
+msgid "There is no such tag."
+msgstr "Det finns ingen sådan tagg."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Tags.cs:33
+msgid "Add or remove at least one tag."
+msgstr "Lägg till eller ta bort minst en tagg."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Tags.cs:38
+msgid "A tag cannot be added and removed at once."
+msgstr "En tagg kan inte läggas till och tas bort samtidigt."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.Tags.cs:57
+msgid "This folder cannot keep tags."
+msgstr "Den här mappen kan inte spara taggar."
+
+#: src/SocklessMail.Api/Mailbox/MailboxService.cs:453
+#: src/SocklessMail.Api/Mailbox/MailboxService.cs:471
+msgid "The calendar data is too large."
+msgstr "Kalenderdatan är för stor."
+
+#: src/SocklessMail.Api/Mailbox/MessageFilters.cs:25
+msgid "Use unread, flagged or attachments."
+msgstr "Använd unread, flagged eller attachments."
+
+#: src/SocklessMail.Api/Mailbox/SearchTerms.cs:33
+msgid "Enter something to search for."
+msgstr "Ange något att söka efter."
+
+#: src/SocklessMail.Api/Mailbox/SearchTerms.cs:38
+msgid "Use at most {max} search words."
+msgstr "Använd högst {max} sökord."
+
+#: src/SocklessMail.Api/Mailbox/UnifiedFolders.cs:64
+#: src/SocklessMail.Api/Mailbox/UnifiedFolders.cs:280
+#: src/SocklessMail.Api/Tags/TagFolders.cs:203
+msgid "The cursor is not valid."
+msgstr "Markören är inte giltig."
+
+#: src/SocklessMail.Api/Mailbox/UnifiedFolders.cs:171
+msgid "Smart folders are filtered already."
+msgstr "Smarta mappar är redan filtrerade."
+
+#: src/SocklessMail.Api/Mailbox/UnifiedFolders.cs:429
+msgid "The token is not valid."
+msgstr "Token är inte giltig."
+
+#: src/SocklessMail.Api/OAuth/MailLogins.cs:106
+#: src/SocklessMail.Api/OAuth/MailLogins.cs:159
+msgid "The sign-in with {provider} has expired or was revoked. Sign in again in the account settings."
+msgstr "Inloggningen med {provider} har gått ut eller återkallats. Logga in igen i kontoinställningarna."
+
+#: src/SocklessMail.Api/OAuth/MailLogins.cs:148
+msgid "Signing in with this provider is not set up (any more). Ask your administrator to configure it."
+msgstr "Inloggning med den här leverantören är inte (längre) inställd. Be din administratör att ställa in den."
+
+#: src/SocklessMail.Api/OAuth/MailLogins.cs:195
+msgid "Sign in again to allow tags as Outlook categories."
+msgstr "Logga in igen för att tillåta taggar som Outlook-kategorier."
+
+#: src/SocklessMail.Api/OAuth/OAuthClients.cs:87
+msgid "Use at most 500 characters."
+msgstr "Använd högst 500 tecken."
+
+#: src/SocklessMail.Api/OAuth/OAuthClients.cs:89
+msgid "Enter the client secret."
+msgstr "Ange klienthemligheten."
+
+#: src/SocklessMail.Api/OAuth/OAuthClients.cs:90
+msgid "Use at most 2000 characters."
+msgstr "Använd högst 2000 tecken."
+
+#: src/SocklessMail.Api/OAuth/OAuthClients.cs:92
+msgid "Enter the full callback URL, starting with https://."
+msgstr "Ange hela återanrops-URL:en, som börjar med https://."
+
+#: src/SocklessMail.Api/Rules/RuleEngine.cs:178
+msgid "Give the messages to run the rule on."
+msgstr "Ange meddelandena som regeln ska köras på."
+
+#: src/SocklessMail.Api/Rules/RuleEngine.cs:206
+msgid "The folder has changed on the server. Check the messages again."
+msgstr "Mappen har ändrats på servern. Kontrollera meddelandena igen."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:40
+msgid "At most {max} rules per account."
+msgstr "Högst {max} regler per konto."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:117
+#: src/SocklessMail.Api/Rules/RuleStore.cs:326
+msgid "Choose a tag."
+msgstr "Välj en tagg."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:151
+msgid "Give a rule."
+msgstr "Ange en regel."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:182
+msgid "Give the rule a name."
+msgstr "Ge regeln ett namn."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:193
+msgid "Add at least one condition."
+msgstr "Lägg till minst ett villkor."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:198
+msgid "At most {max} conditions."
+msgstr "Högst {max} villkor."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:204
+msgid "Add at least one action."
+msgstr "Lägg till minst en åtgärd."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:209
+msgid "At most {max} actions."
+msgstr "Högst {max} åtgärder."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:221
+msgid "Not a condition."
+msgstr "Inte ett villkor."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:229
+msgid "Choose larger or smaller than."
+msgstr "Välj större eller mindre än."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:234
+msgid "Enter a size."
+msgstr "Ange en storlek."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:242
+msgid "Choose has or has no attachments."
+msgstr "Välj har eller har inga bilagor."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:250
+msgid "Choose what to look at."
+msgstr "Välj vad som ska granskas."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:260
+msgid "Enter a header name, such as List-Id."
+msgstr "Ange ett namn på ett huvud, till exempel List-Id."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:266
+msgid "Choose how to compare."
+msgstr "Välj hur det ska jämföras."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:272
+msgid "Enter a value."
+msgstr "Ange ett värde."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:288
+msgid "This is not a valid regular expression."
+msgstr "Det här är inte ett giltigt reguljärt uttryck."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:304
+msgid "Choose an action."
+msgstr "Välj en åtgärd."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:319
+msgid "Rules act on new mail in the inbox: choose another folder."
+msgstr "Regler gäller ny e-post i inkorgen: välj en annan mapp."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:334
+msgid "This action is already in the rule."
+msgstr "Den här åtgärden finns redan i regeln."
+
+#: src/SocklessMail.Api/Rules/RuleStore.cs:342
+msgid "A rule can move a message to one place only."
+msgstr "En regel kan bara flytta ett meddelande till ett ställe."
+
+#: src/SocklessMail.Api/Scheduling/ScheduledMail.cs:193
+msgid "Choose when to send the message."
+msgstr "Välj när meddelandet ska skickas."
+
+#: src/SocklessMail.Api/Scheduling/ScheduledMail.cs:198
+msgid "Choose a time at least a minute from now."
+msgstr "Välj en tid minst en minut fram i tiden."
+
+#: src/SocklessMail.Api/Scheduling/ScheduledMail.cs:203
+msgid "Choose a time within a year."
+msgstr "Välj en tid inom ett år."
+
+#: src/SocklessMail.Api/Scheduling/ScheduledMail.cs:210
+msgid "The message is being sent right now."
+msgstr "Meddelandet skickas just nu."
+
+#: src/SocklessMail.Api/Scheduling/SendLaterPresets.cs:56
+msgid "Send the list of presets."
+msgstr "Skicka listan med förval."
+
+#: src/SocklessMail.Api/Scheduling/SendLaterPresets.cs:78
+msgid "At most {max} presets."
+msgstr "Högst {max} förval."
+
+#: src/SocklessMail.Api/Scheduling/SendLaterPresets.cs:87
+msgid "Each preset needs its own id (lowercase letters, digits and dashes)."
+msgstr "Varje förval behöver ett eget id (gemener, siffror och bindestreck)."
+
+#: src/SocklessMail.Api/Scheduling/SendLaterPresets.cs:93
+msgid "Give the preset a name of at most {max} characters."
+msgstr "Ge förvalet ett namn på högst {max} tecken."
+
+#: src/SocklessMail.Api/Scheduling/SendLaterPresets.cs:98
+msgid "Choose today, tomorrow, a weekday or a number of hours."
+msgstr "Välj idag, i morgon, en veckodag eller ett antal timmar."
+
+#: src/SocklessMail.Api/Scheduling/SendLaterPresets.cs:110
+msgid "Choose a time (HH:MM)."
+msgstr "Välj en tid (TT:MM)."
+
+#: src/SocklessMail.Api/Scheduling/SendLaterPresets.cs:115
+msgid "Choose a day of the week."
+msgstr "Välj en veckodag."
+
+#: src/SocklessMail.Api/Scheduling/SendLaterPresets.cs:120
+msgid "Days of the week are 0 (Sunday) to 6 (Saturday)."
+msgstr "Veckodagarna är 0 (söndag) till 6 (lördag)."
+
+#: src/SocklessMail.Api/Tags/GraphClient.cs:106
+msgid "Microsoft Graph could not be reached."
+msgstr "Microsoft Graph kunde inte nås."
+
+#: src/SocklessMail.Api/Tags/GraphClient.cs:121
+msgid "Microsoft Graph asks to slow down. Try again in a minute."
+msgstr "Microsoft Graph ber om ett lugnare tempo. Försök igen om en minut."
+
+#: src/SocklessMail.Api/Tags/GraphClient.cs:122
+msgid "Microsoft Graph refused the change (HTTP {status})."
+msgstr "Microsoft Graph avvisade ändringen (HTTP {status})."
+
+#: src/SocklessMail.Api/Tags/GraphClient.cs:132
+msgid "Microsoft Graph answered something unexpected."
+msgstr "Microsoft Graph svarade något oväntat."
+
+#: src/SocklessMail.Api/Tags/TagStore.cs:51
+msgid "At most {max} tags."
+msgstr "Högst {max} taggar."
+
+#: src/SocklessMail.Api/Tags/TagStore.cs:61
+msgid "This keyword cannot be a tag."
+msgstr "Det här nyckelordet kan inte vara en tagg."
+
+#: src/SocklessMail.Api/Tags/TagStore.cs:66
+msgid "A tag already uses this keyword."
+msgstr "En tagg använder redan det här nyckelordet."
+
+#: src/SocklessMail.Api/Tags/TagStore.cs:189
+msgid "Enter a name."
+msgstr "Ange ett namn."
+
+#: src/SocklessMail.Api/Tags/TagStore.cs:192
+msgid "At most {max} characters."
+msgstr "Högst {max} tecken."
+
+#: src/SocklessMail.Api/Tags/TagStore.cs:196
+msgid "Use a color like #1a2b3c."
+msgstr "Använd en färg som #1a2b3c."
+
+#: src/SocklessMail.Api/Tags/TagStore.cs:202
+msgid "A tag with this name exists already."
+msgstr "Det finns redan en tagg med det här namnet."
+
+#: src/SocklessMail.Api/Tasks/TaskService.cs:52
+msgid "The due date is not a valid date."
+msgstr "Förfallodatumet är inte ett giltigt datum."
+
+#: src/SocklessMail.Api/Tasks/TaskService.cs:178
+msgid "The task needs a title."
+msgstr "Uppgiften behöver en titel."
+
+#: src/SocklessMail.Api/Tasks/TaskService.cs:183
+msgid "The title may be at most {max} characters."
+msgstr "Titeln får vara högst {max} tecken."
+
+#: src/SocklessMail.Api/Tasks/TaskService.cs:190
+msgid "The Tasks app is not enabled for you in Nextcloud."
+msgstr "Appen Uppgifter är inte aktiverad för dig i Nextcloud."
+
+#: src/SocklessMail.Api/Tasks/TaskService.cs:194
+msgid "The task list no longer exists."
+msgstr "Uppgiftslistan finns inte längre."
+
+#: src/SocklessMail.Api/Tasks/TaskService.cs:197
+msgid "This task list is read-only."
+msgstr "Den här uppgiftslistan är skrivskyddad."

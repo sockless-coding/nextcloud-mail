@@ -190,22 +190,22 @@ public sealed class ScheduledMail(
         var now = clock.GetUtcNow();
         if (value is not { } sendAt)
         {
-            throw new MailboxValidationException("sendAt", "Choose when to send the message.");
+            throw new MailboxValidationException("sendAt", L.T("Choose when to send the message."));
         }
 
         if (sendAt < now + options.MinimumLead)
         {
-            throw new MailboxValidationException("sendAt", "Choose a time at least a minute from now.");
+            throw new MailboxValidationException("sendAt", L.T("Choose a time at least a minute from now."));
         }
 
         if (sendAt > now + MaxLead)
         {
-            throw new MailboxValidationException("sendAt", "Choose a time within a year.");
+            throw new MailboxValidationException("sendAt", L.T("Choose a time within a year."));
         }
 
         return sendAt.ToUniversalTime();
     }
 
     private static MailboxConflictException BeingSent() =>
-        new("scheduled_sending", "The message is being sent right now.");
+        new("scheduled_sending", L.T("The message is being sent right now."));
 }

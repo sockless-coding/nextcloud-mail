@@ -1076,10 +1076,16 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload))
 
 .composer__footer {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 8px;
 	padding: 10px 14px;
 	border-top: 1px solid var(--color-border);
+}
+
+/* Longer labels (translations) wrap the footer rather than squeezing Send. */
+.composer__footer > * {
+	flex-shrink: 0;
 }
 
 .composer__editor {

@@ -10,6 +10,14 @@ app (`socklessmail`) share version numbers, so this file covers both.
 ### Added
 - Packaging for the Nextcloud App Store: release archives for both apps, signed and uploaded by
   the release workflow, and store metadata in `info.xml`.
+- Translations: the interface and the server's messages follow the user's Nextcloud language.
+  Swedish is included, and the files are ready for Nextcloud's Transifex translators.
+
+### Fixed
+- The message list header shows the translated name of standard folders, like the folder pane.
+- The composer's footer wraps instead of squeezing the Send button when labels are long.
+- Dropdown lists (font, size, rules and others) are readable in the dark theme.
+- The "Show images" button on the remote images notice is readable in both themes.
 
 ## [0.50.0] - 2026-11-02
 

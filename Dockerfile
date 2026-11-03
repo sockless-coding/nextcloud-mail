@@ -7,8 +7,10 @@ FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
 WORKDIR /src/src/frontend
 COPY src/frontend/package.json src/frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
-# vite.config.js takes the app version from the manifest.
+# vite.config.js takes the app version from the manifest
 COPY appinfo/info.xml /src/appinfo/info.xml
+# and copies the compiled translations into the bundle.
+COPY l10n/ /src/l10n/
 COPY src/frontend/ ./
 RUN npm run build
 

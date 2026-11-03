@@ -53,7 +53,7 @@ public sealed partial class SendLaterPresets(MailDbContext db, TimeProvider cloc
     /// <summary>Replaces the user's presets; an empty list is allowed (only the date and time picker is offered then).</summary>
     public async Task<SendLaterPresetsDto> SaveAsync(string userId, IReadOnlyList<SendLaterPreset>? presets, CancellationToken ct)
     {
-        var cleaned = Validate(presets ?? throw new MailboxValidationException("presets", "Send the list of presets."));
+        var cleaned = Validate(presets ?? throw new MailboxValidationException("presets", L.T("Send the list of presets.")));
         var row = await db.SendLaterPresets.SingleOrDefaultAsync(p => p.OwnerUserId == userId, ct);
         if (row is null)
         {
@@ -75,7 +75,7 @@ public sealed partial class SendLaterPresets(MailDbContext db, TimeProvider cloc
     {
         if (presets.Count > MaxPresets)
         {
-            throw new MailboxValidationException("presets", $"At most {MaxPresets} presets.");
+            throw new MailboxValidationException("presets", L.T("At most {max} presets.", ("max", MaxPresets)));
         }
 
         var ids = new HashSet<string>();
@@ -84,40 +84,40 @@ public sealed partial class SendLaterPresets(MailDbContext db, TimeProvider cloc
             string Field(string name) => $"presets[{i}].{name}";
             if (p.Id is null || !IdPattern().IsMatch(p.Id) || !ids.Add(p.Id))
             {
-                throw new MailboxValidationException(Field("id"), "Each preset needs its own id (lowercase letters, digits and dashes).");
+                throw new MailboxValidationException(Field("id"), L.T("Each preset needs its own id (lowercase letters, digits and dashes)."));
             }
 
             var label = (p.Label ?? "").ReplaceLineEndings(" ").Trim();
             if (label.Length == 0 || label.Length > MaxLabelLength)
             {
-                throw new MailboxValidationException(Field("label"), $"Give the preset a name of at most {MaxLabelLength} characters.");
+                throw new MailboxValidationException(Field("label"), L.T("Give the preset a name of at most {max} characters.", ("max", MaxLabelLength)));
             }
 
             if (p.Kind is null || !Kinds.Contains(p.Kind))
             {
-                throw new MailboxValidationException(Field("kind"), "Choose today, tomorrow, a weekday or a number of hours.");
+                throw new MailboxValidationException(Field("kind"), L.T("Choose today, tomorrow, a weekday or a number of hours."));
             }
 
             if (p.Kind == "hours")
             {
                 if (p.Hours is not (>= 1 and <= MaxHours))
                 {
-                    throw new MailboxValidationException(Field("hours"), $"Choose between 1 and {MaxHours} hours.");
+                    throw new MailboxValidationException(Field("hours"), L.T("Choose between 1 and {max} hours.", ("max", MaxHours)));
                 }
             }
             else if (p.Time is null || !TimePattern().IsMatch(p.Time))
             {
-                throw new MailboxValidationException(Field("time"), "Choose a time (HH:MM).");
+                throw new MailboxValidationException(Field("time"), L.T("Choose a time (HH:MM)."));
             }
 
             if (p.Kind == "weekday" && p.Weekday is not (>= 0 and <= 6))
             {
-                throw new MailboxValidationException(Field("weekday"), "Choose a day of the week.");
+                throw new MailboxValidationException(Field("weekday"), L.T("Choose a day of the week."));
             }
 
             if (p.ShowOn is { } days && days.Any(d => d is < 0 or > 6))
             {
-                throw new MailboxValidationException(Field("showOn"), "Days of the week are 0 (Sunday) to 6 (Saturday).");
+                throw new MailboxValidationException(Field("showOn"), L.T("Days of the week are 0 (Sunday) to 6 (Saturday)."));
             }
 
             var showOn = p.ShowOn is { Length: > 0 and < 7 } some ? some.Distinct().Order().ToArray() : null;

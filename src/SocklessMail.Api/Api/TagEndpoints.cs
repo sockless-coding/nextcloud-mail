@@ -132,7 +132,7 @@ public static class TagEndpoints
                         {
                             // A name Outlook does not know would take the tag off its messages at the next scan.
                             await store.UpdateAsync(userId, tagId, new TagInput(before.Name, before.Color, null), ct);
-                            return Results.Json(new { error = "graph_unavailable", message = $"Outlook could not rename the category for {account.DisplayName}: {e.Message}" },
+                            return Results.Json(new { error = "graph_unavailable", message = L.T("Outlook could not rename the category for {account}: {error}", ("account", account.DisplayName), ("error", e.Message)) },
                                 statusCode: StatusCodes.Status502BadGateway);
                         }
                     }
@@ -182,7 +182,7 @@ public static class TagEndpoints
 
                 if (failed > 0)
                 {
-                    return Results.Json(new { error = "tag_removal_failed", message = $"The tag could not be removed from {failed} messages. Try again later." },
+                    return Results.Json(new { error = "tag_removal_failed", message = L.T("The tag could not be removed from {count} messages. Try again later.", ("count", failed)) },
                         statusCode: StatusCodes.Status502BadGateway);
                 }
 
@@ -195,7 +195,7 @@ public static class TagEndpoints
                     }
                     catch (Exception e) when (e is GraphUnavailableException or GraphConsentRequiredException)
                     {
-                        return Results.Json(new { error = "graph_unavailable", message = $"Outlook could not remove the category for {account.DisplayName}: {e.Message}" },
+                        return Results.Json(new { error = "graph_unavailable", message = L.T("Outlook could not remove the category for {account}: {error}", ("account", account.DisplayName), ("error", e.Message)) },
                             statusCode: StatusCodes.Status502BadGateway);
                     }
                 }

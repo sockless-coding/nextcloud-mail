@@ -82,7 +82,7 @@ public static class AccountEndpoints
         accounts.MapPut("/order", async (ReorderInput input, ClaimsPrincipal user, AccountService service, CancellationToken ct) =>
             await service.ReorderAsync(user.GetNextcloudUserId(), input.AccountIds ?? [], ct)
                 ? Results.NoContent()
-                : Results.Json(new { error = "invalid_order", message = "The list must contain each of your accounts exactly once." },
+                : Results.Json(new { error = "invalid_order", message = L.T("The list must contain each of your accounts exactly once.") },
                     statusCode: StatusCodes.Status400BadRequest));
 
         accounts.MapPost("/test", async (ConnectionTestInput input, ClaimsPrincipal user, AccountService service, CancellationToken ct) =>

@@ -13,28 +13,28 @@ import { commandTargets, endSelectionMode, selection } from './selection.js'
  * is open. The list also feeds the help dialog (ShortcutsDialog.vue).
  */
 export const SHORTCUTS = [
-	{ keys: ['N', 'Ctrl+Shift+M'], label: t('sockless_mail', 'New message'), run: composeNew },
-	{ keys: ['R', 'Ctrl+R'], label: t('sockless_mail', 'Reply'), run: () => reply('reply') },
-	{ keys: ['Shift+R', 'Ctrl+Shift+R'], label: t('sockless_mail', 'Reply all'), run: () => reply('replyAll') },
-	{ keys: ['F', 'Ctrl+Shift+F'], label: t('sockless_mail', 'Forward'), run: () => reply('forward') },
-	{ keys: ['Delete'], label: t('sockless_mail', 'Delete'), run: () => withTargets(removeRows) },
-	{ keys: ['Ctrl+Q'], label: t('sockless_mail', 'Mark as read'), run: () => withTargets((rows) => setSeenRows(rows, true)) },
-	{ keys: ['Ctrl+U'], label: t('sockless_mail', 'Mark as unread'), run: () => withTargets((rows) => setSeenRows(rows, false)) },
-	{ keys: ['Insert'], label: t('sockless_mail', 'Flag or remove the flag'), run: () => withTargets((rows) => setFlaggedRows(rows, rows.some((r) => !r.message.flagged))) },
-	{ keys: ['T'], label: t('sockless_mail', 'Tag'), run: () => withTargets(askTags) },
-	{ keys: ['/', 'Alt+Q'], label: t('sockless_mail', 'Search'), run: focusSearch },
-	{ keys: ['Esc'], label: t('sockless_mail', 'Clear the selection, or close the message'), run: escape },
-	{ keys: ['?'], label: t('sockless_mail', 'Show keyboard shortcuts'), run: () => { dialogs.shortcuts = true } },
+	{ keys: ['N', 'Ctrl+Shift+M'], get label() { return t('sockless_mail', 'New message') }, run: composeNew },
+	{ keys: ['R', 'Ctrl+R'], get label() { return t('sockless_mail', 'Reply') }, run: () => reply('reply') },
+	{ keys: ['Shift+R', 'Ctrl+Shift+R'], get label() { return t('sockless_mail', 'Reply all') }, run: () => reply('replyAll') },
+	{ keys: ['F', 'Ctrl+Shift+F'], get label() { return t('sockless_mail', 'Forward') }, run: () => reply('forward') },
+	{ keys: ['Delete'], get label() { return t('sockless_mail', 'Delete') }, run: () => withTargets(removeRows) },
+	{ keys: ['Ctrl+Q'], get label() { return t('sockless_mail', 'Mark as read') }, run: () => withTargets((rows) => setSeenRows(rows, true)) },
+	{ keys: ['Ctrl+U'], get label() { return t('sockless_mail', 'Mark as unread') }, run: () => withTargets((rows) => setSeenRows(rows, false)) },
+	{ keys: ['Insert'], get label() { return t('sockless_mail', 'Flag or remove the flag') }, run: () => withTargets((rows) => setFlaggedRows(rows, rows.some((r) => !r.message.flagged))) },
+	{ keys: ['T'], get label() { return t('sockless_mail', 'Tag') }, run: () => withTargets(askTags) },
+	{ keys: ['/', 'Alt+Q'], get label() { return t('sockless_mail', 'Search') }, run: focusSearch },
+	{ keys: ['Esc'], get label() { return t('sockless_mail', 'Clear the selection, or close the message') }, run: escape },
+	{ keys: ['?'], get label() { return t('sockless_mail', 'Show keyboard shortcuts') }, run: () => { dialogs.shortcuts = true } },
 ]
 
 /** Handled where they apply, listed here for the help dialog. */
 export const LOCAL_SHORTCUTS = [
-	{ keys: ['↑', '↓'], label: t('sockless_mail', 'Previous or next message (in the list)') },
-	{ keys: ['Space'], label: t('sockless_mail', 'Select or deselect the message (in the list)') },
-	{ keys: ['Shift+↑', 'Shift+↓'], label: t('sockless_mail', 'Extend the selection (in the list)') },
-	{ keys: ['Ctrl+A'], label: t('sockless_mail', 'Select all loaded messages (in the list)') },
-	{ keys: ['Menu', 'Shift+F10'], label: t('sockless_mail', 'Message actions (in the list)') },
-	{ keys: ['Ctrl+Enter'], label: t('sockless_mail', 'Send (in the composer)') },
+	{ keys: ['↑', '↓'], get label() { return t('sockless_mail', 'Previous or next message (in the list)') } },
+	{ keys: ['Space'], get label() { return t('sockless_mail', 'Select or deselect the message (in the list)') } },
+	{ keys: ['Shift+↑', 'Shift+↓'], get label() { return t('sockless_mail', 'Extend the selection (in the list)') } },
+	{ keys: ['Ctrl+A'], get label() { return t('sockless_mail', 'Select all loaded messages (in the list)') } },
+	{ keys: ['Menu', 'Shift+F10'], get label() { return t('sockless_mail', 'Message actions (in the list)') } },
+	{ keys: ['Ctrl+Enter'], get label() { return t('sockless_mail', 'Send (in the composer)') } },
 ]
 
 async function reply(mode) {

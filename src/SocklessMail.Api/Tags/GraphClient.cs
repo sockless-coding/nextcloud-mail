@@ -103,7 +103,7 @@ public sealed class GraphClient(IHttpClientFactory http, GraphOptions options, I
         }
         catch (Exception e) when (e is HttpRequestException || (e is TaskCanceledException && !ct.IsCancellationRequested))
         {
-            throw new GraphUnavailableException("Microsoft Graph could not be reached.", e);
+            throw new GraphUnavailableException(L.T("Microsoft Graph could not be reached."), e);
         }
 
         using (response)
@@ -118,8 +118,8 @@ public sealed class GraphClient(IHttpClientFactory http, GraphOptions options, I
             {
                 logger.LogWarning("Microsoft Graph answered {StatusCode} to {Method}", (int)response.StatusCode, method);
                 throw new GraphUnavailableException(response.StatusCode == HttpStatusCode.TooManyRequests
-                    ? "Microsoft Graph asks to slow down. Try again in a minute."
-                    : $"Microsoft Graph refused the change (HTTP {(int)response.StatusCode}).");
+                    ? L.T("Microsoft Graph asks to slow down. Try again in a minute.")
+                    : L.T("Microsoft Graph refused the change (HTTP {status}).", ("status", (int)response.StatusCode)));
             }
 
             var text = await response.Content.ReadAsStringAsync(ct);
@@ -129,7 +129,7 @@ public sealed class GraphClient(IHttpClientFactory http, GraphOptions options, I
             }
             catch (JsonException e)
             {
-                throw new GraphUnavailableException("Microsoft Graph answered something unexpected.", e);
+                throw new GraphUnavailableException(L.T("Microsoft Graph answered something unexpected."), e);
             }
         }
     }

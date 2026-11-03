@@ -49,7 +49,7 @@ public sealed record TaskDue(DateOnly? Date, DateTimeOffset? Instant)
         throw Invalid();
     }
 
-    private static MailboxValidationException Invalid() => new("due", "The due date is not a valid date.");
+    private static MailboxValidationException Invalid() => new("due", L.T("The due date is not a valid date."));
 }
 
 /// <summary>A VTODO for Nextcloud Tasks, made from a message.</summary>
@@ -175,26 +175,26 @@ public sealed class TaskService(
         var title = input.Title?.Trim();
         if (string.IsNullOrEmpty(title))
         {
-            throw new MailboxValidationException("title", "The task needs a title.");
+            throw new MailboxValidationException("title", L.T("The task needs a title."));
         }
 
         if (title.Length > TaskBuilder.MaxTitleLength)
         {
-            throw new MailboxValidationException("title", $"The title may be at most {TaskBuilder.MaxTitleLength} characters.");
+            throw new MailboxValidationException("title", L.T("The title may be at most {max} characters.", ("max", TaskBuilder.MaxTitleLength)));
         }
 
         var due = TaskDue.Parse(input.Due);
         var zone = input.TimeZone is { Length: > 0 } tz ? DateTimeZoneProviders.Tzdb.GetZoneOrNull(tz) ?? DateTimeZone.Utc : DateTimeZone.Utc;
         if (await apps.TasksUrlAsync(nextcloud, userId, ct) is null)
         {
-            throw new CalendarException("tasks_unavailable", "The Tasks app is not enabled for you in Nextcloud.", StatusCodes.Status409Conflict);
+            throw new CalendarException("tasks_unavailable", L.T("The Tasks app is not enabled for you in Nextcloud."), StatusCodes.Status409Conflict);
         }
 
         var list = (await calendars.ListAsync(userId, ct, "VTODO")).FirstOrDefault(l => l.Id == input.CalendarId)
-                   ?? throw new CalendarException("not_found", "The task list no longer exists.", StatusCodes.Status404NotFound);
+                   ?? throw new CalendarException("not_found", L.T("The task list no longer exists."), StatusCodes.Status404NotFound);
         if (!list.Writable)
         {
-            throw new CalendarException("read_only", "This task list is read-only.", StatusCodes.Status403Forbidden);
+            throw new CalendarException("read_only", L.T("This task list is read-only."), StatusCodes.Status403Forbidden);
         }
 
         var message = await mailbox.GetMessageTextAsync(account, folderId, messageId, ct);

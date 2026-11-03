@@ -19,9 +19,9 @@ export const INBOX_ID = 'SU5CT1g'
  * one special use of every account; a smart folder is a quick filter over some of them.
  */
 export const UNIFIED_VIEWS = [
-	...['inbox', 'drafts', 'sent', 'archive', 'junk', 'trash'].map((use) => ({ id: use, roles: [use], name: USE_NAMES[use], icon: USE_ICONS[use] })),
-	{ id: 'unread', roles: ['inbox'], filter: 'unread', name: t('sockless_mail', 'Unread'), icon: mdiEmailMarkAsUnread },
-	{ id: 'flagged', roles: ['inbox', 'archive', 'sent'], filter: 'flagged', name: t('sockless_mail', 'Flagged'), icon: mdiFlagOutline },
+	...['inbox', 'drafts', 'sent', 'archive', 'junk', 'trash'].map((use) => ({ id: use, roles: [use], get name() { return USE_NAMES[use] }, icon: USE_ICONS[use] })),
+	{ id: 'unread', roles: ['inbox'], filter: 'unread', get name() { return t('sockless_mail', 'Unread') }, icon: mdiEmailMarkAsUnread },
+	{ id: 'flagged', roles: ['inbox', 'archive', 'sent'], filter: 'flagged', get name() { return t('sockless_mail', 'Flagged') }, icon: mdiFlagOutline },
 ]
 
 /** The most a tag folder reloads at once when polled (the server's page limit). */

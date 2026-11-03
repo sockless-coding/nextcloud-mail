@@ -99,7 +99,7 @@ public sealed partial class ViewStates(MailDbContext db, TimeProvider clock)
     {
         if (storage is not (Server or Browser))
         {
-            throw new ViewStateValidationException("storage", "Choose server or browser.");
+            throw new ViewStateValidationException("storage", L.T("Choose server or browser."));
         }
 
         if (storage == Server && state is not null)
@@ -157,7 +157,7 @@ public sealed partial class ViewStates(MailDbContext db, TimeProvider clock)
                 : view.AccountId is not null && IsFolderId(view.FolderId);
             if (!valid)
             {
-                throw new ViewStateValidationException("lastView", "Give an account and folder, or a unified view.");
+                throw new ViewStateValidationException("lastView", L.T("Give an account and folder, or a unified view."));
             }
         }
 
@@ -166,12 +166,12 @@ public sealed partial class ViewStates(MailDbContext db, TimeProvider clock)
             var expanded = account.Expanded ?? [];
             if (expanded.Count > MaxExpanded)
             {
-                throw new ViewStateValidationException("accounts", $"At most {MaxExpanded} expanded folders per account.");
+                throw new ViewStateValidationException("accounts", L.T("At most {max} expanded folders per account.", ("max", MaxExpanded)));
             }
 
             if (!expanded.All(IsFolderId) || (account.LastFolderId is not null && !IsFolderId(account.LastFolderId)))
             {
-                throw new ViewStateValidationException("accounts", "Not a folder id.");
+                throw new ViewStateValidationException("accounts", L.T("Not a folder id."));
             }
         }
     }

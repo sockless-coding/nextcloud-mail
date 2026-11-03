@@ -32,7 +32,7 @@ public static class ComposeEndpoints
                 await using var content = file.OpenReadStream();
                 return await uploads.SaveAsync(user.GetNextcloudUserId(), file.FileName, file.ContentType, content, ct) is { } upload
                     ? Results.Ok(upload)
-                    : Results.Json(new { error = "too_large", message = $"Attachments may be at most {AttachmentUploads.MaxFileBytes / (1024 * 1024)} MB." },
+                    : Results.Json(new { error = "too_large", message = L.T("Attachments may be at most {megabytes} MB.", ("megabytes", AttachmentUploads.MaxFileBytes / (1024 * 1024))) },
                         statusCode: StatusCodes.Status413PayloadTooLarge);
             })
             .DisableAntiforgery()
@@ -64,7 +64,7 @@ public static class ComposeEndpoints
             {
                 if (await proxy.FetchAsync(input.Url ?? "", ct) is not { } image || !OutgoingHtml.InlineImageTypes.Contains(image.ContentType))
                 {
-                    return Results.Json(new { error = "image_unavailable", message = "The image could not be fetched." }, statusCode: StatusCodes.Status422UnprocessableEntity);
+                    return Results.Json(new { error = "image_unavailable", message = L.T("The image could not be fetched.") }, statusCode: StatusCodes.Status422UnprocessableEntity);
                 }
 
                 await using var content = new MemoryStream(image.Content);
@@ -80,7 +80,7 @@ public static class ComposeEndpoints
             {
                 if (!Enum.TryParse<ReplyMode>(mode, ignoreCase: true, out var replyMode))
                 {
-                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["mode"] = ["Use reply, replyAll, forward or edit."] });
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["mode"] = [L.T("Use reply, replyAll, forward or edit.")] });
                 }
 
                 return await accounts.GetAsync(user.GetNextcloudUserId(), accountId, ct) is { } a
